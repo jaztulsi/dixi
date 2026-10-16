@@ -1,0 +1,53 @@
+/* The only file with color literals. Everything else reads these through Tailwind (globals.css @theme). */
+:root {
+  /* Apple dark system, grayscale */
+  --bg: #000000;
+  --surface-1: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --hairline: #38383a;
+  --text: #ffffff;
+  --text-2: rgba(235, 235, 245, 0.6);  /* 6.36:1 on black */
+  --text-3: rgba(235, 235, 245, 0.3);  /* 2.24:1: never for text, only inactive bars */
+
+  /* Light marble zones */
+  --light-bg: #ededf0;
+  --light-bg-2: #f5f5f7;
+  --light-text: #1d1d1f;
+  --light-text-2: #636366;             /* #6E6E73 is 4.34:1 on #EDEDF0, fails AA; this is 5.12:1 */
+  --light-hairline: rgba(0, 0, 0, 0.08);
+
+  /* Functional only */
+  --done: #30d158;
+  --rec: #ff453a;
+
+  /* Glass */
+  --glass-fill: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-spec: rgba(255, 255, 255, 0.35);
+  --glass-sheen: rgba(255, 255, 255, 0.12);
+  --glass-shadow: rgba(0, 0, 0, 0.35);
+  --glass-fill-light: rgba(255, 255, 255, 0.55);
+  --glass-border-light: rgba(0, 0, 0, 0.08);
+  --island-ring: rgba(255, 255, 255, 0.1);
+
+  /* Marble */
+  --marble-white-ratio: 0.35;          /* bright share per screen; drives the mask stops below */
+  --marble-fade: calc(var(--marble-white-ratio) * 160%);
+
+  /* Shape + space */
+  --radius-panel: 28px;
+  --space: 8px;
+
+  /* Per-zone text, switched by [data-tone] */
+  --fg: var(--text);
+  --fg-2: var(--text-2);
+  --line: var(--hairline);
+  --ring: var(--text);
+}
+
+[data-tone='light'] {
+  --fg: var(--light-text);
+  --fg-2: var(--light-text-2);
+  --line: var(--light-hairline);
+  --ring: var(--light-text);           /* a white ring is invisible on white marble */
+}
