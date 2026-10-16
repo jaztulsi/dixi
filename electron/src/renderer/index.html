@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:">
+  <title>Runic</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="content">
+    <section id="start-page" aria-label="Start page">
+      <div class="start-inner">
+        <div class="start-icon" data-icon="waveform"></div>
+        <h1>Just say what you want.</h1>
+        <p class="start-sub" id="start-sub">Start with &ldquo;Runic&rdquo;. No clicking needed.</p>
+        <ul class="examples" id="examples"></ul>
+      </div>
+    </section>
+    <div id="tabs"></div>
+  </main>
+
+  <!-- Live caption: what Runic hears and what it's doing (never blocks clicks on the page). -->
+  <div id="caption" class="glass" role="status" aria-live="polite">
+    <div class="caption-head">
+      <span id="caption-icon" class="caption-icon" data-icon="waveform"></span>
+      <span id="caption-state"></span>
+      <span class="spacer"></span>
+      <span id="caption-spinner" class="spinner" hidden></span>
+    </div>
+    <div id="caption-transcript" class="caption-transcript" hidden></div>
+    <div id="caption-answer" class="answer" hidden>
+      <div id="answer-text" class="answer-text"></div>
+      <div id="answer-source" class="answer-source"></div>
+      <div id="answer-quote" class="answer-quote"></div>
+    </div>
+    <div id="caption-activity" class="caption-activity" hidden><span data-icon="turnRight"></span><span id="activity-text"></span></div>
+  </div>
+
+  <div id="toast" class="toast" hidden>
+    <div class="toast-head"><span class="ok" data-icon="check"></span><b>Result</b><span class="spacer"></span>
+      <button id="toast-close" class="icon-btn small" aria-label="Dismiss" data-icon="close"></button></div>
+    <div id="toast-text"></div>
+  </div>
+
+  <!-- Bottom bar (same controls as the Swift app's bar) -->
+  <footer id="bar">
+    <div class="menu-wrap">
+      <button id="more" class="icon-btn" aria-label="More" aria-haspopup="menu"><span data-icon="ellipsis"></span><span class="chev" data-icon="chevronDown"></span></button>
+      <div id="menu" class="menu glass" role="menu" hidden>
+        <button role="menuitem" data-cmd="agent"><span data-icon="brain"></span>AI Agent</button>
+        <button role="menuitem" data-cmd="settings"><span data-icon="gear"></span>Settings</button>
+        <hr>
+        <button role="menuitem" data-cmd="new-tab"><span data-icon="plus"></span>New Tab</button>
+        <button role="menuitem" data-cmd="open-external"><span data-icon="safari"></span>Open in Browser</button>
+        <hr class="tab-nav">
+        <button role="menuitem" class="tab-nav" data-cmd="next-tab"><span data-icon="chevronRight"></span>Next Tab</button>
+        <button role="menuitem" class="tab-nav" data-cmd="prev-tab"><span data-icon="chevronLeft"></span>Previous Tab</button>
+      </div>
+    </div>
+    <button id="back" class="icon-btn" aria-label="Back" data-icon="chevronLeft" hidden></button>
+    <form id="pill" class="pill glass">
+      <span id="tab-count" class="tab-count" hidden></span>
+      <span id="lock" class="lock" data-icon="lock" hidden></span>
+      <span id="agent-status" class="agent-status" hidden><span class="spinner"></span><span id="agent-status-text"></span></span>
+      <input id="bar-input" type="text" autocomplete="off" spellcheck="false" placeholder="Search or enter website name" aria-label="Command or address">
+    </form>
+    <button id="mic" class="icon-btn" aria-label="Microphone"></button>
+    <button id="send" class="icon-btn" aria-label="Send" data-icon="arrowUp"></button>
+    <button id="stop" class="icon-btn stop" aria-label="Stop agent" data-icon="stop" hidden></button>
+  </footer>
+
+  <dialog id="agent-sheet" class="sheet">
+    <header class="sheet-head"><span id="agent-dot" class="agent-dot"></span><b>Agent</b>
+      <span id="agent-step" class="mono muted"></span><span class="spacer"></span>
+      <button id="agent-stop" class="pill-btn danger" hidden>Stop</button>
+      <button class="done-btn" data-close>Done</button></header>
+    <div id="agent-log" class="log"></div>
+    <div id="agent-result" class="result" hidden><div class="result-label"><span data-icon="check"></span>Result</div><div id="agent-result-text"></div></div>
+  </dialog>
+
+  <dialog id="settings-sheet" class="sheet">
+    <header class="sheet-head"><b>Settings</b><span class="spacer"></span><button class="done-btn" data-close>Done</button></header>
+    <div class="form">
+      <div class="group-title">Voice</div>
+      <div class="group"><label class="row"><span>Require &ldquo;Runic&rdquo; wake word</span><input id="wake-toggle" type="checkbox" class="switch"></label></div>
+      <p class="footnote">The microphone is always on. With the wake word, Runic only acts on speech that starts with &ldquo;Runic&rdquo; (plus follow-ups for a few seconds after), so TV and conversations are ignored.</p>
+      <div class="group-title">API keys</div>
+      <div class="group">
+        <div class="row"><span>Groq (AI)</span><span id="key-groq"></span></div>
+        <div class="row"><span>Deepgram (voice)</span><span id="key-deepgram"></span></div>
+      </div>
+      <p class="footnote">Keys come from the .env file in the project folder and stay in the app's main process; the window never sees them.</p>
+      <div class="group">
+        <div class="row"><span>Agent model</span><span id="agent-model" class="muted"></span></div>
+        <div class="row"><span>Voice model</span><span id="voice-model" class="muted"></span></div>
+      </div>
+      <div class="group-title">About</div>
+      <div class="group"><div class="row about"><b>Runic</b><span class="muted">A hands-free, voice-controlled browser. Say what you want and Runic does it while you're still talking.</span></div>
+        <div class="row"><span>Version</span><span class="muted">1.0.0</span></div></div>
+    </div>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

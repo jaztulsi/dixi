@@ -1,0 +1,22 @@
+{
+  "name": "runic",
+  "productName": "Runic",
+  "version": "1.0.0",
+  "description": "Runic: a hands-free, voice-powered browser (Electron).",
+  "type": "module",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/unit/*.test.js",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "dotenv": "18.0.8",
+    "ws": "8.18.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "electron": "44.7.2"
+  }
+}

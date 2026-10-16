@@ -4,3 +4,6 @@
 backend/target/
 !.gitignore
 !.env.example
+electron/node_modules/
+electron/test-results/
+electron/playwright-report/
