@@ -14,6 +14,7 @@
 
 import Foundation
 import AVFoundation
+import WebKit
 import os.log
 
 private let logger = Logger(subsystem: "com.bisv26.agent", category: "VoiceAgent")
@@ -144,6 +145,19 @@ private func resolveURL(_ target: String) -> String? {
     return nil
 }
 
+/// "go to amazon" / "open youtube.com" → URL with no LLM call. nil for anything more than a bare site,
+/// e.g. "go to amazon and search headphones" still goes to the agent.
+func directNavigationURL(for command: String) -> String? {
+    let ns = command as NSString
+    guard let m = navigatePattern.firstMatch(in: command, range: NSRange(location: 0, length: ns.length)),
+          m.range.location == 0 else { return nil }
+    let target = ns.substring(with: m.range(at: 1)).lowercased()
+        .trimmingCharacters(in: .whitespaces)
+        .trimmingCharacters(in: .punctuationCharacters)
+    if let url = siteMap[target] { return url }
+    return target.contains(" ") ? nil : resolveURL(target)
+}
+
 // MARK: - Voice Agent
 
 @Observable
@@ -153,10 +167,26 @@ final class VoiceAgent {
     var liveTranscript = ""
     var finalTranscript = ""
     var statusLine = ""
+    /// True while the current speech is addressed to Runic (wake word heard, or a follow-up).
+    var isAwake = false
+    private var isStarting = false
+
+    // --- Wake word ---
+    /// The mic is always on, so only speech that starts with "Runic" (or comes within a few seconds of
+    /// the last command, for follow-ups like "click the second one") is acted on. Settings can turn it off.
+    static let wakeWordDefaultsKey = "requireWakeWord"
+    private var requireWakeWord: Bool { UserDefaults.standard.object(forKey: Self.wakeWordDefaultsKey) as? Bool ?? true }
+    private static let followUpSeconds: TimeInterval = 8
+    private var awakeUntil = Date.distantPast
+    /// Only a wake word or a real action renews the follow-up window; otherwise a conversation in the
+    /// room (seen in testing) keeps Runic awake forever.
+    private var actedThisUtterance = false
+    // Deepgram also hears "Runek"/"Runik"; the `keywords` boost below makes "Runic" most likely.
+    private static let wakePattern = #"\b(?:runic|runek|runik|runick|ronic|rune ic)\b[\s,.!?]*"#
 
     var deepgramKey: String = Secrets.deepgramAPIKey
-    var openAIKey: String = OpenAIService().apiKey
-    var openAIBaseURL: String = "https://api.openai.com/v1"
+    var llmKey: String = LLMService().apiKey
+    var llmBaseURL: String = LLMService.groqBaseURL
 
     weak var tabManager: TabManager?
     weak var browserAgent: BrowserAgent?
@@ -180,18 +210,22 @@ final class VoiceAgent {
     private var intentTask: Task<Void, Never>?
 
     private static let stabilityMS = 300
-    private static let silenceAutoStopMS = 2000
+    private static let utteranceResetMS = 2000
     private var silenceTimer: DispatchWorkItem?
 
     // MARK: - Public
 
     func start() async throws {
-        guard !isListening else { return }
+        // isListening only flips after the mic-permission await, so without isStarting a second
+        // caller in that gap (seen on launch via runic://) would open a second Deepgram stream.
+        guard !isListening, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
         guard !deepgramKey.isEmpty else {
             throw VoiceAgentError.missingDeepgramKey
         }
-        guard !openAIKey.isEmpty else {
-            throw VoiceAgentError.missingOpenAIKey
+        guard !llmKey.isEmpty else {
+            throw VoiceAgentError.missingLLMKey
         }
 
         resetDispatchState()
@@ -206,7 +240,7 @@ final class VoiceAgent {
         try startAudioEngine()
 
         isListening = true
-        statusLine = "Listening..."
+        statusLine = ""
         logger.info("VoiceAgent started successfully")
     }
 
@@ -237,6 +271,7 @@ final class VoiceAgent {
 
         cancelStabilityTimer()
         cancelSilenceTimer()
+        quietTimer?.cancel()
         // Keep dispatchedFingerprints/handledInterimParts alive until next start
         lastInterimText = ""
         liveTranscript = ""
@@ -250,6 +285,7 @@ final class VoiceAgent {
         handledInterimParts.removeAll()
         lastInterimText = ""
         currentUtterance = ""
+        pendingFinal = ""
         // NOTE: lastNavigatedSite and session persist across utterances
     }
 
@@ -263,9 +299,12 @@ final class VoiceAgent {
     }
 
     private func configureAudioSession() throws {
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
+        #endif
+        // macOS has no audio session; AVAudioEngine uses the default input directly.
     }
 
     private func startAudioEngine() throws {
@@ -338,8 +377,9 @@ final class VoiceAgent {
             .init(name: "sample_rate", value: "16000"),
             .init(name: "channels", value: "1"),
             .init(name: "interim_results", value: "true"),
-            .init(name: "endpointing", value: "300"),
+            .init(name: "endpointing", value: "500"),  // ms of silence before "speech_final"; lower = snappier, higher = fewer split phrases
             .init(name: "utterance_end_ms", value: "1500"),
+            .init(name: "keywords", value: "Runic:3"),  // wake word; unboosted it often comes back as "Runek"
         ]
         guard let url = comps.url else { throw VoiceAgentError.badDeepgramURL }
 
@@ -361,8 +401,14 @@ final class VoiceAgent {
             Task { @MainActor in
                 switch result {
                 case .failure(let err):
-                    logger.error("Deepgram receive error: \(err.localizedDescription)")
-                    self.statusLine = "Connection lost"
+                    logger.error("Deepgram receive error: \(err.localizedDescription, privacy: .public)")
+                    // stop() also lands here, with isListening already false. Otherwise the drop was
+                    // unexpected: reconnect, since a hands-free user can't tap the mic to restart.
+                    guard self.isListening else { return }
+                    self.statusLine = "Reconnecting..."
+                    self.stop()
+                    try? await Task.sleep(for: .seconds(1))
+                    try? await self.start()
                 case .success(let msg):
                     self.handleDeepgramMessage(msg)
                     if self.isListening { self.receiveDeepgramLoop() }
@@ -383,9 +429,10 @@ final class VoiceAgent {
         let eventType = json["type"] as? String
 
         // UtteranceEnd = Deepgram detected extended silence after speech.
-        // Process any pending transcript, then auto-stop after a short delay.
+        // Process any pending transcript, then reset for the next command after a short delay.
         if eventType == "UtteranceEnd" {
-            logger.info("[deepgram] UtteranceEnd — arming auto-stop")
+            logger.info("[deepgram] UtteranceEnd — arming reset")
+            flushPendingFinal()
             armSilenceTimer()
             return
         }
@@ -397,26 +444,83 @@ final class VoiceAgent {
               !transcript.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
         let isFinal = (json["is_final"] as? Bool) ?? false
-        liveTranscript = transcript
+        let heard = pendingFinal + transcript
+        liveTranscript = heard
 
-        // User is still speaking — cancel any pending auto-stop
+        // User is still speaking — cancel any pending reset
         cancelSilenceTimer()
 
         if isFinal {
-            cancelStabilityTimer()
-            finalTranscript += transcript + " "
-            currentUtterance = transcript
-            handleFinalTranscript(transcript)
-        } else {
-            handleInterimTranscript(transcript)
+            // is_final only locks in a chunk of audio; the user may still be mid-sentence
+            // ("add bean" | "burrito to cart"). Act once they actually stopped.
+            pendingFinal += transcript + " "
+            if (json["speech_final"] as? Bool) == true || (json["from_finalize"] as? Bool) == true {
+                flushPendingFinal()
+                return
+            }
+        } else if let command = commandText(heard) {
+            handleInterimTranscript(command)
         }
+        armQuietTimer()
+    }
+
+    private var pendingFinal = ""
+
+    /// Deepgram's own end-of-speech signals (speech_final, UtteranceEnd) can lag by seconds in a
+    /// noisy room; a test showed a 5s wait. If no new words arrive for this long, finish up ourselves.
+    // Deepgram can go ~1.1s between updates mid-sentence (measured), so shorter cuts phrases in half.
+    private static let quietMS = 1200  // lower = snappier, higher = fewer mid-sentence cut-offs
+    private var quietTimer: DispatchWorkItem?
+
+    private func armQuietTimer() {
+        quietTimer?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            Task { @MainActor in
+                guard let self, self.isListening else { return }
+                // Ask Deepgram to finalize audio it's still holding; its reply (from_finalize) flushes it.
+                self.dgTask?.send(.string(#"{"type":"Finalize"}"#)) { _ in }
+                self.flushPendingFinal()
+            }
+        }
+        quietTimer = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.quietMS), execute: work)
+    }
+
+    private func flushPendingFinal() {
+        let text = pendingFinal.trimmingCharacters(in: .whitespaces)
+        pendingFinal = ""
+        guard !text.isEmpty else { return }
+        cancelStabilityTimer()
+        armSilenceTimer()
+        guard let command = commandText(text) else {
+            logger.info("[voice] Ignored (no wake word): \(text, privacy: .public)")
+            return
+        }
+        finalTranscript += command + " "
+        currentUtterance = command
+        handleFinalTranscript(command)
+    }
+
+    /// The part of `text` meant for Runic, or nil if it wasn't addressed to Runic.
+    private func commandText(_ text: String) -> String? {
+        guard requireWakeWord else { return text }
+        if let r = text.range(of: Self.wakePattern, options: [.regularExpression, .caseInsensitive]) {
+            isAwake = true
+            actedThisUtterance = true
+            let rest = String(text[r.upperBound...])
+            return rest.trimmingCharacters(in: .whitespaces).isEmpty ? nil : rest
+        }
+        guard isAwake || Date() < awakeUntil else { return nil }
+        isAwake = true
+        return text
     }
 
     // MARK: - Incremental Dispatch: Interim
 
     private func handleInterimTranscript(_ text: String) {
-        // 1. Instant navigate to known sites
+        // 1. Instant navigate to known sites, instant search on known sites
         tryInstantNavigate(text)
+        tryInstantSearch(text, isFinal: false)
 
         // 2. Arm stability timer — if text stays unchanged for 300ms, ask LLM
         if text != lastInterimText {
@@ -441,7 +545,7 @@ final class VoiceAgent {
     /// so navigation starts before the user finishes speaking.
     /// Sets lastNavigatedSite immediately so follow-up commands have context.
     private func tryInstantNavigate(_ text: String) {
-        for part in splitOnConjunctions(text) {
+        for part in Self.splitOnConjunctions(text) {
             let trimmed = part.trimmingCharacters(in: .whitespaces)
             let range = NSRange(trimmed.startIndex..., in: trimmed)
             guard let match = navigatePattern.firstMatch(in: trimmed, range: range),
@@ -454,10 +558,10 @@ final class VoiceAgent {
             guard !dispatchedFingerprints.contains(fingerprint) else { continue }
 
             dispatchedFingerprints.insert(fingerprint)
-            handledInterimParts.insert(trimmed.lowercased())
+            handledInterimParts.insert(Self.clauseKey(trimmed))
             // Set context IMMEDIATELY so follow-up parts know where we are
             lastNavigatedSite = url
-            logger.info("[dispatch] Instant navigate → \(url)")
+            logger.info("[dispatch] Instant navigate → \(url, privacy: .public)")
             statusLine = "Opening \(target)..."
 
             let step = IntentStep(action: "open", target: url, detail: target)
@@ -465,78 +569,114 @@ final class VoiceAgent {
         }
     }
 
-    /// Called when interim text hasn't changed for 300ms.
-    /// Asks LLM whether the partial transcript contains complete, executable commands.
+    /// Called when interim text hasn't changed for a moment. Acts early only on clauses the user has
+    /// already moved past ("open amazon AND ..."): those are finished. The last clause may still be
+    /// mid-phrase ("add bean..." → "bean burrito"), so it waits for the final transcript.
     private func onInterimStable(_ text: String) async {
-        let unhandled = splitOnConjunctions(text)
+        let unhandled = Self.splitOnConjunctions(text).dropLast()
             .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !handledInterimParts.contains($0.lowercased()) }
+            .filter { !$0.isEmpty && !isAlreadyHandled($0) }
 
         guard !unhandled.isEmpty else { return }
         let textToEvaluate = unhandled.joined(separator: " and ")
 
-        logger.info("[dispatch] Stable (\(Self.stabilityMS)ms), asking LLM: \"\(textToEvaluate)\"")
+        logger.info("[dispatch] Stable (\(Self.stabilityMS, privacy: .public)ms), asking LLM: \"\(textToEvaluate, privacy: .public)\"")
 
-        let context = buildContext()
-
-        let body: [String: Any] = [
-            "model": "gpt-4o-mini",
-            "messages": [
-                ["role": "system", "content": Self.stabilitySystemPrompt],
-                ["role": "user", "content": "\(context)\n\nTranscript: \"\(textToEvaluate)\""],
-            ],
-            "response_format": ["type": "json_object"],
-            "max_tokens": 500,
-            "temperature": 0,
-        ]
-
-        guard let url = URL(string: "\(openAIBaseURL)/chat/completions") else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(openAIKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 10
-
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                let body = String(data: data, encoding: .utf8) ?? "(no body)"
-                logger.error("[dispatch] Stable LLM API \(code): \(body)")
-                return
-            }
-
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let choices = json["choices"] as? [[String: Any]],
-                  let message = choices.first?["message"] as? [String: Any],
-                  let content = message["content"] as? String,
-                  let parsed = try? JSONDecoder().decode(StabilityResponse.self, from: Data(content.utf8))
-            else { return }
-
-            for cmd in parsed.commands {
-                guard cmd.complete else {
-                    logger.info("[dispatch] LLM says incomplete: \"\(cmd.text ?? "")\"")
-                    continue
-                }
-                guard let action = cmd.action else { continue }
-
-                let step = IntentStep(
-                    action: action,
-                    target: cmd.target ?? "",
-                    detail: cmd.detail ?? ""
-                )
-                let fp = stepFingerprint(step)
-                guard !dispatchedFingerprints.contains(fp) else { continue }
-
-                dispatchedFingerprints.insert(fp)
-                handledInterimParts.insert(textToEvaluate.lowercased())
-                logger.info("[dispatch] Stable LLM: \(step.action) → \(step.target) \"\(step.detail)\"")
-                await dispatch(step)
-            }
-        } catch {
-            logger.error("[dispatch] Stable LLM error: \(error.localizedDescription)")
+        guard let content = await askVoiceLLM(system: Self.stabilitySystemPrompt, transcript: textToEvaluate, timeout: 10) else { return }
+        guard let parsed = try? JSONDecoder().decode(StabilityResponse.self, from: Data(content.utf8)) else {
+            logger.error("[dispatch] Stable: unreadable LLM reply: \(content, privacy: .public)")
+            return
         }
+
+        // Mark each evaluated clause handled so the final pass (which checks clause by clause) skips it.
+        for part in unhandled { handledInterimParts.insert(Self.clauseKey(part)) }
+
+        for cmd in parsed.commands {
+            guard cmd.complete else {
+                logger.info("[dispatch] LLM says incomplete: \"\(cmd.text ?? "", privacy: .public)\"")
+                continue
+            }
+            guard let action = cmd.action else { continue }
+
+            let step = IntentStep(
+                action: action,
+                target: cmd.target ?? "",
+                detail: cmd.detail ?? ""
+            )
+            let fp = stepFingerprint(step)
+            guard !dispatchedFingerprints.contains(fp) else { continue }
+
+            dispatchedFingerprints.insert(fp)
+            logger.info("[dispatch] Stable LLM: \(step.action, privacy: .public) → \(step.target, privacy: .public) \"\(step.detail, privacy: .public)\"")
+            await dispatch(step)
+        }
+    }
+
+    /// "search for lofi beats" on a site with a known search URL → load that URL with no LLM call.
+    /// On interim text it only takes clauses that are clearly finished: followed by "and/then", or
+    /// ending in the period Deepgram adds once it thinks the sentence is over. Measured: that period
+    /// shows up ~1-2s before any end-of-speech signal. If the user keeps going, the final pass simply
+    /// searches again with the full phrase.
+    private func tryInstantSearch(_ text: String, isFinal: Bool) {
+        let clauses = Self.splitOnConjunctions(text).map { $0.trimmingCharacters(in: .whitespaces) }
+        for (i, clause) in clauses.enumerated() {
+            let finished = isFinal || i < clauses.count - 1 || clause.last.map { ".?!".contains($0) } == true
+            guard finished, !isAlreadyHandled(clause), let (platform, query) = parseSearch(clause) else { continue }
+            handledInterimParts.insert(Self.clauseKey(clause))
+            let step = IntentStep(action: "search", target: platform, detail: query)
+            let fp = stepFingerprint(step)
+            guard !dispatchedFingerprints.contains(fp) else { continue }
+            dispatchedFingerprints.insert(fp)
+            logger.info("[dispatch] Instant search (\(platform, privacy: .public)): \(query, privacy: .public)")
+            Task { await self.dispatch(step) }
+        }
+    }
+
+    private static let searchPattern = try! NSRegularExpression(
+        pattern: #"^(?:(?:can|could|would) you |please )?(?:search(?: for)?|look up)\s+(.+?)(?:\s+on\s+([a-z ]+?))?[\s.?!]*$"#,
+        options: .caseInsensitive
+    )
+
+    /// (platform, query) for a plain search command on a site with a known search URL, else nil
+    /// (anything fancier, or an unknown site, goes to the LLM / browser agent).
+    private func parseSearch(_ clause: String) -> (String, String)? {
+        let ns = clause as NSString
+        guard let m = Self.searchPattern.firstMatch(in: clause, range: NSRange(location: 0, length: ns.length)) else { return nil }
+        let query = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+        let named = m.range(at: 2).location == NSNotFound ? nil : ns.substring(with: m.range(at: 2)).lowercased()
+        let platform = named ?? Self.platform(for: currentSiteURL())
+        guard !query.isEmpty, Self.isPlainQuery(query), let platform, hasSearchURLPattern(platform) else { return nil }
+        return (platform, query)
+    }
+
+    /// A query that still contains another command ("lofi beats n, play the first video") means the
+    /// clause split missed something. Skip the instant path and let the LLM split it into steps.
+    static func isPlainQuery(_ query: String) -> Bool {
+        query.range(of: #"(?i)\b(?:play|click|open|go to|go back|add|scroll|select|watch|tap|buy)\b"#, options: .regularExpression) == nil
+    }
+
+    /// The site the user is on. Mid-navigation the tab still reports the old page, so trust the
+    /// site we just sent it to.
+    private func currentSiteURL() -> String {
+        guard let tabManager else { return lastNavigatedSite ?? "" }
+        return tabManager.activeWebView?.isLoading == true
+            ? (lastNavigatedSite ?? tabManager.getCurrentURL())
+            : tabManager.getCurrentURL()
+    }
+
+    static func clauseKey(_ clause: String) -> String {
+        clause.lowercased().trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+    }
+
+    /// True if this clause was already acted on, either as text or as an instant navigate to the
+    /// same site (otherwise "open youtube" would be dispatched twice and reload the page).
+    private func isAlreadyHandled(_ part: String) -> Bool {
+        if handledInterimParts.contains(Self.clauseKey(part)) { return true }
+        let range = NSRange(part.startIndex..., in: part)
+        guard let match = navigatePattern.firstMatch(in: part, range: range),
+              let targetRange = Range(match.range(at: 1), in: part),
+              let url = resolveURL(String(part[targetRange])) else { return false }
+        return dispatchedFingerprints.contains("navigate:\(url)")
     }
 
     // MARK: - Incremental Dispatch: Final
@@ -544,24 +684,11 @@ final class VoiceAgent {
     /// Processes the final transcript, skipping any parts already dispatched
     /// by instant navigate or the stability timer.
     private func handleFinalTranscript(_ transcript: String) {
-        let parts = splitOnConjunctions(transcript)
+        tryInstantSearch(transcript, isFinal: true)
+        let parts = Self.splitOnConjunctions(transcript)
         let unhandled = parts
             .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { part in
-                guard !part.isEmpty else { return false }
-                if handledInterimParts.contains(part.lowercased()) { return false }
-                // Check if it's a navigate we already dispatched
-                let range = NSRange(part.startIndex..., in: part)
-                if let match = navigatePattern.firstMatch(in: part, range: range),
-                   let targetRange = Range(match.range(at: 1), in: part) {
-                    let target = String(part[targetRange]).trimmingCharacters(in: .whitespaces)
-                    if let url = resolveURL(target),
-                       dispatchedFingerprints.contains("navigate:\(url)") {
-                        return false
-                    }
-                }
-                return true
-            }
+            .filter { !$0.isEmpty && !isAlreadyHandled($0) }
 
         if unhandled.isEmpty {
             logger.info("[dispatch] Final: all parts already handled")
@@ -569,7 +696,7 @@ final class VoiceAgent {
         }
 
         let unhandledText = unhandled.joined(separator: " and ")
-        logger.info("[dispatch] Final LLM: \"\(unhandledText)\"")
+        logger.info("[dispatch] Final LLM: \"\(unhandledText, privacy: .public)\"")
 
         intentTask = Task { [weak self] in
             await self?.detectFinalIntent(unhandledText)
@@ -577,55 +704,64 @@ final class VoiceAgent {
     }
 
     private func detectFinalIntent(_ text: String) async {
-        let context = buildContext()
-
-        let body: [String: Any] = [
-            "model": "gpt-4o-mini",
-            "messages": [
-                ["role": "system", "content": Self.intentSystemPrompt],
-                ["role": "user", "content": "\(context)\n\nTranscript: \"\(text)\""],
-            ],
-            "response_format": ["type": "json_object"],
-            "max_tokens": 500,
-            "temperature": 0,
-        ]
-
-        guard let url = URL(string: "\(openAIBaseURL)/chat/completions") else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(openAIKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30
-
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                let body = String(data: data, encoding: .utf8) ?? "(no body)"
-                logger.error("Intent API \(code): \(body)")
-                return
-            }
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let choices = json["choices"] as? [[String: Any]],
-                  let message = choices.first?["message"] as? [String: Any],
-                  let content = message["content"] as? String,
-                  let parsed = try? JSONDecoder().decode(IntentResponse.self, from: Data(content.utf8))
-            else { return }
-
-            for step in parsed.steps {
-                let fp = stepFingerprint(step)
-                guard !dispatchedFingerprints.contains(fp) else {
-                    logger.info("[dispatch] Final dedup: skipping \(fp)")
-                    continue
-                }
-                dispatchedFingerprints.insert(fp)
-                logger.info("[dispatch] Final: \(step.action) → \(step.target)")
-                await dispatch(step)
-            }
-        } catch {
-            logger.error("Intent error: \(error.localizedDescription)")
+        guard let content = await askVoiceLLM(system: Self.intentSystemPrompt, transcript: text, timeout: 30) else { return }
+        guard let parsed = try? JSONDecoder().decode(IntentResponse.self, from: Data(content.utf8)) else {
+            logger.error("[dispatch] Final: unreadable LLM reply: \(content, privacy: .public)")
+            return
         }
+        if parsed.steps.isEmpty { logger.info("[dispatch] Final: LLM found no action in \"\(text, privacy: .public)\"") }
+
+        for step in parsed.steps {
+            let fp = stepFingerprint(step)
+            guard !dispatchedFingerprints.contains(fp) else {
+                logger.info("[dispatch] Final dedup: skipping \(fp, privacy: .public)")
+                continue
+            }
+            dispatchedFingerprints.insert(fp)
+            logger.info("[dispatch] Final: \(step.action, privacy: .public) → \(step.target, privacy: .public)")
+            await dispatch(step)
+        }
+    }
+
+    /// One JSON-mode call to the voice model. On a rate limit it falls back to the other Groq models
+    /// (each has its own free-tier budget) instead of silently dropping the command.
+    private func askVoiceLLM(system: String, transcript: String, timeout: TimeInterval) async -> String? {
+        guard let url = URL(string: "\(llmBaseURL)/chat/completions") else { return nil }
+        let models = [Secrets.voiceModel] + ["openai/gpt-oss-120b", Secrets.agentModel].filter { $0 != Secrets.voiceModel }
+        for model in models {
+            var body: [String: Any] = [
+                "model": model,
+                "messages": [
+                    ["role": "system", "content": system],
+                    ["role": "user", "content": "\(buildContext())\n\nTranscript: \"\(transcript)\""],
+                ],
+                "response_format": ["type": "json_object"],
+                "max_tokens": 500,
+                "temperature": 0,
+            ]
+            if let effort = LLMService.reasoningEffort(for: model) { body["reasoning_effort"] = effort }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.addValue("Bearer \(llmKey)", forHTTPHeaderField: "Authorization")
+            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = timeout
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  let code = (response as? HTTPURLResponse)?.statusCode else { return nil }
+            if code == 429 { logger.warning("[voice] \(model, privacy: .public) rate limited, trying next"); continue }
+            guard code == 200 else {
+                logger.error("[voice] LLM API \(code, privacy: .public): \(String(data: data, encoding: .utf8) ?? "", privacy: .public)")
+                return nil
+            }
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let choices = json["choices"] as? [[String: Any]],
+                  let message = choices.first?["message"] as? [String: Any] else { return nil }
+            return message["content"] as? String
+        }
+        statusLine = "Groq rate limit: try again in a few seconds"
+        return nil
     }
 
     // MARK: - Dispatch
@@ -635,8 +771,9 @@ final class VoiceAgent {
             logger.error("[dispatch] tabManager is nil — cannot dispatch")
             return
         }
-        statusLine = "\(step.action): \(step.detail.isEmpty ? step.target : step.detail)"
-        logger.info("Dispatch \(step.action) → \(step.target) (\(step.detail))")
+        statusLine = Self.friendlyStatus(step)
+        actedThisUtterance = true
+        logger.info("Dispatch \(step.action, privacy: .public) → \(step.target, privacy: .public) (\(step.detail, privacy: .public))")
 
         // Ensure a tab exists before navigating
         if tabManager.tabs.isEmpty {
@@ -649,35 +786,34 @@ final class VoiceAgent {
             await tabManager.navigate(to: step.target)
 
         case "search":
-            // Determine if we should search on the current page vs. navigating to a search URL.
-            let currentURL = tabManager.getCurrentURL().lowercased()
+            // Sites with a known search URL get that URL loaded directly: instant, no AI agent, no
+            // tokens. The agent (find the search box, type, confirm) costs 1-2s and is only for the rest.
             let targetLower = step.target.lowercased()
             let isCurrentSite = targetLower == "current site" || targetLower == "current page"
-            let alreadyOnSite = isCurrentSite
-                || lastNavigatedSite.map { $0.lowercased().contains(targetLower) } ?? false
-                || currentURL.contains(targetLower)
+            let platform = isCurrentSite ? Self.platform(for: currentSiteURL()) : targetLower
 
-            if alreadyOnSite || !hasSearchURLPattern(step.target) {
+            if let platform, hasSearchURLPattern(platform) {
+                let url = searchURL(platform: platform, query: step.detail)
+                logger.info("[dispatch] Direct search URL → \(url, privacy: .public)")
+                lastNavigatedSite = url
+                await tabManager.navigate(to: url)
+            } else {
                 // Search on the current page via browser agent.
                 // Wait for any pending navigation to finish first.
                 await tabManager.waitUntilLoaded()
                 let task = "Find the search bar or search input on this page and search for: \(step.detail). Show the results and stop. Do NOT click into any result."
-                logger.info("[dispatch] On-page search via agent: \(task)")
-                await browserAgent?.start(task: task)
-            } else {
-                let url = searchURL(platform: step.target, query: step.detail)
-                lastNavigatedSite = url
-                await tabManager.navigate(to: url)
+                logger.info("[dispatch] On-page search via agent: \(task, privacy: .public)")
+                await browserAgent?.enqueue(task: task)
             }
 
         case "type", "click", "scroll", "send", "create":
             // Wait for page to be loaded before interacting
             await tabManager.waitUntilLoaded()
             let task = "\(step.action) \(step.detail) in \(step.target)".trimmingCharacters(in: .whitespaces)
-            await browserAgent?.start(task: task)
+            await browserAgent?.enqueue(task: task)
 
         default:
-            logger.warning("Unknown action: \(step.action)")
+            logger.warning("Unknown action: \(step.action, privacy: .public)")
         }
 
         // Write back to session context — the "AIP write" step.
@@ -690,6 +826,19 @@ final class VoiceAgent {
             detail: step.detail,
             pageTitle: pageTitle
         )
+    }
+
+    static func friendlyStatus(_ step: IntentStep) -> String {
+        let what = step.detail.isEmpty ? step.target : step.detail
+        switch step.action {
+        case "open": return "Opening \(step.detail.isEmpty ? (URL(string: step.target)?.host ?? step.target) : step.detail)"
+        case "search": return "Searching for \"\(step.detail)\""
+        case "click": return "Clicking \(what)"
+        case "type": return "Typing \"\(step.detail)\""
+        case "scroll": return "Scrolling \(step.detail)"
+        case "go_back": return "Going back"
+        default: return "\(step.action.capitalized) \(what)"
+        }
     }
 
     // MARK: - Helpers
@@ -705,13 +854,20 @@ final class VoiceAgent {
             guard let self else { return }
             Task { @MainActor in
                 guard self.isListening else { return }
-                logger.info("[voice] Auto-stopping after \(Self.silenceAutoStopMS)ms silence")
-                self.stop()
+                // Hands-free: the mic stays open. Just start fresh so the next sentence is a new command.
+                logger.info("[voice] Utterance done after \(Self.utteranceResetMS, privacy: .public)ms silence, ready for next")
+                self.resetDispatchState()
+                self.liveTranscript = ""
+                self.finalTranscript = ""
+                self.statusLine = ""
+                if self.actedThisUtterance { self.awakeUntil = Date().addingTimeInterval(Self.followUpSeconds) }
+                self.actedThisUtterance = false
+                self.isAwake = false
             }
         }
         silenceTimer = work
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + .milliseconds(Self.silenceAutoStopMS),
+            deadline: .now() + .milliseconds(Self.utteranceResetMS),
             execute: work
         )
     }
@@ -753,24 +909,20 @@ final class VoiceAgent {
         return parts.joined(separator: "\n")
     }
 
-    private func splitOnConjunctions(_ text: String) -> [String] {
-        // Case-insensitive split on "and", "then", "also"
-        let pattern = #"(?i)\s+(?:and|then|also)\s+"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return [text]
-        }
-        let nsText = text as NSString
-        var parts: [String] = []
-        var lastEnd = 0
-        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
-        for match in matches {
-            let partRange = NSRange(location: lastEnd, length: match.range.location - lastEnd)
-            parts.append(nsText.substring(with: partRange))
-            lastEnd = match.range.location + match.range.length
-        }
-        parts.append(nsText.substring(from: lastEnd))
-        return parts.filter { !$0.isEmpty }
+    /// Splits speech into clauses on "and" / "then" / "also" (and a lone "n", which is how Deepgram
+    /// writes a fast "and": "lofi beats n, play the first video"). Tolerates the punctuation Deepgram adds
+    /// ("lofi beats and, like, play the first video" used to stay one clause and became the YouTube
+    /// search query) and drops filler words first.
+    static func splitOnConjunctions(_ text: String) -> [String] {
+        text.replacingOccurrences(of: fillerPattern, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)[\s,;]+(?:and then|and|then|also|n)\b[\s,;]*"#, with: "\u{1F}", options: .regularExpression)
+            .components(separatedBy: "\u{1F}")
+            .map { $0.trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: ","))) }
+            .filter { !$0.isEmpty }
     }
+
+    /// "um", "uh", and "like," / "you know," used as filler (with the comma, so "songs like this" stays).
+    private static let fillerPattern = #"(?i)\b(?:um+|uh+|erm)\b[,.]?|(?<=[\s,])like,|\byou know,"#
 
     private func stepFingerprint(_ step: IntentStep) -> String {
         switch step.action {
@@ -792,6 +944,22 @@ final class VoiceAgent {
         "github", "amazon", "wikipedia", "google maps", "google",
         "facebook marketplace", "ebay",
     ]
+
+    /// Which known search platform a URL belongs to ("https://www.youtube.com/watch?v=…" → "youtube").
+    /// Matches on the host, so "netflix.com" doesn't count as "x.com".
+    static func platform(for url: String) -> String? {
+        let full = url.contains("://") ? url : "https://\(url)"
+        guard let comps = URL(string: full), let host = comps.host?.lowercased() else { return nil }
+        let path = comps.path.lowercased()
+        func on(_ domain: String) -> Bool { host == domain || host.hasSuffix("." + domain) }
+        if on("google.com") && path.hasPrefix("/maps") { return "google maps" }
+        if on("facebook.com") && path.hasPrefix("/marketplace") { return "facebook marketplace" }
+        if on("mail.google.com") { return "gmail" }
+        let sites = [("youtube.com", "youtube"), ("amazon.com", "amazon"), ("reddit.com", "reddit"),
+                     ("github.com", "github"), ("x.com", "x"), ("twitter.com", "x"),
+                     ("wikipedia.org", "wikipedia"), ("ebay.com", "ebay"), ("google.com", "google")]
+        return sites.first { on($0.0) }?.1
+    }
 
     private func hasSearchURLPattern(_ platform: String) -> Bool {
         Self.knownSearchSites.contains(platform.lowercased())
@@ -829,6 +997,7 @@ final class VoiceAgent {
 
     IMPORTANT rules:
     - If a phrase seems mid-sentence or cut off, it is INCOMPLETE.
+    - The mic is always on: conversation or commentary that isn't a request to the browser is INCOMPLETE.
     - If a phrase is clearly a full command, it is COMPLETE.
     - Split multi-command sentences on "and" / "then" and evaluate each part independently.
     - Ignore filler words like "can you", "please", "um", "uh".
@@ -887,6 +1056,10 @@ final class VoiceAgent {
     Example: user searched YouTube, got Shorts. Says "no I want a regular video not a short" \
     → click on "Videos" filter tab, or search with modified query.
     3. Never return empty steps for corrections — always generate the corrective action.
+    4. The microphone is always on, so you also hear conversation. Only act on speech clearly \
+    directed at the browser as a request (open, search, play, click, add, buy, scroll, go back, \
+    type...). Commentary, talking to someone else, complaints, numbers or fragments \
+    ("five six seven seconds", "it ended up working") → {"steps": []}.
 
     Common URL mappings:
     - google → https://www.google.com
@@ -906,7 +1079,7 @@ final class VoiceAgent {
 
 enum VoiceAgentError: LocalizedError {
     case missingDeepgramKey
-    case missingOpenAIKey
+    case missingLLMKey
     case microphoneDenied
     case audioFormatFailed
     case badDeepgramURL
@@ -914,7 +1087,7 @@ enum VoiceAgentError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingDeepgramKey: return "DEEPGRAM_API_KEY is not set"
-        case .missingOpenAIKey: return "OpenAI API key is not set"
+        case .missingLLMKey: return "GROQ_API_KEY is not set in .env"
         case .microphoneDenied: return "Microphone permission denied"
         case .audioFormatFailed: return "Failed to create 16 kHz PCM format"
         case .badDeepgramURL: return "Invalid Deepgram URL"

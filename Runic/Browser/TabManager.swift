@@ -327,7 +327,9 @@ final class TabManager {
     func takeScreenshot() async -> Data? {
         guard let webView = activeWebView else { return nil }
         let config = WKSnapshotConfiguration()
-        config.snapshotWidth = NSNumber(value: 1280)
+        // Small on purpose: it's only a fallback for when the agent is stuck, and full-size Retina
+        // shots were ~640 KB, making every request ~860 KB. 640pt (1280px at 2x) is plenty to read.
+        config.snapshotWidth = NSNumber(value: 640)
 
         return await withCheckedContinuation { continuation in
             #if os(macOS)
@@ -335,7 +337,7 @@ final class TabManager {
                 guard let image = image,
                       let tiff = image.tiffRepresentation,
                       let bitmap = NSBitmapImageRep(data: tiff),
-                      let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+                      let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.5])
                 else { continuation.resume(returning: nil); return }
                 continuation.resume(returning: jpeg)
             }
@@ -345,9 +347,9 @@ final class TabManager {
                 // Redraw into an opaque context to strip the alpha channel
                 let format = UIGraphicsImageRendererFormat()
                 format.opaque = true
-                format.scale = image.scale
+                format.scale = 2  // not the screen's 3x; keeps the upload small
                 let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
-                let jpeg = renderer.jpegData(withCompressionQuality: 0.8) { ctx in
+                let jpeg = renderer.jpegData(withCompressionQuality: 0.5) { ctx in
                     image.draw(at: .zero)
                 }
                 continuation.resume(returning: jpeg)

@@ -64,16 +64,12 @@ struct MainBrowserView: View {
                     }
                 }
                 .ignoresSafeArea()
-
-                VStack {
-                    Spacer()
-
-                    if !StoreManager.shared.isPremium {
-                        SubscriptionBannerView(showSettings: $showSettings)
-                    }
-                }
             }
-            //TODO: allow this to work on macos too
+            .overlay(alignment: .bottom) {
+                VoiceCaptionView(voice: voiceAgent, agent: agent)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+            }
             #if os(iOS)
                 .toolbar {
 
@@ -86,15 +82,7 @@ struct MainBrowserView: View {
 
                     //Back Button
                     ToolbarItem(placement: .bottomBar) {
-                            if !agent.isRunning,
-                                tabManager.activeWebView?.canGoBack == true
-                            {
-                                Button {
-                                    Task { await tabManager.goBack() }
-                                } label: {
-                                    Image(systemName: "chevron.left")
-                                }
-                            }
+                        backButton
                     }
 
                     ToolbarSpacer(placement: .bottomBar)
@@ -132,55 +120,86 @@ struct MainBrowserView: View {
 
                     // Mic button
                     ToolbarItem(placement: .bottomBar) {
-                        Button {
-                            print("[VoiceAgent] Mic button tapped")
-                            Task {
-                                if voiceAgent.isListening {
-                                    print("[VoiceAgent] Stopping...")
-                                    voiceAgent.stop()
-                                } else {
-                                    do {
-                                        print("[VoiceAgent] Starting...")
-                                        try await voiceAgent.start()
-                                        print("[VoiceAgent] Started OK")
-                                    } catch {
-                                        print("[VoiceAgent] Error: \(error)")
-                                        voiceAgent.statusLine = error.localizedDescription
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: voiceAgent.isListening ? "mic.fill" : "mic")
-                                .foregroundStyle(voiceAgent.isListening ? .red : .primary)
-                        }
+                        micButton
                     }
 
                     ToolbarSpacer(placement: .bottomBar)
 
                     //Send / Stop Button
                     ToolbarItem(placement: .bottomBar) {
-                        if agent.isRunning {
-                            Button {
-                                agent.stop()
-                            } label: {
-                                Image(systemName: "stop.fill")
-                                .background(
-                                    Color.red,
-                                    in: RoundedRectangle(cornerRadius: 8)
-                                )
-                            }
-                        } else {
-                            Button {
-                                isBarFocused = false
-                                onSubmit()
-                            } label: {
-                                Image(systemName: "arrow.up")
-                            }
-                        }
+                        sendButton
                     }
                 }
+            #else
+                // macOS has no bottom toolbar placement, so the same controls sit in a bar under the content.
+                .safeAreaInset(edge: .bottom) {
+                    HStack(spacing: 14) {
+                        moreMenu
+                        backButton
+                        searchPill
+                            .padding(.vertical, 10)
+                            .glassEffect(.regular, in: .capsule)
+                        micButton
+                        sendButton
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.system(size: 16, weight: .medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+            #endif
+        }
+    }
 
-#endif // os(iOS)
+    @ViewBuilder
+    private var backButton: some View {
+        if !agent.isRunning, tabManager.activeWebView?.canGoBack == true {
+            Button {
+                Task { await tabManager.goBack() }
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+        }
+    }
+
+    private var micButton: some View {
+        Button {
+            Task {
+                if voiceAgent.isListening {
+                    voiceAgent.stop()
+                } else {
+                    do {
+                        try await voiceAgent.start()
+                    } catch {
+                        voiceAgent.statusLine = error.localizedDescription
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: voiceAgent.isListening ? "mic.fill" : "mic")
+                .foregroundStyle(voiceAgent.isListening ? .red : .primary)
+        }
+    }
+
+    @ViewBuilder
+    private var sendButton: some View {
+        if agent.isRunning {
+            Button {
+                agent.stop()
+            } label: {
+                Image(systemName: "stop.fill")
+                .background(
+                    Color.red,
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+            }
+        } else {
+            Button {
+                isBarFocused = false
+                onSubmit()
+            } label: {
+                Image(systemName: "arrow.up")
+            }
         }
     }
 
@@ -205,17 +224,8 @@ struct MainBrowserView: View {
                     .foregroundStyle(.green)
             }
 
-            if voiceAgent.isListening {
-                Image(systemName: "waveform")
-                    .foregroundStyle(.red)
-                    .symbolEffect(.variableColor.iterative, isActive: true)
-
-                Text(voiceAgent.liveTranscript.isEmpty ? "Listening..." : voiceAgent.liveTranscript)
-                    .font(.system(size: 15))
-                    .lineLimit(1)
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else if agent.isRunning {
+            // Voice is always on and shown in the caption above, so the bar stays a normal text field.
+            if agent.isRunning {
                 ProgressView()
                     .controlSize(.mini)
 
@@ -237,6 +247,10 @@ struct MainBrowserView: View {
                 //TODO: re-enable this and allow the view to grow taller to show the text content.
                 .lineLimit(1...6)
                 .textFieldStyle(.plain)
+                .onSubmit {
+                    isBarFocused = false
+                    onSubmit()
+                }
                 //TODO: make this a struct and let the barText propagate to refresh the vew
                 .font(.system(size: barText.isEmpty ? 16 : 16))
             }
@@ -423,8 +437,6 @@ struct ContentView: View {
     @State private var tabManager = TabManager()
     @State private var agent = BrowserAgent()
     @State private var voiceAgent = VoiceAgent()
-    @State private var backend = BackendService()
-    @State private var storeManager = StoreManager.shared
     @State private var barText = ""
     @State private var showAgentLog = false
     @State private var showAgentSheet = false
@@ -468,7 +480,9 @@ struct ContentView: View {
         }
         .onAppear { loadState() }
         .task {
-            await checkSubscriptionOnLaunch()
+            // Hands-free: start listening as soon as the app opens.
+            guard !Secrets.deepgramAPIKey.isEmpty else { return }
+            do { try await voiceAgent.start() } catch { voiceAgent.statusLine = error.localizedDescription }
         }
     }
 
@@ -488,7 +502,6 @@ struct ContentView: View {
 
     private func loadState() {
         agent.tabManager = tabManager
-        agent.backend = backend
         voiceAgent.tabManager = tabManager
         voiceAgent.browserAgent = agent
     }
@@ -543,7 +556,11 @@ struct ContentView: View {
             tabManager.createTab(url: "https://google.com")
         }
 
-        if looksLikeURL(text) {
+        if let url = directNavigationURL(for: text) {
+            Task { await tabManager.navigate(to: url) }
+            barText = ""
+            isBarFocused = false
+        } else if looksLikeURL(text) {
             Task { await tabManager.navigate(to: text) }
             //TODO: make the URL part of barText---allowing it to be edited and refreshed---and disable the input when in agent mode.
             barText = ""
@@ -553,9 +570,5 @@ struct ContentView: View {
             isBarFocused = false
             Task { await agent.start(task: text) }
         }
-    }
-
-    private func checkSubscriptionOnLaunch() async {
-        await StoreManager.shared.updateSubscriptionStatus()
     }
 }

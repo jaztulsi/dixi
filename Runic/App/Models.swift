@@ -55,7 +55,7 @@ struct AgentLogEntry: Identifiable {
     let timestamp = Date()
 }
 
-// MARK: - OpenAI API Types
+// MARK: - Chat Completions API Types (OpenAI-compatible)
 
 struct ChatMessage: Codable {
     let role: String

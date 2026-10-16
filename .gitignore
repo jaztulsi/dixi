@@ -3,4 +3,4 @@
 .*
 backend/target/
 !.gitignore
-Runic/Secrets.swift
+!.env.example

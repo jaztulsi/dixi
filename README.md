@@ -2,23 +2,23 @@
 
 An AI-native browser for iOS and macOS. Runic wraps a multi-tab WebKit browser around two agents: a voice agent that acts while you are still speaking, and a browser agent that clicks, types and navigates the web to complete tasks on its own.
 
-Built with SwiftUI and targeting iOS 26 / macOS 26.
+Built with SwiftUI. Deployment target: iOS 26.2 / macOS 26.2.
 
 ## Features
 
 ### Voice agent: faster than finishing your sentence
 
-Streams microphone audio to Deepgram for live transcription and dispatches actions incrementally, before you stop talking:
+Hands-free: Runic starts listening when it opens and never needs a button. Start a command with **"Runic"** ("Runic, open YouTube and search for lofi beats"); for 8 seconds after it acts, follow-ups like "click the second one" work without it. Everything else (TV, conversation) is ignored without an AI call. The wake word can be turned off in Settings. Audio streams to Deepgram (`nova-2`) for live transcription, and actions dispatch before you stop talking:
 
-1. Interim transcript: instant navigation to known sites via regex fast-path
-2. Interim stable for 300ms: LLM evaluates whether the partial command is already actionable
-3. Final transcript: LLM catches anything not yet dispatched
+1. Interim transcript: instant navigation to known sites via a regex fast path, no LLM call
+2. Interim text unchanged for 300 ms: an LLM on Groq (`openai/gpt-oss-20b`) decides whether the partial command is already actionable
+3. Final transcript: the LLM catches anything not yet dispatched
 
-A rolling session context (last 20 actions) is hydrated into each LLM call, so follow-ups like "open the second one" resolve against what just happened.
+Only parts you have already moved past ("open amazon **and** ...") run early; the last part waits until you finish speaking, so "add a bean burrito" is not cut into "bean" and "burrito". After each command the mic stays open for the next one, and it reconnects on its own if the connection drops. A rolling session context (last 20 actions) is fed into each LLM call, so follow-ups like "open the second one" resolve against what just happened.
 
 ### Browser agent: autonomous task completion
 
-A tool-calling LLM loop that operates the browser like a user would. The page's interactive elements (buttons, links, inputs) are extracted from the DOM with bounding boxes and indexed, then the agent acts through a fixed tool set:
+A tool-calling LLM loop (up to 15 steps per task) that operates the browser like a user would. Interactive elements (buttons, links, inputs) are extracted from the DOM with bounding boxes and indexed, and the agent acts through a fixed tool set:
 
 | Tool | What it does |
 |------|--------------|
@@ -29,39 +29,36 @@ A tool-calling LLM loop that operates the browser like a user would. The page's 
 | `new_tab` / `switch_tab` | Multi-tab control |
 | `wait` | Pause for slow pages |
 | `evaluate_js` | Run JavaScript directly |
-| `fork_tasks` | Spawn parallel subtasks across tabs (e.g. compare prices on three sites at once) |
+| `fork_tasks` | Spawn parallel subtasks, each in its own tab (e.g. compare prices on three sites at once) |
+| `done` | Finish and report a summary |
 
-Built-in platform shortcuts route obvious tasks straight to YouTube, Amazon, Reddit, GitHub and others instead of detouring through Google. A site cache remembers which URLs satisfied past tasks. A live agent log shows every thought and action as it happens.
+Forked sub-agents get a reduced tool set (no `fork_tasks`, `new_tab` or `switch_tab`) to prevent recursion and tab conflicts. When the agent looks stuck, a screenshot of the page is attached to the next turn.
 
-### On-device task classification
+Built-in platform shortcuts send obvious tasks straight to search pages on YouTube, Amazon, Reddit, GitHub, Wikipedia and others instead of detouring through Google. A site cache remembers which URLs satisfied past tasks and jumps there directly on similar ones. A live agent log shows every thought and action as it happens.
 
-On iOS 26+ devices, Apple's FoundationModels framework classifies task complexity (simple, moderate or complex) on-device to route between fast paths and full agent runs, with no server round-trip. Older devices fall back to sub-millisecond heuristics.
+### Models and the free Groq tier
+
+- **Your own key:** with a Groq API key in `.env`, the agent calls Groq's OpenAI-compatible `/chat/completions` directly. The browser agent uses `qwen/qwen3.8-27b` (the Groq model that supports both tool calls and images) and the voice agent uses `openai/gpt-oss-20b`. Override either with `AGENT_MODEL` / `VOICE_MODEL` in `.env`.
+- The free tier allows about 8k tokens per minute per model. Each agent step is ~2.7k tokens (trimmed history, capped page snapshot, terse tools). When a model is rate-limited Runic switches to another Groq model with budget left instead of waiting.
+- Typed or spoken "go to amazon" opens the site instantly with no AI call.
 
 ### Full browser underneath
 
 - Multi-tab browsing on `WKWebView` with a Safari user agent
-- Start page, navigation bar and a unified bottom input bar for both typed and spoken commands
-- Scroll-direction-aware chrome (UI collapses as you scroll)
-
-### Accounts and subscriptions
-
-- Backend auth (register / login) with token persistence
-- StoreKit 2 monthly and yearly premium subscriptions with a transaction listener and restore support
+- Start page, navigation bar and a unified bottom input bar for typed commands
+- Swipe the input bar left or right to switch tabs
 
 ## Architecture
 
 ```
 RunicApp
 └── ContentView
-    ├── TabManager          WKWebView pool, DOM extraction, JS bridge
-    ├── BrowserAgent        tool-calling agent loop (OpenAI-compatible API)
-    │   ├── OpenAIService   chat completions and tool definitions
-    │   ├── SiteCache       task-to-URL memory
-    │   └── BackendService  auth, chat proxy, task history
-    ├── VoiceAgent          Deepgram streaming and incremental dispatch
-    │   └── SessionContext  rolling action history for LLM hydration
-    ├── OnDeviceClassifier  FoundationModels complexity routing
-    └── StoreManager        StoreKit 2 subscriptions
+    ├── TabManager          WKWebView pool, DOM extraction, screenshots, JS bridge
+    ├── BrowserAgent        tool-calling agent loop on Groq, FIFO queue for spoken commands
+    │   ├── LLMService      Groq chat completions and tool definitions
+    │   └── SiteCache       task-to-URL memory
+    └── VoiceAgent          always-on Deepgram streaming and incremental dispatch
+        └── SessionContext  rolling action history for LLM hydration
 ```
 
 Everything is SwiftUI + `@Observable`, with `@MainActor` isolation where it touches WebKit.
@@ -70,9 +67,8 @@ Everything is SwiftUI + `@Observable`, with `@MainActor` isolation where it touc
 
 ### Requirements
 
-- Xcode 26+
-- iOS 26 / macOS 26 deployment target
-- An OpenAI API key (or any OpenAI-compatible endpoint, the base URL is configurable)
+- Xcode 26.2+
+- A Groq API key (free tier available at https://console.groq.com/keys)
 - A Deepgram API key (for the voice agent)
 
 ### Setup
@@ -83,44 +79,45 @@ Everything is SwiftUI + `@Observable`, with `@MainActor` isolation where it touc
    cd runic
    ```
 
-2. Create your secrets file:
+2. Create a `.env` file in the repo root (next to this README):
    ```sh
-   cp Runic/Secrets.swift.example Runic/Secrets.swift
+   cp .env.example .env
    ```
-   Then fill in your keys:
-   ```swift
-   enum Secrets {
-       static let openAIAPIKey  = "sk-..."
-       static let deepgramAPIKey = "..."
-   }
+   Then paste your keys after the `=` signs:
    ```
-   `Secrets.swift` is gitignored. It never leaves your machine.
+   GROQ_API_KEY=gsk_...
+   DEEPGRAM_API_KEY=...
+   ```
+   `.env` is gitignored, so your keys stay out of version control. A build step copies it into the app, where `Secrets.swift` reads it. Rebuild after changing keys. Note that the keys ship inside the app bundle.
 
 3. Open `Runic.xcodeproj` in Xcode and run.
 
+Everything is free: there are no accounts, subscriptions or servers besides Groq and Deepgram.
+
 ### Usage
 
-- Type a task in the bottom input bar ("find the cheapest flight from SFO to Tokyo in November") and watch the agent work in the live log.
-- Hold to speak. Commands dispatch as you talk: "Open YouTube and search for..." starts navigating before you finish the sentence.
-- Parallel tasks: ask for comparisons ("compare this laptop's price on Amazon and eBay") and the agent forks subtasks across tabs.
+- Type a task in the bottom input bar ("find the cheapest flight from SFO to Tokyo in November") and tap the status line to watch the agent work in the live log.
+- Just talk, starting with "Runic"; the mic is on from launch (the mic button pauses it). A live caption shows what Runic hears and what it is doing. Commands dispatch as you talk: "Open YouTube and search for..." starts navigating before you finish the sentence.
+- Parallel tasks: ask for comparisons ("compare this laptop's price on Amazon and eBay") and the agent can fork subtasks across tabs.
 
 ## Project layout
 
-```
-Runic/
-├── RunicApp.swift            App entry point
-├── ContentView.swift         Main browser UI
-├── TabManager.swift          WKWebView, tab management, JS bridge
-├── BrowserAgent.swift        Agent loop and action execution
-├── VoiceAgent.swift          Deepgram streaming and incremental dispatch
-├── OnDeviceClassifier.swift  FoundationModels task routing
-├── OpenAIService.swift       LLM API client and tool schemas
-├── BackendService.swift      Auth, chat proxy, tasks
-├── SiteCacheImpl.swift       Task-to-URL memory
-├── StoreManager.swift        StoreKit 2 subscriptions
-├── Models.swift              Shared data models
-└── *View.swift               SwiftUI components
-```
+| Folder | What's in it |
+|--------|--------------|
+| `.env` | Your API keys (create from `.env.example`) |
+| `Runic/App/` | App entry point, main browser screen, shared models |
+| `Runic/Agents/` | Browser agent, voice agent, task classifier (not wired in yet) |
+| `Runic/Browser/` | WebKit tabs, JS bridge, site cache |
+| `Runic/Services/` | Groq client, secrets loader |
+| `Runic/Views/` | SwiftUI screens and components |
+| `Runic/Resources/` | Assets, app icon, entitlements |
+| `branding/` | App Store preview images (not shipped in the app) |
+
+## Known limitations
+
+- No automated tests yet.
+- `OnDeviceClassifier` is not called anywhere, and it classifies with keyword heuristics. It does not use FoundationModels yet.
+- The Xcode project is tied to the original developer's signing team. To build for your own Mac or iPhone, pick your team under Signing & Capabilities.
 
 ## License
 

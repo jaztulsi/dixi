@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runic — the web, hands-free</title>
+<meta name="description" content="Runic is a voice-powered browser that acts before you finish your sentence.">
+<style>
+  :root {
+    --bg: #07080c;
+    --panel: #10121a;
+    --panel-2: #161925;
+    --line: rgba(255,255,255,0.08);
+    --text: #f4f5f8;
+    --muted: #9aa1b2;
+    --dim: #5f6678;
+    --accent: #7c5cff;
+    --accent-2: #22d3ee;
+    --good: #34d399;
+    --radius: 20px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* Background glow */
+  .glow {
+    position: fixed; inset: -20% -10% auto -10%; height: 90vh; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(40% 50% at 25% 30%, rgba(124,92,255,0.28), transparent 70%),
+      radial-gradient(35% 45% at 80% 20%, rgba(34,211,238,0.18), transparent 70%);
+    filter: blur(20px);
+  }
+
+  /* Nav */
+  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(16px); background: rgba(7,8,12,0.6); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; letter-spacing: -0.01em; }
+  .brand svg { width: 26px; height: 26px; }
+  .nav-links { display: flex; align-items: center; gap: 28px; color: var(--muted); font-size: 15px; }
+  .nav-links a:hover { color: var(--text); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; border: 0; cursor: pointer;
+    font: inherit; font-weight: 600; border-radius: 999px; padding: 14px 26px; transition: transform .15s ease, box-shadow .2s ease, background .2s ease;
+  }
+  .btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
+  .btn-primary {
+    color: #fff; background: linear-gradient(135deg, var(--accent), #5b8cff);
+    box-shadow: 0 10px 40px -10px rgba(124,92,255,0.8), inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 50px -10px rgba(124,92,255,0.9), inset 0 1px 0 rgba(255,255,255,0.25); }
+  .btn-ghost { color: var(--text); background: rgba(255,255,255,0.06); border: 1px solid var(--line); }
+  .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+  .btn-sm { padding: 9px 18px; font-size: 15px; }
+
+  /* Hero */
+  .hero { padding: 96px 0 72px; display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent-2); background: rgba(34,211,238,0.08); border: 1px solid rgba(34,211,238,0.2); padding: 6px 12px; border-radius: 999px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 12px var(--accent-2); animation: pulse 1.6s ease-in-out infinite; }
+  h1 { font-size: clamp(44px, 6.4vw, 76px); line-height: 1.02; letter-spacing: -0.035em; font-weight: 800; margin: 22px 0 20px; }
+  h1 .grad { background: linear-gradient(90deg, #fff, #c4b5fd 40%, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { font-size: 20px; color: var(--muted); max-width: 30em; }
+  .cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+  .hint { margin-top: 14px; font-size: 14px; color: var(--dim); }
+
+  /* Demo card (mirrors the app's live caption) */
+  .demo {
+    position: relative; background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line);
+    border-radius: 28px; padding: 26px; box-shadow: 0 40px 120px -40px rgba(0,0,0,0.9);
+  }
+  .demo::before { content: ""; position: absolute; inset: -1px; border-radius: 28px; padding: 1px; pointer-events: none;
+    background: linear-gradient(140deg, rgba(124,92,255,0.6), transparent 40%, rgba(34,211,238,0.4));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+  .demo-top { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; font-weight: 600; }
+  .listening { display: flex; align-items: center; gap: 10px; }
+  .bars { display: flex; gap: 3px; align-items: center; height: 18px; }
+  .bars i { width: 3px; border-radius: 3px; background: #f43f5e; animation: bar 0.9s ease-in-out infinite; }
+  .bars i:nth-child(2) { animation-delay: .15s } .bars i:nth-child(3) { animation-delay: .3s } .bars i:nth-child(4) { animation-delay: .45s }
+  .url { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--dim); background: rgba(255,255,255,0.04); border: 1px solid var(--line); padding: 5px 10px; border-radius: 8px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .3s; }
+  .url.live { color: var(--accent-2); }
+  .transcript { min-height: 3.6em; margin: 22px 0 18px; font-size: 26px; line-height: 1.3; font-weight: 650; letter-spacing: -0.01em; }
+  .transcript .w { opacity: 0; display: inline-block; transform: translateY(6px); animation: word .25s ease forwards; margin-right: .26em; }
+  .transcript .wake { color: #c4b5fd; }
+  .caret { display: inline-block; width: 3px; height: 1em; vertical-align: -0.12em; background: var(--accent-2); animation: blink 1s steps(1) infinite; }
+  .steps { display: grid; gap: 10px; min-height: 104px; }
+  .step {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+    font-size: 15px; opacity: 0; transform: translateY(8px); animation: step .35s ease forwards;
+  }
+  .step .ic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: rgba(52,211,153,0.12); color: var(--good); flex: none; }
+  .step .t { color: var(--dim); margin-left: auto; font-variant-numeric: tabular-nums; font-size: 13px; }
+  .step .mid { color: var(--accent-2); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-left: 6px; }
+
+  /* Sections */
+  section { padding: 88px 0; }
+  .kicker { color: var(--accent-2); font-weight: 700; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+  h2 { font-size: clamp(32px, 4.2vw, 48px); line-height: 1.08; letter-spacing: -0.03em; margin: 12px 0 16px; font-weight: 800; }
+  .sub { color: var(--muted); font-size: 19px; max-width: 40em; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; transition: border-color .2s, transform .2s; }
+  .card:hover { border-color: rgba(124,92,255,0.4); transform: translateY(-3px); }
+  .card h3 { font-size: 20px; letter-spacing: -0.01em; margin: 16px 0 8px; }
+  .card p { color: var(--muted); font-size: 16px; }
+  .card .num { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800;
+    background: linear-gradient(135deg, rgba(124,92,255,0.25), rgba(34,211,238,0.15)); border: 1px solid rgba(124,92,255,0.35); }
+  .card .x { color: #f87171; background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.3); }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  .stat { padding: 28px; border-radius: var(--radius); background: linear-gradient(180deg, rgba(124,92,255,0.12), rgba(124,92,255,0.02)); border: 1px solid rgba(124,92,255,0.25); }
+  .stat b { display: block; font-size: 46px; letter-spacing: -0.03em; line-height: 1; }
+  .stat span { color: var(--muted); font-size: 15px; display: block; margin-top: 10px; }
+
+  .say { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+  .say span { padding: 12px 18px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--text); font-size: 16px; }
+  .say span b { color: #c4b5fd; font-weight: 600; }
+
+  .final { text-align: center; padding: 110px 0; }
+  .final .cta { justify-content: center; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--dim); font-size: 14px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  /* Launch fallback toast */
+  .toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+    background: var(--panel-2); border: 1px solid var(--line); padding: 14px 20px; border-radius: 14px; font-size: 15px; transition: all .3s ease; box-shadow: 0 20px 60px -20px #000; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @keyframes pulse { 50% { opacity: .35 } }
+  @keyframes bar { 0%, 100% { height: 4px } 50% { height: 18px } }
+  @keyframes word { to { opacity: 1; transform: none } }
+  @keyframes step { to { opacity: 1; transform: none } }
+  @keyframes blink { 50% { opacity: 0 } }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; padding-top: 56px; }
+    .grid3, .stats { grid-template-columns: 1fr; }
+    .nav-links a:not(.btn) { display: none; }
+    .transcript { font-size: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="glow" aria-hidden="true"></div>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Runic home">
+      <svg viewBox="0 0 26 26" fill="none" aria-hidden="true">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="26" y2="26"><stop stop-color="#7c5cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+        <rect width="26" height="26" rx="8" fill="url(#g)"/>
+        <path d="M7 10v6M10.5 7.5v11M14 9.5v7M17.5 6.5v13M21 10.5v5" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Runic
+    </a>
+    <div class="nav-links">
+      <a href="#problem">Why</a>
+      <a href="#how">How it works</a>
+      <a class="btn btn-primary btn-sm launch" href="runic://open">Launch Runic</a>
+    </div>
+  </div>
+</nav>
+
+<main id="top">
+  <div class="wrap hero">
+    <div>
+      <span class="eyebrow"><span class="dot"></span>Voice-powered browser agent</span>
+      <h1>The web,<br><span class="grad">hands-free.</span></h1>
+      <p class="lede">Say what you want. Runic reads the live page and does it, acting <strong>before you finish your sentence</strong>. No mouse, no keyboard, no commands to memorize.</p>
+      <div class="cta">
+        <a class="btn btn-primary launch" href="runic://open">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" fill="currentColor"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Launch Runic
+        </a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
+      </div>
+      <p class="hint">Opens the Runic app on this Mac. Then just say &ldquo;Runic, &hellip;&rdquo;</p>
+    </div>
+
+    <div class="demo" role="img" aria-label="Animated demo: Runic opens YouTube while the user is still speaking, then searches.">
+      <div class="demo-top">
+        <span class="listening"><span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Listening to you</span>
+        <span class="url" id="url">about:blank</span>
+      </div>
+      <div class="transcript" id="transcript"></div>
+      <div class="steps" id="steps"></div>
+    </div>
+  </div>
+
+  <section id="problem">
+    <div class="wrap">
+      <div class="kicker">The problem</div>
+      <h2>If you can&rsquo;t use your hands, the web barely works.</h2>
+      <p class="sub">People with conditions like ALS and cerebral palsy are left with tools that are slow, narrow, or expensive.</p>
+      <div class="grid3">
+        <div class="card">
+          <div class="num x">1</div>
+          <h3>Voice assistants wait</h3>
+          <p>Siri and Alexa wait until you stop talking, think for seconds, then handle one narrow task, or hand you off somewhere else.</p>
+        </div>
+        <div class="card">
+          <div class="num x">2</div>
+          <h3>AI agents squint at screenshots</h3>
+          <p>Today&rsquo;s AI browsers screenshot the page and guess pixel coordinates to click. Slow, costly, and easy to break.</p>
+        </div>
+        <div class="card">
+          <div class="num x">3</div>
+          <h3>Assistive hardware is pricey</h3>
+          <p>Eye-gaze systems can cost thousands of dollars, and built-in head tracking is tiring to use for everyday browsing.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="kicker">How it works</div>
+      <h2>Talk naturally. Runic keeps up.</h2>
+      <p class="sub">Your speech streams in live. Every finished part of a sentence is acted on immediately, while you keep talking.</p>
+      <div class="grid3">
+        <div class="card">
+          <div class="num">1</div>
+          <h3>Always listening</h3>
+          <p>No button. Start with &ldquo;Runic&rdquo; and it&rsquo;s yours. Follow-ups like &ldquo;click the second one&rdquo; just work. TV and conversation are ignored.</p>
+        </div>
+        <div class="card">
+          <div class="num">2</div>
+          <h3>Acts mid-sentence</h3>
+          <p>&ldquo;Open YouTube&rdquo; fires the moment you say it. By the time you finish &ldquo;&hellip;and search for lofi beats&rdquo;, the results are loading.</p>
+        </div>
+        <div class="card">
+          <div class="num">3</div>
+          <h3>Reads the real page</h3>
+          <p>Runic reads the page&rsquo;s actual buttons, links and fields, not pixels, so it can click &ldquo;Add to cart&rdquo; on sites nobody pre-programmed.</p>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>~1s</b><span>into your sentence, the site is already opening</span></div>
+        <div class="stat"><b>~1.7s</b><span>after you stop talking, search results load</span></div>
+        <div class="stat"><b>0</b><span>clicks, keys or memorized commands</span></div>
+      </div>
+
+      <div class="say" aria-label="Things you can say">
+        <span><b>Runic,</b> open YouTube and search for lofi beats</span>
+        <span><b>Runic,</b> go to Amazon and search for noise cancelling headphones</span>
+        <span>click the second one</span>
+        <span>add it to my cart</span>
+        <span>go back</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Just say what you want.</h2>
+      <p class="sub" style="margin: 0 auto;">Runic does the rest, before you&rsquo;ve even finished asking.</p>
+      <div class="cta"><a class="btn btn-primary launch" href="runic://open">Launch Runic</a></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Runic &mdash; a hands-free, voice-powered browser.</span>
+    <span>Built with SwiftUI, WebKit, Groq and Deepgram.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status">Couldn&rsquo;t open Runic. Is the app installed on this Mac?</div>
+
+<script>
+  // Hero demo: mirrors how the app works. Each step fires at the word where Runic acts,
+  // i.e. mid-sentence, not after the user stops talking.
+  const scripts = [
+    { words: ["Runic,", "open", "YouTube", "and", "search", "for", "lofi", "beats."],
+      steps: [
+        { at: 2, text: "Opening YouTube", url: "youtube.com", mid: true },
+        { at: 7, text: "Searching for “lofi beats”", url: "youtube.com/results?search_query=lofi+beats" } ] },
+    { words: ["Runic,", "go", "to", "Amazon", "and", "search", "for", "noise", "cancelling", "headphones."],
+      steps: [
+        { at: 3, text: "Opening Amazon", url: "amazon.com", mid: true },
+        { at: 9, text: "Searching for “noise cancelling headphones”", url: "amazon.com/s?k=noise+cancelling+headphones" } ] },
+    { words: ["add", "the", "Sony", "ones", "to", "my", "cart."],
+      steps: [ { at: 6, text: "Clicking “Add to cart” on Sony WH-1000XM5", url: "amazon.com/cart" } ] },
+  ];
+  const $t = document.getElementById("transcript"), $s = document.getElementById("steps"), $u = document.getElementById("url");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = ms => new Promise(r => setTimeout(r, reduce ? 0 : ms));
+  const check = '<span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m5 12 5 5L20 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+
+  async function play() {
+    for (let n = 0; ; n = (n + 1) % scripts.length) {
+      const { words, steps } = scripts[n];
+      $t.innerHTML = '<span class="caret"></span>'; $s.innerHTML = "";
+      const started = performance.now();
+      for (let i = 0; i < words.length; i++) {
+        const w = document.createElement("span");
+        w.className = "w" + (i === 0 && /^runic/i.test(words[i]) ? " wake" : "");
+        w.textContent = words[i];
+        $t.insertBefore(w, $t.lastChild);
+        await wait(330);
+        for (const st of steps.filter(s => s.at === i)) {
+          const el = document.createElement("div");
+          el.className = "step";
+          const secs = ((performance.now() - started) / 1000).toFixed(1);
+          el.innerHTML = `${check}<span>${st.text}</span>${st.mid ? '<span class="mid">while talking</span>' : ""}<span class="t">${secs}s</span>`;
+          $s.appendChild(el);
+          $u.textContent = st.url; $u.classList.add("live");
+        }
+      }
+      await wait(2600);
+      $u.classList.remove("live");
+    }
+  }
+  play();
+
+  // Launch button: runic:// opens the app. If the page never loses focus, the app probably isn't installed.
+  const toast = document.getElementById("toast");
+  document.querySelectorAll(".launch").forEach(a => a.addEventListener("click", () => {
+    let left = false;
+    const onBlur = () => { left = true; };
+    window.addEventListener("blur", onBlur, { once: true });
+    setTimeout(() => {
+      window.removeEventListener("blur", onBlur);
+      if (!left && document.visibilityState === "visible") {
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 3500);
+      }
+    }, 1500);
+  }));
+</script>
+</body>
+</html>

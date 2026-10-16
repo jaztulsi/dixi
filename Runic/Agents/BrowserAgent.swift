@@ -23,21 +23,10 @@ protocol SiteCache: AnyObject {
 
 enum PlatformShortcuts {
     static let promptSnippet = """
-    When the task clearly targets a known platform, use navigate to go there directly \
-    instead of searching Google first. Use these URL patterns (replace {q} with the URL-encoded query):
-      YouTube:       https://www.youtube.com/results?search_query={q}
-      Twitter/X:     https://x.com/search?q={q}
-      Reddit:        https://www.reddit.com/search/?q={q}
-      GitHub:        https://github.com/search?q={q}
-      StackOverflow: https://stackoverflow.com/search?q={q}
-      Amazon:        https://www.amazon.com/s?k={q}
-      eBay:          https://www.ebay.com/sch/i.html?_nkw={q}
-      Wikipedia:     https://en.wikipedia.org/wiki/Special:Search?search={q}
-      Google Maps:   https://www.google.com/maps/search/{q}
-      Google News:   https://news.google.com/search?q={q}
-      Google:        https://www.google.com/search?q={q}
-    Only use these when the user explicitly mentions the platform or the task \
-    obviously belongs there (e.g. "find a video" → YouTube). Otherwise start with Google.
+    Search URLs for named/obvious platforms ({q} = URL-encoded query): \
+    youtube.com/results?search_query={q} | x.com/search?q={q} | reddit.com/search/?q={q} | \
+    github.com/search?q={q} | amazon.com/s?k={q} | ebay.com/sch/i.html?_nkw={q} | \
+    en.wikipedia.org/wiki/Special:Search?search={q} | google.com/maps/search/{q}
     """
 }
 
@@ -52,22 +41,20 @@ final class BrowserAgent {
     var finalResult: String?
     var currentStatusLine: String = ""
 
-    private let openAI = OpenAIService()
-    private var wsTask: URLSessionWebSocketTask?
+    private let llm = LLMService()
     private var recentActions: [String] = []
 
     var tabManager: TabManager?
     var siteCache: SiteCache?
-    var backend: BackendService?
 
     var apiKey: String {
-        get { openAI.apiKey }
-        set { openAI.apiKey = newValue }
+        get { llm.apiKey }
+        set { llm.apiKey = newValue }
     }
 
     var apiBaseURL: String {
-        get { openAI.baseURL }
-        set { openAI.baseURL = newValue }
+        get { llm.baseURL }
+        set { llm.baseURL = newValue }
     }
 
     // MARK: - Public
@@ -78,17 +65,9 @@ final class BrowserAgent {
             return
         }
 
-        let useBackend = backend?.isLoggedIn == true && backend?.token != nil
-        guard useBackend || !openAI.apiKey.isEmpty else {
-            logger.error("No backend or API key configured")
-            log(.error, "Log in or set your OpenAI API key first")
-            return
-        }
-        
-        if useBackend && !StoreManager.shared.isPremium {
-            logger.warning("User not subscribed - showing subscribe prompt")
-            log(.error, "Subscribe to Premium to use the AI agent")
-            currentStatusLine = "Subscribe to Premium"
+        guard !llm.apiKey.isEmpty else {
+            logger.error("No API key configured")
+            log(.error, "Set GROQ_API_KEY in .env first")
             return
         }
 
@@ -98,8 +77,12 @@ final class BrowserAgent {
         taskDescription = task
         logEntries = []
         recentActions = []
+        llm.onRateLimit = { [weak self] seconds in
+            self?.currentStatusLine = "Groq rate limit, waiting \(seconds)s..."
+            self?.log(.info, "Groq free-tier rate limit hit, waiting \(seconds)s")
+        }
 
-        logger.info("Agent starting task: \(task)")
+        logger.info("Agent starting task: \(task, privacy: .public)")
         currentStatusLine = "Starting: \(task)"
         log(.info, "Starting task: \(task)")
 
@@ -115,173 +98,33 @@ final class BrowserAgent {
         }
         siteCache?.recordVisit(task: task, url: tabManager.getCurrentURL())
 
-        if useBackend {
-            await startViaWebSocket(task: task, tabManager: tabManager)
-        } else {
-            await startViaHTTP(task: task, tabManager: tabManager)
-        }
+        await runAgentLoop(task: task, tabManager: tabManager)
 
-        logger.info("Agent loop ended after \(self.currentStep) steps")
+        logger.info("Agent loop ended after \(self.currentStep, privacy: .public) steps")
         currentStatusLine = ""
         isRunning = false
     }
 
+    /// Runs tasks one after another in the order they were spoken. `start` alone drops a task
+    /// if the agent is busy, which loses follow-ups like "add this to cart... and that one too".
+    func enqueue(task: String) async {
+        let previous = queueTail
+        let next = Task { await previous?.value; await self.start(task: task) }
+        queueTail = next
+        await next.value
+    }
+    private var queueTail: Task<Void, Never>?
+
     func stop() {
-        logger.info("Agent stopped by user at step \(self.currentStep)")
+        logger.info("Agent stopped by user at step \(self.currentStep, privacy: .public)")
         isRunning = false
-        wsTask?.cancel(with: .normalClosure, reason: nil)
-        wsTask = nil
         currentStatusLine = ""
         log(.info, "Agent stopped by user")
     }
 
-    // MARK: - WebSocket Path
+    // MARK: - Agent Loop (Groq)
 
-    private func startViaWebSocket(task: String, tabManager: TabManager) async {
-        guard let backend = backend, let token = backend.token else { return }
-
-        let wsURLString = backend.baseURL
-            .replacingOccurrences(of: "http://", with: "ws://")
-            .replacingOccurrences(of: "https://", with: "wss://")
-            + "/api/ws/chat?token=\(token)"
-
-        guard let wsURL = URL(string: wsURLString) else {
-            log(.error, "Invalid WebSocket URL")
-            return
-        }
-
-        let ws = URLSession.shared.webSocketTask(with: wsURL)
-        ws.resume()
-        self.wsTask = ws
-        defer {
-            ws.cancel(with: .normalClosure, reason: nil)
-            self.wsTask = nil
-        }
-
-        logger.info("WebSocket connected to \(wsURLString)")
-        log(.info, "Connected to backend")
-
-        // Build initial page state (no screenshot on first turn)
-        var (pageContent, elements) = await buildPageContent(tabManager: tabManager, includeScreenshot: false)
-        let systemPrompt = buildSystemPrompt(task: task)
-
-        // Send start message
-        do {
-            try await wsSend(ws, message: [
-                "type": "start",
-                "system_prompt": systemPrompt,
-                "user_message": pageContent
-            ])
-        } catch {
-            log(.error, "Failed to send start: \(error.localizedDescription)")
-            return
-        }
-
-        var done = false
-
-        while currentStep < maxSteps && !done && isRunning {
-            currentStep += 1
-            logger.debug("=== Step \(self.currentStep)/\(self.maxSteps) ===")
-            log(.info, "Step \(currentStep)")
-            currentStatusLine = "Analyzing page..."
-            log(.thinking, "Thinking...")
-
-            // Receive response from backend
-            let response: [String: Any]
-            do {
-                response = try await wsReceive(ws)
-            } catch {
-                logger.error("WS receive error: \(error.localizedDescription)")
-                log(.error, "Connection error: \(error.localizedDescription)")
-                break
-            }
-
-            guard let msgType = response["type"] as? String else { continue }
-
-            if msgType == "error" {
-                let errMsg = response["error"] as? String ?? "Unknown server error"
-                logger.error("Server error: \(errMsg)")
-                log(.error, errMsg)
-                break
-            }
-
-            guard let message = response["message"] as? [String: Any] else {
-                log(.error, "Invalid response from server")
-                break
-            }
-
-            // Parse tool calls
-            guard let toolCalls = message["tool_calls"] as? [[String: Any]], !toolCalls.isEmpty else {
-                if let content = message["content"] as? String {
-                    log(.thinking, "Model says: \(String(content.prefix(200)))")
-                }
-                break
-            }
-
-            var toolResults: [[String: Any]] = []
-
-            for tc in toolCalls {
-                guard let fn = tc["function"] as? [String: Any],
-                      let name = fn["name"] as? String,
-                      let args = fn["arguments"] as? String,
-                      let id = tc["id"] as? String else { continue }
-
-                currentStatusLine = friendlyStatus(action: name, argsJSON: args, elements: elements)
-                logger.info("Tool call: \(name) args: \(args)")
-                log(.action, currentStatusLine)
-
-                if name == "done" {
-                    if let doneArgs = try? JSONDecoder().decode(DoneArgs.self, from: Data(args.utf8)) {
-                        finalResult = doneArgs.result
-                        currentStatusLine = "Done"
-                        logger.info("Agent completed: \(doneArgs.result)")
-                        log(.success, "Task complete!")
-                        log(.info, doneArgs.result)
-                    }
-                    done = true
-                    break
-                }
-
-                let result = await executeAction(name: name, argsJSON: args, elements: elements, tabManager: tabManager)
-                logger.debug("Action result: \(result)")
-                log(.success, String(result.prefix(100)))
-                trackAction(name, result: result)
-
-                toolResults.append([
-                    "role": "tool",
-                    "tool_call_id": id,
-                    "content": result
-                ])
-            }
-
-            if done { break }
-
-            // Get updated page state — include screenshot only when stuck
-            let needsScreenshot = isStuck
-            if needsScreenshot { log(.info, "Agent appears stuck — attaching screenshot") }
-            (pageContent, elements) = await buildPageContent(tabManager: tabManager, includeScreenshot: needsScreenshot)
-
-            // Send tool results + new page state
-            do {
-                try await wsSend(ws, message: [
-                    "type": "tool_results",
-                    "results": toolResults,
-                    "user_message": pageContent
-                ])
-            } catch {
-                log(.error, "Failed to send results: \(error.localizedDescription)")
-                break
-            }
-        }
-
-        if currentStep >= maxSteps {
-            log(.error, "Reached maximum steps (\(maxSteps)). Stopping.")
-        }
-    }
-
-    // MARK: - HTTP Fallback Path (direct OpenAI)
-
-    private func startViaHTTP(task: String, tabManager: TabManager) async {
+    private func runAgentLoop(task: String, tabManager: TabManager) async {
         var messages: [[String: Any]] = []
         let systemPrompt = buildSystemPrompt(task: task)
         messages.append(["role": "system", "content": systemPrompt])
@@ -290,7 +133,7 @@ final class BrowserAgent {
 
         while currentStep < maxSteps && !done && isRunning {
             currentStep += 1
-            logger.debug("=== Step \(self.currentStep)/\(self.maxSteps) ===")
+            logger.debug("=== Step \(self.currentStep, privacy: .public)/\(self.maxSteps, privacy: .public) ===")
             log(.info, "Step \(currentStep)")
 
             // Include screenshot only when agent appears stuck
@@ -304,9 +147,9 @@ final class BrowserAgent {
 
             let response: ChatCompletionResponse
             do {
-                response = try await openAI.chatCompletion(messages: messages)
+                response = try await llm.chatCompletion(messages: messages)
             } catch {
-                logger.error("API error: \(error.localizedDescription)")
+                logger.error("API error: \(error.localizedDescription, privacy: .public)")
                 log(.error, "API error: \(error.localizedDescription)")
                 try? await Task.sleep(for: .seconds(2))
                 continue
@@ -336,7 +179,7 @@ final class BrowserAgent {
                     let fnArgs = toolCall.function.arguments
 
                     currentStatusLine = friendlyStatus(action: fnName, argsJSON: fnArgs, elements: elements)
-                    logger.info("Tool call: \(fnName) args: \(fnArgs)")
+                    logger.info("Tool call: \(fnName, privacy: .public) args: \(fnArgs, privacy: .public)")
                     log(.action, currentStatusLine)
 
                     if fnName == "done" {
@@ -545,7 +388,7 @@ final class BrowserAgent {
 
             let response: ChatCompletionResponse
             do {
-                response = try await openAI.chatCompletion(messages: messages, tools: OpenAIService.subAgentTools)
+                response = try await llm.chatCompletion(messages: messages, tools: LLMService.subAgentTools)
             } catch {
                 return "Error: \(error.localizedDescription)"
             }
@@ -656,9 +499,7 @@ final class BrowserAgent {
         let currentURL = tabManager.getCurrentURL(tabID: tabID)
         let pageTitle = await tabManager.getPageTitle(tabID: tabID)
 
-        let elementsText = elements.map { e in
-            "[\(e.index)] <\(e.tag)> '\(e.label)'"
-        }.joined(separator: "\n")
+        let elementsText = Self.compactElementList(elements)
 
         let pageInfo = """
         Current URL: \(currentURL)
@@ -671,51 +512,35 @@ final class BrowserAgent {
         return (pageInfo, elements)
     }
 
+    /// The page snapshot is the biggest part of every request (~2k tokens for 60 elements), so cap
+    /// the count and label length. Indices stay the real ones, so clicks still hit the right element.
+    static func compactElementList(_ elements: [InteractiveElement]) -> String {
+        let shown = elements.prefix(50).map { e in "[\(e.index)] <\(e.tag)> '\(e.label.prefix(50))'" }
+        let more = elements.count > 50 ? "\n(\(elements.count - 50) more below; scroll to see them)" : ""
+        return shown.joined(separator: "\n") + more
+    }
+
     // MARK: - System Prompt
 
     private func buildSystemPrompt(task: String) -> String {
         """
-        You are a browser automation agent. You do EXACTLY what the user asked — nothing more, \
-        nothing less. You are the user's hands, not their brain. They decide what to do; you execute.
-
-        Each turn you receive the current URL, page title, and a list of interactive DOM elements. \
-        If you appear stuck, a screenshot may be included.
+        You are a browser agent: the user's hands. Do EXACTLY the task, nothing more, then call done.
+        Each turn you get the URL, title and indexed interactive elements (plus a screenshot if stuck).
 
         Task: \(task)
 
-        Available actions: click, type_text, scroll, navigate, wait, new_tab, switch_tab, go_back, evaluate_js, fork_tasks, done.
-
         \(PlatformShortcuts.promptSnippet)
 
-        === SCOPE RULES (NEVER VIOLATE) ===
+        Scope (never violate): do only the verb used.
+        - FIND/SEARCH → show results, done. Never open a result, add to cart or buy.
+        - CLICK X → click it, done. Never click buy/cart/checkout/subscribe/confirm afterward.
+        - OPEN site → navigate, done.
+        - BUY/ADD TO CART → only then click transactional buttons.
 
-        Interpret the task LITERALLY. Do only the verb the user used:
-
-        FIND / SEARCH / LOOK FOR → Search, show results, call done. \
-        NEVER click into a result. NEVER add to cart. NEVER purchase.
-
-        CLICK [something] → Click that one element, call done. \
-        NEVER continue interacting with what opens. NEVER click "buy", "add to cart", \
-        "checkout", "subscribe", "confirm", or any transactional button afterward.
-
-        OPEN [site] → Navigate there, call done once loaded.
-
-        BUY / PURCHASE / ADD TO CART → Only then may you click transactional buttons.
-
-        Any action not explicitly requested is FORBIDDEN. After completing the requested \
-        action, you MUST call done immediately. Do not "help" by doing the next logical step.
-
-        === STRATEGY ===
-        - Check the current URL. If unrelated to the task, navigate to the right site or search URL.
-        - If the task names a specific website, go directly — don't search Google for it.
-        - If no site is named, use a Google search URL (e.g. google.com/search?q=...).
-        - Choose ONE action per turn. Be precise with element indices.
-        - After clicking links that open in new tabs, use switch_tab.
-        - When scrolling, use 500-800px increments.
-        - If a page is loading, use wait.
-        - If stuck, try scrolling or navigating differently.
-        - Use fork_tasks for independent multi-site lookups.
-        - You only have \(maxSteps) steps. Be direct.
+        Strategy: if the current URL is unrelated, navigate. Named site → go directly; otherwise \
+        google.com/search?q=... One action per turn, exact indices. New-tab links → switch_tab. \
+        Scroll 500-800px. Loading → wait. Stuck → scroll or try another route. \
+        fork_tasks for independent multi-site lookups. Max \(maxSteps) steps.
         """
     }
 
@@ -723,16 +548,14 @@ final class BrowserAgent {
 
     private func buildPageInfo(tabManager: TabManager) async -> (String, [InteractiveElement]) {
         let elements = await tabManager.extractInteractiveElements()
-        logger.debug("Found \(elements.count) interactive elements")
+        logger.debug("Found \(elements.count, privacy: .public) interactive elements")
         log(.info, "Found \(elements.count) interactive elements")
 
         let currentURL = tabManager.getCurrentURL()
         let pageTitle = await tabManager.getPageTitle()
         let tabList = tabManager.getTabList()
 
-        let elementsText = elements.map { e in
-            "[\(e.index)] <\(e.tag)> '\(e.label)'"
-        }.joined(separator: "\n")
+        let elementsText = Self.compactElementList(elements)
 
         let pageInfo = """
         Current URL: \(currentURL)
@@ -746,7 +569,7 @@ final class BrowserAgent {
         return (pageInfo, elements)
     }
 
-    /// Builds a multimodal content array (text + optional screenshot) for the OpenAI vision API.
+    /// Builds a multimodal content array (text + optional screenshot) for the vision model.
     /// Screenshots are only included when `includeScreenshot` is true (i.e. agent appears stuck).
     private func buildPageContent(tabManager: TabManager, includeScreenshot: Bool) async -> ([[String: Any]], [InteractiveElement]) {
         let (pageInfo, elements) = await buildPageInfo(tabManager: tabManager)
@@ -764,7 +587,7 @@ final class BrowserAgent {
                     "detail": "low"
                 ] as [String: String]
             ])
-            logger.debug("Attached screenshot (\(screenshotData.count) bytes)")
+            logger.debug("Attached screenshot (\(screenshotData.count, privacy: .public) bytes)")
         }
 
         return (content, elements)
@@ -833,29 +656,4 @@ final class BrowserAgent {
         logEntries.append(AgentLogEntry(kind: kind, message: message))
     }
 
-    // MARK: - WebSocket Helpers
-
-    private func wsSend(_ ws: URLSessionWebSocketTask, message: [String: Any]) async throws {
-        let data = try JSONSerialization.data(withJSONObject: message)
-        let string = String(data: data, encoding: .utf8)!
-        try await ws.send(.string(string))
-    }
-
-    private func wsReceive(_ ws: URLSessionWebSocketTask) async throws -> [String: Any] {
-        let msg = try await ws.receive()
-        switch msg {
-        case .string(let text):
-            guard let json = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] else {
-                throw NSError(domain: "BrowserAgent", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid JSON from server"])
-            }
-            return json
-        case .data(let data):
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                throw NSError(domain: "BrowserAgent", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid JSON from server"])
-            }
-            return json
-        @unknown default:
-            throw NSError(domain: "BrowserAgent", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unknown WS message type"])
-        }
-    }
 }
