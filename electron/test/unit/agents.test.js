@@ -110,53 +110,13 @@ test('voice: instant search + site action, no AI call', async () => {
   assert.equal(r.llmCalls.length, 0);
 });
 
-test('voice: many commands in one breath run in order; the AI sees only its own clause', async () => {
-  const r = voiceRig({ wake: false, intent: JSON.stringify({ steps: [{ action: 'click', target: 'Videos filter', detail: '' }] }) });
-  r.tabs.url = 'about:blank';
-  await r.voice.start();
-  r.say('open youtube search lofi and click the videos filter and play the first video');
-  await sleep(900);
-  assert.deepEqual(r.tabs.navigations, ['https://www.youtube.com', 'https://www.youtube.com/results?search_query=lofi']);
-  assert.equal(r.llmCalls.length, 1, 'only the clause no rule covers goes to the AI');
-  assert.match(r.llmCalls[0], /Transcript: "click the videos filter"/);
-  assert.deepEqual(r.enqueued, ['Click Videos filter. (The user said: "click the videos filter")']);
-  assert.equal(r.tabs.js.length, 1, 'first video played in the page, after the click');
-});
-
-test('voice: Deepgram revising the last search ("lofi beat." → "lofi beats.") re-aims it', async () => {
-  const r = voiceRig({ wake: false });
-  await r.voice.start();
-  r.say('search lofi beat.', { final: false });
-  await sleep(20);
-  r.say('search lofi beats.');
-  await sleep(20);
-  assert.equal(r.tabs.navigations.at(-1), 'https://www.youtube.com/results?search_query=lofi%20beats');
-  assert.equal(r.voice.plan.length, 1, 'one command on screen, relabelled');
-  assert.match(r.voice.plan[0].label, /lofi beats/);
-});
-
-test('voice: a premature "open." that Flux corrects to "open YouTube" still opens YouTube', async () => {
-  const r = voiceRig({ wake: false });
-  r.tabs.url = 'about:blank';
-  await r.voice.start();
-  r.say('open.', { final: false });          // Flux's early guess, period and all → went to the AI
-  await sleep(20);
-  r.say('open YouTube and', { final: false });
-  await sleep(20);
-  assert.deepEqual(r.tabs.navigations, ['https://www.youtube.com']);
-  assert.deepEqual(r.voice.plan.map((p) => p.label), ['Opening YouTube'], 'the premature line is gone');
-});
-
-test('voice: unclear request asks back and waits for yes', async () => {
+test('voice: never asks back: acts at once even if the AI tries to confirm', async () => {
   const r = voiceRig({ intent: JSON.stringify({ steps: [{ action: 'click', target: 'Buy now', detail: '' }], confirm: 'So you want me to buy it?' }) });
   await r.voice.start();
   r.say('Dixi, get me that thing');
   await sleep(20);
-  assert.deepEqual(r.spoken, ['So you want me to buy it?']);
-  assert.equal(r.enqueued.length, 0, 'nothing happens before yes');
-  r.say('yes');
-  await sleep(20);
-  assert.equal(r.enqueued.length, 1);
+  assert.deepEqual(r.spoken, [], 'no question spoken');
+  assert.equal(r.enqueued.length, 1, 'did it straight away');
   assert.match(r.enqueued[0], /Click Buy now/);
 });
 

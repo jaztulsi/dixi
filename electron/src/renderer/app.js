@@ -51,7 +51,7 @@ const appActions = {
   zoomOut: () => zoom(-0.5),
   zoomReset: () => zoom(null),
   settings: () => { renderSettings(); $('settings-sheet').showModal(); },
-  stopAgent: () => agent.stop(),
+  stopAgent: () => voice.cancelAll(),
 };
 // Learned phrasings and remembered AI answers persist across launches, so repeats cost no API calls.
 const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic(), tabs, agent, speaker, llm, config, settings,

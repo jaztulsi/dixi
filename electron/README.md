@@ -1,9 +1,8 @@
 # Dixi for desktop (Electron)
 
-The Swift app's features on macOS, Windows and Linux: always-on voice with the "Dixi" wake word,
+Dixi on macOS, Windows and Linux: always-on voice with the "Dixi" wake word,
 actions while you're still talking, instant site actions (play the Nth video, skip ad, add to cart),
-grounded answers about the current page, a tool-calling browser agent, and the same look.
-iPhone stays on the Swift app (Electron can't target iOS).
+grounded answers about the current page, and a tool-calling browser agent.
 
 ## Run
 
@@ -13,7 +12,7 @@ npm install
 npm start
 ```
 
-Keys come from the same `.env` as the Swift app (repo root): `GROQ_API_KEY`, `DEEPGRAM_API_KEY`,
+Keys come from `.env` at the repo root: `GROQ_API_KEY`, `DEEPGRAM_API_KEY`,
 optional `AGENT_MODEL` / `VOICE_MODEL`. They are read only by the main process; the window never sees them.
 
 ## Test

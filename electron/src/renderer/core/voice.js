@@ -2,12 +2,13 @@
 // you're still talking. UI-free: Deepgram, mic, tabs, agent, speaker and llm are injected.
 
 import {
-  NAVIGATE_PATTERN, resolveURL, splitOnConjunctions, clauseKey, isQuestion, yesOrNo, afterWakeWord,
+  NAVIGATE_PATTERN, resolveURL, splitOnConjunctions, clauseKey, isQuestion, afterWakeWord,
   parseSearch, searchURL, hasSearchURL, platformFor, stepFingerprint, friendlyStatus, agentTask, directNavigationURL,
 } from './text.js';
 import { matchSiteAction, matchAppAction, runSiteAction } from './siteActions.js';
 import { IntentModel, ReplyCache, intentForSteps, say } from './learn.js';
 import { askPage } from './pageQA.js';
+import { planTask } from './tasks.js';
 import { INTENT_PROMPT } from './prompts.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -31,6 +32,7 @@ export const DEFAULT_TIMING = {
   quietMS: 1200,
   resetMS: 2000,
   followUpMS: 8000,
+  stillMS: 500,      // words unchanged this long (Flux, ~4 updates a second) = done talking
   speculateMS: 400,  // a search query unchanged this long starts loading before the sentence ends
 };
 
@@ -45,12 +47,12 @@ export class VoiceAgent {
     this.statusLine = '';
     this.answer = null;           // latest {text, quote, source, grounded}
     this.session = new SessionContext();
-    this.pendingSteps = [];       // waiting for "yes" after "So you want me to…?"
     this.awakeUntil = 0;
     this.actedThisUtterance = false;
     this.lastNavigatedSite = null;
     this.queue = Promise.resolve();
     this.pending = 0;
+    this.generation = 0;          // bumped by cancelAll(): older queued work is dropped
     this.navigating = Promise.resolve();  // the latest navigation; anything reading the page awaits it
     this.plan = [];               // what was said → what Dixi is doing, shown on screen right away
     this.streamStartedAt = Date.now();
@@ -152,10 +154,11 @@ export class VoiceAgent {
     const text = json.transcript?.trim() ?? '';
     const spokenAt = this.streamStartedAt + (json.audio_window_start ?? 0) * 1000;
     if (this.speaker.isBusy() || this.speaker.wasSpeaking(spokenAt)) return;  // Dixi's own voice
-    if (json.event === 'EndOfTurn') {
-      this.pendingFinal = text;
-      this.flushPendingFinal();
-      this.armReset();
+    // Done talking: Flux's early "probably done", its sure EndOfTurn, or our own check below. Whichever is
+    // first acts; the others see the same words and do nothing. If you keep talking, the new words still count.
+    if (json.event === 'EagerEndOfTurn' || json.event === 'EndOfTurn') {
+      this.finishTurn(text);
+      if (json.event === 'EndOfTurn') { this.armReset(); this.finishedText = ''; }
       return;
     }
     if (!text) return;
@@ -163,6 +166,17 @@ export class VoiceAgent {
     clearTimeout(this.silenceTimer);
     const command = this.commandText(text);
     if (command != null) this.handleInterim(command);
+    // Words unchanged for half a second (Flux updates ~4x a second even in silence) = you've stopped.
+    clearTimeout(this.stillTimer);
+    this.stillTimer = setTimeout(() => this.finishTurn(text), this.timing.stillMS ?? 500);
+  }
+
+  finishTurn(text) {
+    clearTimeout(this.stillTimer);
+    if (!text || text === this.finishedText) return;
+    this.finishedText = text;
+    this.pendingFinal = text;
+    this.flushPendingFinal();
   }
 
   /** Deepgram's own end-of-speech signals can lag by seconds in a noisy room; finish up ourselves. */
@@ -316,8 +330,13 @@ export class VoiceAgent {
 
   /** Decides how to do one clause right now and puts it on screen; the doing waits its turn. */
   route(clause, earlier) {
-    if (isQuestion(clause)) return this.planItem(clause, 'Answering…', () => this.answerQuestion(clause));
+    if (matchAppAction(clause)?.app === 'stopAgent') return this.cancelAll();  // never waits behind what it cancels
     const site = this.plannedSite();
+    // Whole requests in any order ("go to Burger King order me a Whopper", "AirPods, Amazon, add to cart"),
+    // understood in code: no AI call, same words → same steps.
+    const plan = planTask(clause, { site, lastQuery: this.lastQuery, lastCommand: this.lastCommand });
+    if (plan) return this.runPlan(clause, plan);
+    if (isQuestion(clause)) return this.planItem(clause, 'Answering…', () => this.answerQuestion(clause));
     const nav = clause.match(NAVIGATE_PATTERN);
     const url = nav && resolveURL(nav[1]);
     if (url) {
@@ -349,7 +368,7 @@ export class VoiceAgent {
       const steps = parsed?.steps ?? [];
       item.label = steps.length ? steps.map(friendlyStatus).join(', ') : parsed?.question ? 'Answering…' : 'Nothing to do';
       this.onChange();
-      if (steps.length && !parsed.confirm && !parsed.question) {
+      if (steps.length && !parsed.question) {
         this.cache.set(site, clause, steps);
         const intent = intentForSteps(steps);
         if (intent) this.model.learn(clause, intent);
@@ -357,6 +376,47 @@ export class VoiceAgent {
       return parsed;
     });
     return item;
+  }
+
+  /** Queues a planned task's steps in spoken order, each on screen. [] = understood, nothing to do. */
+  runPlan(clause, steps) {
+    let item = null;
+    for (const s of steps) {
+      if (s.do === 'open' || s.do === 'search') {
+        this.lastNavigatedSite = s.url;
+        if (s.query) this.lastQuery = s.query;
+        const it = item = this.planItem(clause, s.label, () => {
+          if (s.url !== this.speculated) this.go(s.url);
+          this.speculated = null;
+          this.session.record({ utterance: clause, action: s.do, target: s.url, detail: s.query ?? '' });
+        });
+        // A lone search can be re-aimed if Deepgram corrects its words ("lofi beat." → "lofi beats.").
+        if (s.do === 'search' && steps.length === 1 && this.lastTaken) Object.assign(this.lastTaken, { search: { platform: platformFor(s.url), query: s.query }, item: it });
+      } else if (s.do === 'command') {
+        this.lastCommand = s.text;
+        const r = this.rule(s.text, this.lastNavigatedSite ?? this.plannedSite());
+        item = r ? this.planItem(clause, s.label ?? r.label, r.run)
+          : this.planItem(clause, s.label, () => this.agentStep(`${s.text[0].toUpperCase()}${s.text.slice(1)} on this page.`, clause, 5));
+      } else if (s.do === 'order') {
+        item = this.planItem(clause, s.label, () => this.agentStep(
+          `On this website, find "${s.item}" and add it to the order or cart. If it asks for a location, store, `
+          + 'pickup or delivery, choose the nearest store or the first option. Stop as soon as it is in the cart: '
+          + 'never check out, pay, sign in or enter personal or payment details.', clause, 12));
+      } else if (s.do === 'ask') {
+        item = this.planItem(clause, s.label, () => this.answerQuestion(s.question));
+      }
+    }
+    return item;
+  }
+
+  /** One job for the browser agent, after the page has loaded. Reports failure honestly. */
+  async agentStep(task, said, maxSteps) {
+    await this.navigating;
+    await this.tabs.waitUntilLoaded();
+    await this.agent.enqueue(`${task} (The user said: "${said}")`, maxSteps);
+    const result = this.agent.finalResult ?? '';
+    return /\b(couldn'?t|could not|unable|not able|failed|no results|not found|wasn'?t able)\b/i.test(result) || !result
+      ? `Couldn't: ${result || 'the agent stopped'}`.slice(0, 120) : result.slice(0, 120);
   }
 
   /** A visible plan entry (queued → running → done/failed) whose work runs in spoken order. */
@@ -381,31 +441,36 @@ export class VoiceAgent {
 
   /** One queue for every action, so "open X and play the first video" never races. */
   enqueue(work) {
+    const gen = this.generation;
     this.pending++;
-    this.queue = this.queue.then(work).catch((err) => console.error('[voice]', err)).finally(() => { this.pending--; });
+    this.queue = this.queue.then(() => (gen === this.generation ? work() : undefined))
+      .catch((err) => console.error('[voice]', err)).finally(() => { if (gen === this.generation) this.pending--; });
     return this.queue;
+  }
+
+  /** "Cancel": right now, not in line. Drops everything queued, stops the agent, starts fresh. */
+  cancelAll() {
+    this.generation++;
+    this.queue = Promise.resolve();
+    this.pending = 0;
+    if (this.agent.isRunning) this.agent.stop();
+    this.plan = [];
+    this.navigating = Promise.resolve();
+    this.set({ statusLine: 'Cancelled' });
   }
 
   /** Where the page will be when a new clause's turn comes: queued navigations count. */
   plannedSite() { return (this.pending || this.speculated) && this.lastNavigatedSite ? this.lastNavigatedSite : this.currentSiteURL(); }
 
   handleFinal(transcript) {
-    if (this.pendingSteps.length) {
-      const yes = yesOrNo(transcript);
-      if (yes != null) {
-        const steps = this.pendingSteps;
-        this.pendingSteps = [];
-        this.actedThisUtterance = true;
-        if (yes) this.planItem(transcript, steps.map(friendlyStatus).join(', '), async () => { for (const s of steps) await this.dispatch(s, this.confirmedClause); });
-        else { this.set({ statusLine: 'Okay, cancelled' }); this.speaker.say('Okay, cancelled.'); }
-        return;
-      }
-      this.pendingSteps = [];  // anything else is a new command
-    }
     // A whole-sentence question ("who made this and how many subs?") isn't split on "and".
+    // About the page → read the page; about the world ("who is the CEO of Tesla") → a web search.
     if (!this.taken && isQuestion(transcript)) {
       if (!this.pending) this.plan = [];
-      this.planItem(transcript, 'Answering…', () => this.answerQuestion(transcript));
+      this.taken = 1;
+      const plan = planTask(transcript, { site: this.plannedSite(), lastQuery: this.lastQuery });
+      if (plan) this.runPlan(transcript, plan);
+      else this.planItem(transcript, 'Answering…', () => this.answerQuestion(transcript));
       return;
     }
     this.takeClauses(transcript, true);
@@ -415,14 +480,6 @@ export class VoiceAgent {
     if (!parsed) return "Couldn't understand that";
     const steps = parsed.steps ?? [];
     if (parsed.question) await this.answerQuestion(parsed.question);
-    if (parsed.confirm && steps.length) {
-      // Risky: say back what we'd do and wait for "yes" (no wake word needed).
-      this.pendingSteps = steps;
-      this.confirmedClause = clause;
-      this.set({ statusLine: parsed.confirm });
-      this.speaker.say(parsed.confirm);
-      return;
-    }
     for (const step of steps) {
       const fp = stepFingerprint(step);
       if (this.dispatched.has(fp)) continue;

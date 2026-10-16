@@ -108,6 +108,31 @@ const PAGE = [
 ];
 
 /** {label, js, patience (s)} or null. js returns "ok: <message>" or "wait" (page not ready yet). */
+// Any site: click the visible link/button whose text best matches the words ("whopper", "chicken burger").
+// Deterministic and AI-free; "wait" until something matches at least half the words.
+const pickByText = (words) => `(() => { const want = ${JSON.stringify(words)};
+  let best = null, bestScore = 0;
+  for (const el of document.querySelectorAll('a[href], button, [role="link"], [role="button"], [role="option"]')) {
+    if (el.offsetParent === null) continue;
+    const text = (el.innerText || el.getAttribute('aria-label') || '').toLowerCase().replace(/\\s+/g, ' ').trim();
+    if (!text || text.length > 140) continue;
+    const hits = want.filter((w) => text.includes(w)).length;
+    const score = hits / want.length - text.length / 2000;
+    if (hits && score > bestScore) { bestScore = score; best = el; }
+  }
+  if (!best || bestScore < 0.5) return 'wait';
+  const label = (best.innerText || best.getAttribute('aria-label') || '').trim().replace(/\\s+/g, ' ').slice(0, 60);
+  best.scrollIntoView({ block: 'center' }); best.click(); return 'ok: ' + label; })()`;
+// Any site: the item page's own "Add to order / bag / cart" button.
+const ADD_TO_ORDER = `(() => { const re = /^(add to (cart|bag|order|basket|meal)|add item|add to my order|order now|add)\\b/i;
+  const b = [...document.querySelectorAll('button, [role="button"], input[type="submit"], a')]
+    .find((e) => e.offsetParent !== null && !e.disabled && re.test((e.innerText || e.value || e.getAttribute('aria-label') || '').trim()));
+  if (!b) return 'wait';
+  b.click(); return 'ok: added to your order'; })()`;
+const STOP_WORDS = new Set(['a', 'an', 'the', 'some', 'with', 'no', 'without', 'extra', 'please', 'me', 'my', 'and', 'large', 'small', 'medium', 'of']);
+/** "chicken burger with no pickles" → ["chicken", "burger"]: the words that name the item, not how it's made. */
+export const itemWords = (item) => item.toLowerCase().split(/\s+(?:with|without|no|extra)\s+/)[0].split(/\s+/).filter((w) => w && !STOP_WORDS.has(w));
+
 export function matchSiteAction(command, url) {
   const c = clean(command);
   let host = '';
@@ -128,6 +153,9 @@ export function matchSiteAction(command, url) {
   }
 
   if (onAmazon && /\badd\b.*\bto\b.*\bcart\b/.test(c)) return { label: 'Adding to cart', js: amazonAddToCart(n?.index), patience: 6 };
+  const find = c.match(/^(?:find|open|select) (.+) on (?:the|this) (?:page|menu)$/);
+  if (find && itemWords(find[1]).length) return { label: `Found “${find[1]}”`, js: pickByText(itemWords(find[1])), patience: 10, navigates: true };
+  if (/^add (?:it|this|that) to (?:the |my )?(?:order|bag|cart|basket)$/.test(c)) return { label: 'Added to your order', js: ADD_TO_ORDER, patience: 8 };
 
   if (onAppleMusic && /^(play|play it|play this|play the (song|album|playlist)|preview( it)?)$/.test(c)) return { label: 'Playing a preview', js: APPLE_MUSIC_PREVIEW, patience: 10 };
   for (const [re, label, call] of MEDIA) {

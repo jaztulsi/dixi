@@ -11,6 +11,8 @@ export const DEEPGRAM_PARAMS = {
   encoding: 'linear16',
   sample_rate: '16000',
   eot_threshold: '0.7',        // how sure Flux must be the turn is over before EndOfTurn
+  eager_eot_threshold: '0.4',  // and a much earlier "probably done" (EagerEndOfTurn): Dixi acts on that
+  eot_timeout_ms: '1500',      // in a noisy room Flux may never be sure: end the turn after 1.5 s of no words (default 5 s)
   keyterm: 'Dixi',             // wake word boost; Flux still often writes "Dixie" (WAKE_PATTERN accepts both)
 };
 
