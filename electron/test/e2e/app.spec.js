@@ -12,11 +12,11 @@ async function launch(env = {}) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.waitForFunction(() => window.__runic);
+  await page.waitForFunction(() => window.__dixi);
   return { app, page, errors };
 }
-const url = (page) => page.evaluate(() => window.__runic.tabs.getCurrentURL());
-const submit = (page, text) => page.evaluate((t) => { window.__runic.submit(t); }, text);
+const url = (page) => page.evaluate(() => window.__dixi.tabs.getCurrentURL());
+const submit = (page, text) => page.evaluate((t) => { window.__dixi.submit(t); }, text);
 
 test.describe('typed commands (live)', () => {
   let app, page, errors;
@@ -53,8 +53,8 @@ test.describe('typed commands (live)', () => {
   test('question about the page is answered from the page, video untouched', async () => {
     const before = await url(page);
     await submit(page, 'Who uploaded this video and how many subscribers do they have?');
-    await expect.poll(() => page.evaluate(() => window.__runic.voice.answer?.text ?? null), { timeout: 60_000 }).not.toBeNull();
-    const answer = await page.evaluate(() => window.__runic.voice.answer);
+    await expect.poll(() => page.evaluate(() => window.__dixi.voice.answer?.text ?? null), { timeout: 60_000 }).not.toBeNull();
+    const answer = await page.evaluate(() => window.__dixi.voice.answer);
     console.log('Answer:', answer);
     expect(answer.text.length).toBeGreaterThan(5);
     expect(await url(page)).toBe(before);
@@ -62,10 +62,10 @@ test.describe('typed commands (live)', () => {
   });
 
   test('AI agent completes a multi-step task on a site it has no shortcut for', async () => {
-    await page.evaluate(() => window.__runic.tabs.navigate('https://en.wikipedia.org/wiki/Main_Page'));
+    await page.evaluate(() => window.__dixi.tabs.navigate('https://en.wikipedia.org/wiki/Main_Page'));
     await submit(page, 'use the search box on this page to search for Golden Gate Bridge');
     await expect.poll(() => url(page), { timeout: 120_000, intervals: [2000] }).toMatch(/Golden_Gate_Bridge|search=Golden/i);
-    const log = await page.evaluate(() => window.__runic.agent.log.map((e) => `${e.kind}: ${e.message}`));
+    const log = await page.evaluate(() => window.__dixi.agent.log.map((e) => `${e.kind}: ${e.message}`));
     console.log(log.join('\n'));
     await page.screenshot({ path: 'test-results/04-agent.png' });
     expect(errors).toEqual([]);
@@ -73,13 +73,13 @@ test.describe('typed commands (live)', () => {
 });
 
 test('voice end to end: recorded speech → Deepgram → instant navigate + search (live)', async () => {
-  // The WAV plays as the microphone (see RUNIC_FAKE_AUDIO in main.js): real mic pipeline, real Deepgram.
-  const { app, page, errors } = await launch({ RUNIC_FAKE_AUDIO: fixture('voice-youtube-lofi.wav') });
+  // The WAV plays as the microphone (see DIXI_FAKE_AUDIO in main.js): real mic pipeline, real Deepgram.
+  const { app, page, errors } = await launch({ DIXI_FAKE_AUDIO: fixture('voice-youtube-lofi.wav') });
   try {
-    await expect.poll(() => page.evaluate(() => window.__runic.voice.isListening), { timeout: 20_000 }).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.__dixi.voice.isListening), { timeout: 20_000 }).toBe(true);
     await expect.poll(() => url(page), { timeout: 40_000 }).toMatch(/youtube\.com\/results\?search_query=lo(\+|%20)?fi/i);
     // History is recorded when each step finishes, so wait for both.
-    const history = () => page.evaluate(() => window.__runic.voice.session.history.map((h) => `${h.action} ${h.target} ${h.detail}`));
+    const history = () => page.evaluate(() => window.__dixi.voice.session.history.map((h) => `${h.action} ${h.target} ${h.detail}`));
     await expect.poll(async () => (await history()).some((h) => /^search youtube lo ?fi beats$/i.test(h)), { timeout: 20_000 }).toBe(true);  // Flux spells it "Lo Fi"
     const heard = await history();
     console.log('Voice dispatched:', heard);

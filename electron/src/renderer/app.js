@@ -22,18 +22,25 @@ const startMascot = mountMascot($('start-mascot'));
 const captionMascot = mountMascot($('caption-mascot'), { eyes: false });
 startMascot.init();
 
-const WAKE_KEY = 'runic.requireWakeWord';
+// Saved keys were "runic.*" before the rename; move them once (old name kept only for this).
+for (const k of Object.keys(localStorage)) {
+  if (!k.startsWith('runic.')) continue;
+  const renamed = 'dixi.' + k.slice(6);
+  if (localStorage.getItem(renamed) == null) localStorage.setItem(renamed, localStorage.getItem(k));
+  localStorage.removeItem(k);
+}
+const WAKE_KEY = 'dixi.requireWakeWord';
 const settings = {
   get requireWakeWord() { return localStorage.getItem(WAKE_KEY) !== 'false'; },
   set requireWakeWord(v) { localStorage.setItem(WAKE_KEY, String(v)); },
 };
 
-const config = await window.runic.config();
-const llm = new LLM((body) => window.runic.groqChat(body), config);
+const config = await window.dixi.config();
+const llm = new LLM((body) => window.dixi.groqChat(body), config);
 const tabs = new TabManager($('tabs'), () => render());
 const speaker = new Speaker();
 const agent = new BrowserAgent({ tabs, llm, siteCache: new SiteCache(localStorage), onChange: () => render() });
-// Runic's own controls, for voice ("new tab", "zoom in", "cancel"...).
+// Dixi's own controls, for voice ("new tab", "zoom in", "cancel"...).
 const zoom = (delta) => { const w = tabs.activeTab?.webview; if (w) w.setZoomLevel(delta == null ? 0 : w.getZoomLevel() + delta); };
 const appActions = {
   newTab: () => tabs.createTab('about:blank'),
@@ -47,14 +54,14 @@ const appActions = {
   stopAgent: () => agent.stop(),
 };
 // Learned phrasings and remembered AI answers persist across launches, so repeats cost no API calls.
-const voice = new VoiceAgent({ deepgram: window.runic.deepgram, mic: new Mic(), tabs, agent, speaker, llm, config, settings,
+const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic(), tabs, agent, speaker, llm, config, settings,
   app: appActions, model: new IntentModel(localStorage), cache: new ReplyCache(localStorage), onChange: () => render() });
 
 // ---- start page ----
 function renderExamples() {
-  const p = settings.requireWakeWord ? 'Runic, ' : '';
-  $('start-sub').textContent = settings.requireWakeWord ? 'Start with “Runic”. No clicking needed.' : 'No clicking needed.';
-  $('examples').innerHTML = [`${p}open YouTube and search for lofi beats`, `${p}go to Amazon and search for noise cancelling headphones`, `${p}click the second one`]
+  const p = settings.requireWakeWord ? 'Dixi, ' : '';
+  $('start-sub').textContent = settings.requireWakeWord ? 'Start with “Dixi”. No clicking needed.' : 'No clicking needed.';
+  $('examples').innerHTML = [`${p}open Apple Music and search for lo fi beats`, `${p}play the first song`, `${p}buy AirPods Pro`]
     .map((e) => `<li><span>${icons.quote}</span><span>“${e}”</span></li>`).join('');
 }
 renderExamples();
@@ -108,7 +115,7 @@ function renderCaption() {
   $('caption').classList.toggle('awake', voice.isAwake);
   $('caption-icon').innerHTML = voice.isListening ? icons.waveform : icons.micSlash;
   $('caption-state').textContent = !voice.isListening ? 'Voice off'
-    : voice.isAwake ? 'Listening to you' : settings.requireWakeWord ? 'Say “Runic” + a command' : 'Listening';
+    : voice.isAwake ? 'Listening to you' : settings.requireWakeWord ? 'Say “Dixi” + a command' : 'Listening';
   $('caption-spinner').hidden = !agent.isRunning;
   const t = $('caption-transcript');
   t.hidden = !voice.liveTranscript;
@@ -205,7 +212,7 @@ menu.addEventListener('click', (e) => {
   if (cmd === 'agent') $('agent-sheet').showModal();
   if (cmd === 'settings') { renderSettings(); $('settings-sheet').showModal(); }
   if (cmd === 'new-tab') tabs.createTab('about:blank');
-  if (cmd === 'open-external') window.runic.openExternal(tabs.getCurrentURL());
+  if (cmd === 'open-external') window.dixi.openExternal(tabs.getCurrentURL());
   if (cmd === 'next-tab') tabs.switchBy(1);
   if (cmd === 'prev-tab') tabs.switchBy(-1);
 });
@@ -222,8 +229,8 @@ function renderSettings() {
 }
 $('wake-toggle').addEventListener('change', (e) => { settings.requireWakeWord = e.target.checked; renderExamples(); render(); });
 
-// ---- runic:// deep links: focus or prefill only, never run a task ----
-window.runic.onOpenURL((url) => {
+// ---- dixi:// deep links: focus or prefill only, never run a task ----
+window.dixi.onOpenURL((url) => {
   try {
     const u = new URL(url);
     const task = u.searchParams.get('task');
@@ -236,4 +243,4 @@ render();
 if (config.hasDeepgramKey && config.hasGroqKey) voice.start().catch((err) => console.error('[voice]', err.message));
 
 // For end-to-end tests and debugging.
-window.__runic = { tabs, agent, voice, llm, submit, settings };
+window.__dixi = { tabs, agent, voice, llm, submit, settings };

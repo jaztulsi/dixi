@@ -2,6 +2,21 @@
 // run in unit tests under plain Node.
 
 export const SITE_MAP = {
+  // Apple first: these are the examples Dixi shows.
+  apple: 'https://www.apple.com', 'apple.com': 'https://www.apple.com', 'apple store': 'https://www.apple.com/store',
+  'apple music': 'https://music.apple.com', 'apple tv': 'https://tv.apple.com', 'apple tv plus': 'https://tv.apple.com',
+  'apple podcasts': 'https://podcasts.apple.com', podcasts: 'https://podcasts.apple.com',
+  'apple support': 'https://support.apple.com', 'apple maps': 'https://maps.apple.com',
+  'app store': 'https://apps.apple.com', icloud: 'https://www.icloud.com',
+  // "buy AirPods Pro" goes straight to the product's buy page (each URL checked; old models redirect to current).
+  // Dixi stops there: options, bag and payment stay with you.
+  'airpods pro': 'https://www.apple.com/shop/buy-airpods/airpods-pro-3', 'airpods max': 'https://www.apple.com/shop/buy-airpods/airpods-max',
+  airpods: 'https://www.apple.com/shop/buy-airpods/airpods-4', 'iphone air': 'https://www.apple.com/shop/buy-iphone/iphone-air',
+  'iphone 17': 'https://www.apple.com/shop/buy-iphone/iphone-17', iphone: 'https://www.apple.com/shop/buy-iphone',
+  'macbook air': 'https://www.apple.com/shop/buy-mac/macbook-air', 'macbook pro': 'https://www.apple.com/shop/buy-mac/macbook-pro',
+  'ipad pro': 'https://www.apple.com/shop/buy-ipad/ipad-pro', 'ipad air': 'https://www.apple.com/shop/buy-ipad/ipad-air',
+  ipad: 'https://www.apple.com/shop/buy-ipad/ipad', 'apple watch': 'https://www.apple.com/shop/buy-watch/apple-watch',
+  'vision pro': 'https://www.apple.com/shop/buy-vision/apple-vision-pro', 'apple vision pro': 'https://www.apple.com/shop/buy-vision/apple-vision-pro',
   google: 'https://www.google.com', 'google maps': 'https://www.google.com/maps',
   youtube: 'https://www.youtube.com', gmail: 'https://mail.google.com', email: 'https://mail.google.com',
   mail: 'https://mail.google.com', calendar: 'https://calendar.google.com', drive: 'https://drive.google.com',
@@ -16,7 +31,7 @@ export const SITE_MAP = {
   tiktok: 'https://www.tiktok.com',
 };
 
-export const NAVIGATE_PATTERN = /(?:open|go to|navigate to|visit)\s+(.+)/i;
+export const NAVIGATE_PATTERN = /(?:open|go to|navigate to|visit|buy|shop for)\s+(.+)/i;
 
 const trimPunct = (s) => s.trim().replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '');
 
@@ -34,7 +49,8 @@ export function resolveURL(target) {
 export function directNavigationURL(command) {
   const m = command.match(NAVIGATE_PATTERN);
   if (!m || m.index !== 0) return null;
-  const target = trimPunct(m[1].toLowerCase());
+  // "open the App Store", "buy a new iPad on apple.com"
+  const target = trimPunct(m[1].toLowerCase()).replace(/^(?:(?:the|an?|some|new|my)\s+)+/, '').replace(/\s+(?:on|from|at)\s+(?:apple(?:\.com)?|the apple store)$/, '');
   if (SITE_MAP[target]) return SITE_MAP[target];
   return target.includes(' ') ? null : resolveURL(target);
 }
@@ -79,8 +95,9 @@ export function yesOrNo(text) {
   return null;
 }
 
-// Deepgram also hears "Runek"/"Runik"; the keywords boost makes "Runic" most likely.
-export const WAKE_PATTERN = /\b(?:runic|runek|runik|runick|ronic|rune ic)\b[\s,.!?]*/i;
+// Deepgram spells the wake word "Dixie" more often than "Dixi" (even with the keyterm boost), and sometimes
+// "Dixy"/"Dixey"/"Dicksy": accept them all.
+export const WAKE_PATTERN = /\b(?:dixi|dixie|dixy|dixey|dixee|dicksy|dicksie)\b[\s,.!?]*/i;
 
 /** Text after the wake word, or null if there's no wake word (or nothing after it). */
 export function afterWakeWord(text) {
@@ -90,7 +107,7 @@ export function afterWakeWord(text) {
   return rest.trim() ? rest : '';
 }
 
-const SEARCH_PATTERN = /^(?:(?:can|could|would) you |please )?(?:search(?: for)?|look up)\s+(.+?)(?:\s+on\s+([a-z ]+?))?[\s.?!]*$/i;
+const SEARCH_PATTERN = /^(?:(?:can|could|would) you |please )?(?:search(?: for)?|look up)\s+(.+?)(?:\s+on\s+([a-z .]+?))?[\s.?!]*$/i;  // "on apple.com" too
 
 /** A query still containing another command means the clause split missed something. */
 export const isPlainQuery = (q) => !/\b(?:play|click|open|go to|go back|add|scroll|select|watch|tap|buy)\b/i.test(q);
@@ -100,17 +117,24 @@ export function parseSearch(clause, currentURL) {
   const m = clause.match(SEARCH_PATTERN);
   if (!m) return null;
   const query = trimPunct(m[1]);
-  const platform = m[2]?.toLowerCase() ?? platformFor(currentURL);
+  const platform = m[2]?.toLowerCase().replace(/^the /, '') ?? platformFor(currentURL);  // "on the App Store"
   if (!query || !isPlainQuery(query) || !platform || !hasSearchURL(platform)) return null;
   return { query, platform };
 }
 
-const SEARCH_SITES = new Set(['youtube', 'gmail', 'twitter', 'x', 'reddit', 'github', 'amazon', 'wikipedia', 'google maps', 'google', 'facebook marketplace', 'ebay']);
+const SEARCH_SITES = new Set(['apple', 'apple.com', 'apple store', 'apple music', 'apple tv', 'apple tv plus', 'apple podcasts', 'podcasts', 'apple support', 'apple maps', 'app store', 'youtube', 'gmail', 'twitter', 'x', 'reddit', 'github', 'amazon', 'wikipedia', 'google maps', 'google', 'facebook marketplace', 'ebay']);
 export const hasSearchURL = (platform) => SEARCH_SITES.has(platform.toLowerCase());
 
 export function searchURL(platform, query) {
   const q = encodeURIComponent(query);
   switch (platform.toLowerCase()) {
+    case 'apple': case 'apple.com': case 'apple store': return `https://www.apple.com/us/search/${q}?src=globalnav`;
+    case 'apple music': return `https://music.apple.com/us/search?term=${q}`;
+    case 'apple tv': case 'apple tv plus': return `https://tv.apple.com/us/search?term=${q}`;
+    case 'apple podcasts': case 'podcasts': return `https://podcasts.apple.com/us/search?term=${q}`;
+    case 'apple support': return `https://www.apple.com/us/search/${q}?src=globalnav&tab=support`;
+    case 'apple maps': return `https://maps.apple.com/search?query=${q}`;
+    case 'app store': return `https://apps.apple.com/us/iphone/search?term=${q.toLowerCase()}`;  // capitalised terms error on Apple's side
     case 'youtube': return `https://www.youtube.com/results?search_query=${q}`;
     case 'gmail': return `https://mail.google.com/mail/u/0/#search/${q}`;
     case 'twitter': case 'x': return `https://x.com/search?q=${q}`;
@@ -134,6 +158,11 @@ export function platformFor(url) {
   if (on('google.com') && p.startsWith('/maps')) return 'google maps';
   if (on('facebook.com') && p.startsWith('/marketplace')) return 'facebook marketplace';
   if (on('mail.google.com')) return 'gmail';
+  // Apple subdomains before apple.com itself.
+  const apple = [['music.apple.com', 'apple music'], ['tv.apple.com', 'apple tv'], ['podcasts.apple.com', 'apple podcasts'],
+    ['support.apple.com', 'apple support'], ['maps.apple.com', 'apple maps'], ['apps.apple.com', 'app store'], ['apple.com', 'apple']];
+  const a = apple.find(([d]) => on(d));
+  if (a) return a[1];
   const sites = [['youtube.com', 'youtube'], ['amazon.com', 'amazon'], ['reddit.com', 'reddit'], ['github.com', 'github'],
     ['x.com', 'x'], ['twitter.com', 'x'], ['wikipedia.org', 'wikipedia'], ['ebay.com', 'ebay'], ['google.com', 'google']];
   return sites.find(([d]) => on(d))?.[1] ?? null;

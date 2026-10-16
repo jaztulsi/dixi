@@ -7,7 +7,7 @@ const STOP = new Set(['the', 'and', 'for', 'that', 'this', 'with', 'from', 'are'
   // Generic UI words: "the search box on this page" once sent a YouTube search to Wikipedia.
   'page', 'box', 'bar', 'input', 'field', 'button', 'result', 'results', 'click', 'into', 'any', 'stop', 'use',
   'site', 'website', 'open', 'show', 'link', 'one', 'first', 'second', 'top', 'user', 'said']);
-const KEY = 'runic.siteCache.urlHistory';
+const KEY = 'dixi.siteCache.urlHistory';
 const MAX_PER_KEYWORD = 5;
 
 export const keywords = (task) => task.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2 && !STOP.has(w));

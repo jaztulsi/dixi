@@ -1,5 +1,5 @@
-// Spoken replies with the system's on-device voices (speechSynthesis). While Runic talks, and for a
-// moment after, the voice agent ignores the mic: otherwise Runic hears itself and acts on it.
+// Spoken replies with the system's on-device voices (speechSynthesis). While Dixi talks, and for a
+// moment after, the voice agent ignores the mic: otherwise Dixi hears itself and acts on it.
 
 const ECHO_TAIL_MS = 1500;  // Deepgram delivers words ~1s late
 
@@ -8,7 +8,7 @@ export class Speaker {
     this.synth = synth;
     this.speaking = false;
     this.deafUntil = 0;
-    this.spans = [];  // [{start, end}] when Runic was talking, to drop late-arriving echoes
+    this.spans = [];  // [{start, end}] when Dixi was talking, to drop late-arriving echoes
   }
 
   isBusy() { return this.speaking || Date.now() < this.deafUntil; }

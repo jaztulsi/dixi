@@ -6,7 +6,7 @@
 import { ordinal } from './siteActions.js';
 
 const ORD = /\b(first|1st|top|second|2nd|third|3rd|fourth|4th|fifth|5th|last)\b/g;
-const FILLER = /\b(please|can you|could you|would you|will you|um+|uh+|just|for me|now|runic)\b/g;
+const FILLER = /\b(please|can you|could you|would you|will you|um+|uh+|just|for me|now|dixi|dixie)\b/g;
 
 /** Ordinals become one token, so "play the second video" is as close to the examples as "play the first video". */
 export const normalize = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, ' ').replace(FILLER, ' ')
@@ -80,7 +80,7 @@ export const MIN_MARGIN = 0.04; // best intent must beat the runner-up by this m
 
 export class IntentModel {
   /** `store` is localStorage-like (or null for tests); learned phrases persist across launches. */
-  constructor(store = null, key = 'runic.learnedIntents') {
+  constructor(store = null, key = 'dixi.learnedIntents') {
     this.store = store; this.key = key;
     let learned = [];
     try { learned = JSON.parse(store?.getItem(key) ?? '[]'); } catch {}
@@ -136,7 +136,7 @@ export class IntentModel {
 
 /** The AI's answer for a clause on a site, remembered: the same command again needs no API call. */
 export class ReplyCache {
-  constructor(store = null, key = 'runic.replyCache', max = 300) {
+  constructor(store = null, key = 'dixi.replyCache', max = 300) {
     this.store = store; this.key = key; this.max = max;
     try { this.map = new Map(JSON.parse(store?.getItem(key) ?? '[]')); } catch { this.map = new Map(); }
   }

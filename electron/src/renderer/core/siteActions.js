@@ -30,6 +30,14 @@ const YOUTUBE_VIDEOS = `(() => { const seen = new Set(), here = new URLSearchPar
     seen.add(v); return true; }); })()`;
 const AMAZON_RESULTS = `[...document.querySelectorAll('div[data-component-type="s-search-result"]')]
   .map(r => r.querySelector('h2 a, a.a-link-normal.s-link-style, a:has(h2)')).filter(a => a && a.href)`;
+// Apple Music search results (songs, albums, playlists, stations), in page order, one per link.
+const APPLE_MUSIC_RESULTS = `(() => { const seen = new Set();
+  return [...document.querySelectorAll('a[href*="/song/"], a[href*="/album/"], a[href*="/playlist/"], a[href*="/station/"]')]
+    .filter(a => a.offsetParent !== null && !seen.has(a.href) && seen.add(a.href)); })()`;
+// Without an Apple Music sign-in the web player plays 30-second previews: press Preview (or Play).
+const APPLE_MUSIC_PREVIEW = `(() => { const b = [...document.querySelectorAll('button')]
+    .find(x => x.offsetParent !== null && /^(preview|play)$/i.test((x.textContent || x.getAttribute('aria-label') || '').trim()));
+  if (!b) return 'wait'; b.click(); return 'ok: playing a preview'; })()`;
 const GOOGLE_RESULTS = `[...document.querySelectorAll('#search a:has(h3)')].filter(a => a.href && a.offsetParent !== null)`;
 
 /** Navigates to the nth link (more reliable than a synthetic click on single-page apps like YouTube). */
@@ -70,7 +78,7 @@ const MEDIA = [
   [/^(captions|subtitles)( (on|off))?$|^turn (on|off) (captions|subtitles)$/, 'Captions', "document.querySelector('.ytp-subtitles-button').click()"],
 ];
 
-// Runic's own controls (tabs, zoom, settings), run by the app, not in the page.
+// Dixi's own controls (tabs, zoom, settings), run by the app, not in the page.
 const APP = [
   [/^(open )?(a )?new tab$/, 'New tab', 'newTab'],
   [/^close (this |the )?tab$/, 'Closed tab', 'closeTab'],
@@ -106,6 +114,7 @@ export function matchSiteAction(command, url) {
   try { host = new URL(url).hostname.toLowerCase(); } catch {}
   const onYouTube = host.endsWith('youtube.com'), onAmazon = host.includes('amazon.');
   const onGoogle = host.endsWith('google.com') && url.includes('/search');
+  const onAppleMusic = host === 'music.apple.com';
 
   if (/\bskip\b.*\bads?\b/.test(c)) return { label: 'Skipping ad', js: SKIP_AD, patience: 8 };
 
@@ -114,10 +123,13 @@ export function matchSiteAction(command, url) {
     if (onYouTube) return { label: `Playing video ${n.label}`, js: openNth(YOUTUBE_VIDEOS, n.index), patience: 6, navigates: true };
     if (onAmazon) return { label: `Opening result ${n.label}`, js: openNth(AMAZON_RESULTS, n.index), patience: 6, navigates: true };
     if (onGoogle) return { label: `Opening result ${n.label}`, js: openNth(GOOGLE_RESULTS, n.index), patience: 6, navigates: true };
+    if (onAppleMusic) return { label: `Playing result ${n.label}`, js: openNth(APPLE_MUSIC_RESULTS, n.index), patience: 8, navigates: true,
+      then: { label: 'Playing a preview', js: APPLE_MUSIC_PREVIEW, patience: 10 } };
   }
 
   if (onAmazon && /\badd\b.*\bto\b.*\bcart\b/.test(c)) return { label: 'Adding to cart', js: amazonAddToCart(n?.index), patience: 6 };
 
+  if (onAppleMusic && /^(play|play it|play this|play the (song|album|playlist)|preview( it)?)$/.test(c)) return { label: 'Playing a preview', js: APPLE_MUSIC_PREVIEW, patience: 10 };
   for (const [re, label, call] of MEDIA) {
     if (re.test(c)) return { label, patience: 3, js: `(() => { const v = [...document.querySelectorAll('video')].find(v => v.offsetWidth > 0);
       if (!v) return 'wait'; ${call}; return 'ok: ${label}'; })()` };
@@ -139,6 +151,7 @@ export async function runSiteAction(match, tabs) {
     if (r.startsWith('ok')) {
       // The next command ("...and how many subs?") must see the new page, not the old one.
       if (match.navigates && !r.startsWith('ok: only')) { await sleep(300); await tabs.waitUntilLoaded(); }
+      if (match.then && !r.startsWith('ok: only')) return runSiteAction(match.then, tabs);  // e.g. open the song, then press Preview
       return r.slice(3).trim();
     }
     if (r !== 'wait') return `Couldn't do that here (${r.slice(0, 60)})`;

@@ -1,7 +1,7 @@
 // The only bridge between the UI and the main process. No keys cross it, only results.
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('runic', {
+contextBridge.exposeInMainWorld('dixi', {
   config: () => ipcRenderer.invoke('config:get'),
   groqChat: (body) => ipcRenderer.invoke('groq:chat', body),
   deepgram: {

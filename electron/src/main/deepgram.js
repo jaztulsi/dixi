@@ -11,7 +11,7 @@ export const DEEPGRAM_PARAMS = {
   encoding: 'linear16',
   sample_rate: '16000',
   eot_threshold: '0.7',        // how sure Flux must be the turn is over before EndOfTurn
-  keyterm: 'Runic',            // wake word; unboosted it comes back as "Runick"
+  keyterm: 'Dixi',             // wake word boost; Flux still often writes "Dixie" (WAKE_PATTERN accepts both)
 };
 
 export class DeepgramBridge {

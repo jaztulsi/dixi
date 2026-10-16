@@ -95,7 +95,7 @@ test('voice: no wake word → ignored, no AI call', async () => {
 test('voice: opens a site while you are still talking (interim)', async () => {
   const r = voiceRig();
   await r.voice.start();
-  r.say('Runic, open Amazon and', { final: false });
+  r.say('Dixi, open Amazon and', { final: false });
   await sleep(5);
   assert.deepEqual(r.tabs.navigations, ['https://www.amazon.com']);
 });
@@ -103,7 +103,7 @@ test('voice: opens a site while you are still talking (interim)', async () => {
 test('voice: instant search + site action, no AI call', async () => {
   const r = voiceRig();
   await r.voice.start();
-  r.say('Runic, search for lofi beats and play the first video');
+  r.say('Dixi, search for lofi beats and play the first video');
   await sleep(450);
   assert.deepEqual(r.tabs.navigations, ['https://www.youtube.com/results?search_query=lofi%20beats']);
   assert.equal(r.tabs.js.length, 1, 'site action ran in the page');
@@ -150,7 +150,7 @@ test('voice: a premature "open." that Flux corrects to "open YouTube" still open
 test('voice: unclear request asks back and waits for yes', async () => {
   const r = voiceRig({ intent: JSON.stringify({ steps: [{ action: 'click', target: 'Buy now', detail: '' }], confirm: 'So you want me to buy it?' }) });
   await r.voice.start();
-  r.say('Runic, get me that thing');
+  r.say('Dixi, get me that thing');
   await sleep(20);
   assert.deepEqual(r.spoken, ['So you want me to buy it?']);
   assert.equal(r.enqueued.length, 0, 'nothing happens before yes');
@@ -163,7 +163,7 @@ test('voice: unclear request asks back and waits for yes', async () => {
 test('voice: follow-up within the window needs no wake word, then expires', async () => {
   const r = voiceRig();
   await r.voice.start();
-  r.say('Runic, go to Amazon');
+  r.say('Dixi, go to Amazon');
   await sleep(80);                       // utterance reset opens the follow-up window
   r.say('search for burrito bowls');
   await sleep(80);
@@ -174,7 +174,7 @@ test('voice: follow-up within the window needs no wake word, then expires', asyn
   assert.equal(r.tabs.navigations.at(-1), 'https://www.amazon.com/s?k=burrito%20bowls');
 });
 
-test('voice: Runic does not act on its own voice', async () => {
+test('voice: Dixi does not act on its own voice', async () => {
   const r = voiceRig({ wake: false });
   r.voice.speaker.wasSpeaking = () => true;
   await r.voice.start();

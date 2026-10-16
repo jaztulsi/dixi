@@ -1,4 +1,4 @@
-// Speed, end to end: a WAV plays as the microphone (real Deepgram, real YouTube). Runic must act while
+// Speed, end to end: a WAV plays as the microphone (real Deepgram, real YouTube). Dixi must act while
 // you're still talking, and pages must be on screen within 2 s of the last spoken word.
 import { test, expect, _electron as electron } from '@playwright/test';
 import fs from 'node:fs';
@@ -10,14 +10,14 @@ const fixture = (name) => path.join(root, 'test/e2e/fixtures', name);
 const speechSeconds = (wav) => (fs.statSync(wav).size - 44) / 32000;  // 16 kHz mono 16-bit, 44-byte header
 const BUDGET_S = 2;
 
-/** Plays `wav` as the mic; logs what Runic heard and showed, with times. Resolves when `doneJS` is true. */
+/** Plays `wav` as the mic; logs what Dixi heard and showed, with times. Resolves when `doneJS` is true. */
 async function listen(wav, doneJS) {
-  const app = await electron.launch({ args: [root], cwd: root, env: { ...process.env, RUNIC_FAKE_AUDIO: wav } });
+  const app = await electron.launch({ args: [root], cwd: root, env: { ...process.env, DIXI_FAKE_AUDIO: wav } });
   try {
     const page = await app.firstWindow();
-    await page.waitForFunction(() => window.__runic?.voice.isListening, null, { timeout: 20_000 });
+    await page.waitForFunction(() => window.__dixi?.voice.isListening, null, { timeout: 20_000 });
     const result = await page.evaluate(async ({ speechS, doneJS }) => {
-      const { voice, tabs } = window.__runic;
+      const { voice, tabs } = window.__dixi;
       const out = [], at = {};
       let t0 = 0;
       const now = () => (performance.now() - t0) / 1000;
@@ -59,14 +59,14 @@ const RESULTS_SHOWN = `/search_query=lo/i.test(tabs.getCurrentURL())
   && Number(await tabs.executeJS("document.querySelectorAll('ytd-video-renderer a#video-title').length")) > 0`;
 
 test('"open YouTube and search lofi beats": results on screen within 2 s of the last word', async () => {
-  const wav = fixture('voice-open-youtube-search.wav');  // "Runic, open YouTube and search lofi beats"
+  const wav = fixture('voice-open-youtube-search.wav');  // "Dixi, open YouTube and search lofi beats"
   const r = await listen(wav, RESULTS_SHOWN);
   console.log(`results ${(r.done - speechSeconds(wav)).toFixed(2)}s after the last word (budget ${BUDGET_S}s)`);
   expect(r.done - speechSeconds(wav)).toBeLessThanOrEqual(BUDGET_S);
 });
 
 test('acts while you speak: with no "and", the search starts before the last word', async () => {
-  const wav = fixture('voice-no-and.wav');  // "Runic, open YouTube, search lofi beats, play the first video"
+  const wav = fixture('voice-no-and.wav');  // "Dixi, open YouTube, search lofi beats, play the first video"
   const r = await listen(wav, `/\\/watch/.test(tabs.getCurrentURL())`);
   const end = speechSeconds(wav);
   console.log(`search on screen at ${r.at.Searching?.toFixed(2)}s, results URL at ${r.at['url:/results']?.toFixed(2)}s, speech ends ${end.toFixed(2)}s, video at ${r.done.toFixed(2)}s`);

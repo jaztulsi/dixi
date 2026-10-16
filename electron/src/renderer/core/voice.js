@@ -52,7 +52,7 @@ export class VoiceAgent {
     this.queue = Promise.resolve();
     this.pending = 0;
     this.navigating = Promise.resolve();  // the latest navigation; anything reading the page awaits it
-    this.plan = [];               // what was said → what Runic is doing, shown on screen right away
+    this.plan = [];               // what was said → what Dixi is doing, shown on screen right away
     this.streamStartedAt = Date.now();
     this.resetDispatchState();
     deepgram.onMessage((text) => this.handleMessage(text));
@@ -128,7 +128,7 @@ export class VoiceAgent {
     const transcript = json.channel?.alternatives?.[0]?.transcript;
     if (json.type !== 'Results' || !transcript?.trim()) return;
 
-    // Runic is talking (or its own words are arriving late): that's its voice, not a command.
+    // Dixi is talking (or its own words are arriving late): that's its voice, not a command.
     const spokenAt = this.streamStartedAt + (json.start ?? 0) * 1000;
     if (this.speaker.isBusy() || this.speaker.wasSpeaking(spokenAt)) { this.pendingFinal = ''; return; }
 
@@ -151,7 +151,7 @@ export class VoiceAgent {
   handleTurn(json) {
     const text = json.transcript?.trim() ?? '';
     const spokenAt = this.streamStartedAt + (json.audio_window_start ?? 0) * 1000;
-    if (this.speaker.isBusy() || this.speaker.wasSpeaking(spokenAt)) return;  // Runic's own voice
+    if (this.speaker.isBusy() || this.speaker.wasSpeaking(spokenAt)) return;  // Dixi's own voice
     if (json.event === 'EndOfTurn') {
       this.pendingFinal = text;
       this.flushPendingFinal();
@@ -200,7 +200,7 @@ export class VoiceAgent {
     this.taken = 0;  // the next words start a new text
   }
 
-  /** The part of `text` meant for Runic, or null if it wasn't addressed to Runic. */
+  /** The part of `text` meant for Dixi, or null if it wasn't addressed to Dixi. */
   commandText(text) {
     if (!this.requireWakeWord) return text;
     const rest = afterWakeWord(text);
@@ -305,7 +305,7 @@ export class VoiceAgent {
     }, this.timing.speculateMS ?? 200);
   }
 
-  /** Exact phrasing → instant action (in the page, or Runic's own controls). */
+  /** Exact phrasing → instant action (in the page, or Dixi's own controls). */
   rule(text, site) {
     const app = matchAppAction(text);
     if (app) return { label: app.label, run: () => { this.app?.[app.app]?.(); } };

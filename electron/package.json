@@ -1,8 +1,8 @@
 {
-  "name": "runic",
-  "productName": "Runic",
+  "name": "dixi",
+  "productName": "Dixi",
   "version": "1.0.0",
-  "description": "Runic: a hands-free, voice-powered browser (Electron).",
+  "description": "Dixi: a hands-free, voice-powered browser (Electron).",
   "type": "module",
   "main": "src/main/main.js",
   "private": true,

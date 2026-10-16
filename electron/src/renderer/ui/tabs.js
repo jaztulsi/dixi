@@ -19,12 +19,12 @@ const EXTRACT_JS = `(function() {
       cx: Math.round(rect.x + rect.width / 2), cy: Math.round(rect.y + rect.height / 2), index: idx });
     idx++;
   }
-  window.__runic_elements = refs;
+  window.__dixi_elements = refs;
   return JSON.stringify(results);
 })()`;
 
 const clickJS = (el) => `(function() {
-  var el = (window.__runic_elements || [])[${el.index}] || document.elementFromPoint(${el.cx}, ${el.cy});
+  var el = (window.__dixi_elements || [])[${el.index}] || document.elementFromPoint(${el.cx}, ${el.cy});
   if (!el) return 'no element found';
   if (el.tagName === 'SELECT') { el.focus(); el.click(); return 'select clicked'; }
   if (el.getAttribute('role') === 'combobox' || el.classList.contains('dropdown') || el.classList.contains('select')) {
@@ -36,7 +36,7 @@ const clickJS = (el) => `(function() {
 })()`;
 
 const typeJS = (el, text, pressEnter) => `(function() {
-  var el = (window.__runic_elements || [])[${el.index}] || document.elementFromPoint(${el.cx}, ${el.cy});
+  var el = (window.__dixi_elements || [])[${el.index}] || document.elementFromPoint(${el.cx}, ${el.cy});
   if (!el) return 'no element found';
   if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !el.isContentEditable) {
     var inner = el.querySelector('input, textarea, [contenteditable="true"]'); if (inner) el = inner;
@@ -55,12 +55,12 @@ const typeJS = (el, text, pressEnter) => `(function() {
 })()`;
 
 const SETTLE_JS = `(function() {
-  if (!window.__runic_mo) {
-    window.__runic_mo_changed = false;
-    window.__runic_mo = new MutationObserver(function() { window.__runic_mo_changed = true; });
-    window.__runic_mo.observe(document.body || document.documentElement, { childList: true, subtree: true });
+  if (!window.__dixi_mo) {
+    window.__dixi_mo_changed = false;
+    window.__dixi_mo = new MutationObserver(function() { window.__dixi_mo_changed = true; });
+    window.__dixi_mo.observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
-  var c = window.__runic_mo_changed; window.__runic_mo_changed = false; return c ? 'changed' : 'stable';
+  var c = window.__dixi_mo_changed; window.__dixi_mo_changed = false; return c ? 'changed' : 'stable';
 })()`;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -92,7 +92,7 @@ export class TabManager {
 
   makeWebview(url, background) {
     const wv = document.createElement('webview');
-    wv.setAttribute('partition', 'persist:runic-tabs');
+    wv.setAttribute('partition', 'persist:dixi-tabs');
     wv.setAttribute('allowpopups', '');
     wv.className = background ? 'tab background' : 'tab';
     const tab = { id: nextId++, webview: wv, title: '', url, background, ready: false };
@@ -211,7 +211,7 @@ export class TabManager {
   async screenshot() {
     const t = this.activeTab;
     if (!t?.ready) return null;
-    return window.runic.screenshot(t.webview.getWebContentsId());
+    return window.dixi.screenshot(t.webview.getWebContentsId());
   }
 
   async waitUntilLoaded(timeoutS = 10, tabId) {

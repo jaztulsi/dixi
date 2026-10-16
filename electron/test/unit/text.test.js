@@ -41,11 +41,13 @@ test('yes / no / neither', () => {
 });
 
 test('wake word', () => {
-  assert.equal(afterWakeWord('Runic, open YouTube.'), 'open YouTube.');
-  assert.equal(afterWakeWord('Hey, Runek. Search for lofi beats.'), 'Search for lofi beats.');
-  assert.equal(afterWakeWord('Runic'), '');
+  assert.equal(afterWakeWord('Dixi, open YouTube.'), 'open YouTube.');
+  assert.equal(afterWakeWord('Dixie, open YouTube and search for lo fi beats.'), 'open YouTube and search for lo fi beats.');  // how Flux spells it
+  assert.equal(afterWakeWord('Hey, Dixy. Search for lofi beats.'), 'Search for lofi beats.');
+  assert.equal(afterWakeWord('Dixi'), '');
   assert.equal(afterWakeWord('this is working pretty well'), null);
   assert.equal(afterWakeWord('the runtime is slow'), null);
+  assert.equal(afterWakeWord('we drove through dixon'), null);
 });
 
 test('instant search parsing', () => {
