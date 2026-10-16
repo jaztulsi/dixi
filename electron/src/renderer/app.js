@@ -4,6 +4,7 @@ import { icons } from './ui/icons.js';
 import { TabManager } from './ui/tabs.js';
 import { Mic } from './ui/mic.js';
 import { Speaker } from './ui/speaker.js';
+import { mountMascot } from './ui/mascot.js';
 import { LLM } from './core/llm.js';
 import { BrowserAgent } from './core/agent.js';
 import { VoiceAgent } from './core/voice.js';
@@ -15,6 +16,11 @@ import { isQuestion, directNavigationURL, looksLikeURL, parseSearch, searchURL }
 const $ = (id) => document.getElementById(id);
 const fillIcons = (root = document) => root.querySelectorAll('[data-icon]').forEach((el) => { if (!el.firstChild || el.tagName === 'BUTTON') el.innerHTML = icons[el.dataset.icon] ?? ''; });
 fillIcons();
+// Dixi the mascot: big on the start page (eyes follow the cursor), small in the caption island.
+// Mounted before anything can call render().
+const startMascot = mountMascot($('start-mascot'));
+const captionMascot = mountMascot($('caption-mascot'), { eyes: false });
+startMascot.init();
 
 const WAKE_KEY = 'runic.requireWakeWord';
 const settings = {
@@ -53,6 +59,14 @@ function renderExamples() {
 }
 renderExamples();
 
+function mascotPose() {
+  if (!voice.isListening) return 'sleep';
+  if (agent.isRunning || voice.plan.some((p) => p.state === 'running')) return 'happy';
+  if (voice.plan.length && voice.plan.every((p) => p.state === 'done')) return 'nod';
+  if (voice.isAwake) return 'curious';
+  return null;
+}
+
 // ---- render (called on every state change) ----
 let lastResult = null, toastTimer = null;
 function render() {
@@ -87,6 +101,9 @@ function render() {
 }
 
 function renderCaption() {
+  const pose = mascotPose();
+  startMascot.setPose(pose ?? 'face');
+  captionMascot.setPose(pose ?? 'neutral');
   const addressed = voice.isAwake || !settings.requireWakeWord;
   $('caption').classList.toggle('awake', voice.isAwake);
   $('caption-icon').innerHTML = voice.isListening ? icons.waveform : icons.micSlash;

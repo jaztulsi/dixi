@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:">
-  <title>Runic</title>
+  <title>Dixi</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main id="content">
     <section id="start-page" aria-label="Start page">
       <div class="start-inner">
-        <div class="start-icon" data-icon="waveform"></div>
+        <div id="start-mascot" class="start-mascot"></div>
+        <p class="wordmark" aria-hidden="true">Dixi</p>
         <h1>Just say what you want.</h1>
         <p class="start-sub" id="start-sub">Start with &ldquo;Runic&rdquo;. No clicking needed.</p>
         <ul class="examples" id="examples"></ul>
@@ -19,16 +20,17 @@
     <div id="tabs"></div>
   </main>
 
-  <!-- Live caption: what Runic hears and what it's doing (never blocks clicks on the page). -->
+  <!-- Live caption, styled as a black Dynamic Island: what Dixi hears and what it's doing (never blocks clicks on the page). -->
   <div id="caption" class="glass" role="status" aria-live="polite">
     <div class="caption-head">
+      <span id="caption-mascot" class="caption-mascot"></span>
       <span id="caption-icon" class="caption-icon" data-icon="waveform"></span>
       <span id="caption-state"></span>
       <span class="spacer"></span>
       <span id="caption-spinner" class="spinner" hidden></span>
     </div>
     <div id="caption-transcript" class="caption-transcript" hidden></div>
-    <ol id="caption-plan" class="caption-plan" aria-label="What Runic is doing" hidden></ol>
+    <ol id="caption-plan" class="caption-plan" aria-label="What Dixi is doing" hidden></ol>
     <div id="caption-answer" class="answer" hidden>
       <div id="answer-text" class="answer-text"></div>
       <div id="answer-source" class="answer-source"></div>
@@ -84,7 +86,7 @@
     <div class="form">
       <div class="group-title">Voice</div>
       <div class="group"><label class="row"><span>Require &ldquo;Runic&rdquo; wake word</span><input id="wake-toggle" type="checkbox" class="switch"></label></div>
-      <p class="footnote">The microphone is always on. With the wake word, Runic only acts on speech that starts with &ldquo;Runic&rdquo; (plus follow-ups for a few seconds after), so TV and conversations are ignored.</p>
+      <p class="footnote">The microphone is always on. With the wake word, Dixi only acts on speech that starts with &ldquo;Runic&rdquo; (plus follow-ups for a few seconds after), so TV and conversations are ignored.</p>
       <div class="group-title">API keys</div>
       <div class="group">
         <div class="row"><span>Groq (AI)</span><span id="key-groq"></span></div>
@@ -96,7 +98,7 @@
         <div class="row"><span>Voice model</span><span id="voice-model" class="muted"></span></div>
       </div>
       <div class="group-title">About</div>
-      <div class="group"><div class="row about"><b>Runic</b><span class="muted">A hands-free, voice-controlled browser. Say what you want and Runic does it while you're still talking.</span></div>
+      <div class="group"><div class="row about"><b>Dixi</b><span class="muted">A hands-free, voice-controlled browser. Say what you want and Dixi does it while you're still talking.</span></div>
         <div class="row"><span>Version</span><span class="muted">1.0.0</span></div></div>
     </div>
   </dialog>

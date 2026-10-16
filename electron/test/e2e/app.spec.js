@@ -24,7 +24,7 @@ test.describe('typed commands (live)', () => {
   test.afterAll(async () => app?.close());
 
   test('launches to the hands-free start page with no errors', async () => {
-    await expect(page).toHaveTitle('Runic');
+    await expect(page).toHaveTitle('Dixi');
     await expect(page.locator('#start-page h1')).toHaveText('Just say what you want.');
     await expect(page.locator('#examples li')).toHaveCount(3);
     await expect(page.locator('#caption')).toBeVisible();
