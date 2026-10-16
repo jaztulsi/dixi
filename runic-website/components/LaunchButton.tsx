@@ -23,13 +23,13 @@ export function LaunchButton({ className }: { className?: string }) {
     <>
       <Button asChild className={cn('w-full sm:w-auto', className)}>
         <a href="runic://open" onClick={onClick}>
-          Launch Runic
+          Launch Dixi
         </a>
       </Button>
       <p aria-live="polite" className={cn('text-[15px] text-fg-2', !failed && 'sr-only')}>
         {failed ? (
           <>
-            Couldn’t open Runic. Is it installed? <a href="#launch" className="text-fg underline underline-offset-4">Get it here</a>.
+            Couldn’t open Dixi. Is it installed? <a href="#launch" className="text-fg underline underline-offset-4">Get it here</a>.
           </>
         ) : null}
       </p>

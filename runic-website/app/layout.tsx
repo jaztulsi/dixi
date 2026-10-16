@@ -7,20 +7,24 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'sw
 const cinzel = Cinzel({ subsets: ['latin'], weight: '400', variable: '--font-cinzel', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'Runic: the web, hands-free',
-  description: 'Runic is a voice-powered browser that acts before you finish your sentence.',
+  title: 'Dixi: the web, hands-free',
+  description: 'Dixi is a voice-powered browser that acts before you finish your sentence.',
   openGraph: {
-    title: 'Runic: the web, hands-free',
-    description: 'Say what you want. Runic reads the page and does it, before you finish your sentence.',
+    title: 'Dixi: the web, hands-free',
+    description: 'Say what you want. Dixi reads the page and does it, before you finish your sentence.',
     type: 'website',
   },
 };
 
-export const viewport: Viewport = { colorScheme: 'dark' };
+export const viewport: Viewport = { colorScheme: 'light' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${cinzel.variable}`}>
+      <head>
+        {/* The hero's stripe mass is the LCP element and a CSS background, so the browser would find it late. */}
+        <link rel="preload" as="image" href="/img/marble-stripes.avif" type="image/avif" fetchPriority="high" media="(min-width: 640px)" />
+      </head>
       <body>{children}</body>
     </html>
   );

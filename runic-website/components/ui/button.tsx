@@ -9,7 +9,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-text text-bg', // solid white pill, black text (21:1)
+        primary: 'bg-fg text-fg-inv', // solid pill in the zone's ink: black on white marble, white on black
         glass: 'glass text-fg',
       },
       size: {

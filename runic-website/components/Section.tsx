@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 /** A page section: sets the text tone for its marble zone and carries the Roman-numeral marker
  *  the island reads ("II · How it works"). */
 export function Section({
-  id, tone = 'dark', numeral, label, children, className,
+  id, tone = 'light', numeral, label, children, className,
 }: {
   id: string;
   tone?: 'dark' | 'light';

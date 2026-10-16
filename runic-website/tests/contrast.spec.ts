@@ -61,7 +61,7 @@ for (const [width, height] of VIEWPORTS) {
 
     // Hide text and the fixed island, then photograph what's behind.
     await page.addStyleTag({
-      content: '*{color:transparent!important;text-decoration-color:transparent!important} nav[aria-label=Main]{display:none!important} main svg, footer svg{visibility:hidden}',
+      content: '*{color:transparent!important;text-decoration-color:transparent!important} nav[aria-label=Main],nextjs-portal{display:none!important} main svg, footer svg{visibility:hidden}',
     });
     const png = PNG.sync.read(await page.screenshot({ fullPage: true }));
     const px = (x: number, y: number) => {

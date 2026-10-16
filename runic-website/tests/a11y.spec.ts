@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('island menu: keyboard open, Tab through links, Escape closes and restores focus', async ({ page }) => {
   await page.goto('/');
-  const open = page.getByRole('button', { name: 'Open menu' });
+  const open = page.getByRole('button', { name: /open menu/ });
   await open.focus();
   // Visible 2px focus ring.
   const outline = await open.evaluate((el) => getComputedStyle(el).outlineWidth + ' ' + getComputedStyle(el).outlineStyle);
@@ -10,20 +10,20 @@ test('island menu: keyboard open, Tab through links, Escape closes and restores 
 
   await page.keyboard.press('Enter');
   await expect(page.locator('#island-menu')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Why' })).toBeFocused();
+  await expect(page.getByRole('link', { name: 'What you can say' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'How it works', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.locator('#island-menu').getByRole('link', { name: 'Launch Runic' })).toHaveAttribute('href', 'runic://open');
+  await expect(page.locator('#island-menu').getByRole('link', { name: 'Launch Dixi' })).toHaveAttribute('href', 'runic://open');
 
   await page.keyboard.press('Escape');
   await expect(page.locator('#island-menu')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open menu' })).toBeFocused();
+  await expect(page.getByRole('button', { name: /open menu/ })).toBeFocused();
 });
 
 test('Launch links only to runic://open (prefill, never a task)', async ({ page }) => {
   await page.goto('/');
-  const hrefs = await page.locator('a', { hasText: 'Launch Runic' }).evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+  const hrefs = await page.locator('a', { hasText: 'Launch Dixi' }).evaluateAll((as) => as.map((a) => a.getAttribute('href')));
   expect(hrefs.length).toBeGreaterThan(0);
   for (const h of hrefs) expect(h).toBe('runic://open');
 });
@@ -53,7 +53,7 @@ for (const width of [320, 390, 1024, 1440]) {
 
 test('credits lists every image source', async ({ page }) => {
   await page.goto('/credits/');
-  for (const id of ['248118', '248205', '251036', '257641', 'Marble019', 'Marble016']) {
+  for (const id of ['Marble019', 'Onyx013']) {
     await expect(page.locator(`a[href*="${id}"]`)).toHaveCount(1);
   }
 });
