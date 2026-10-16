@@ -556,7 +556,15 @@ struct ContentView: View {
             tabManager.createTab(url: "https://google.com")
         }
 
-        if let url = directNavigationURL(for: text) {
+        if let m = SiteActions.match(text, url: tabManager.getCurrentURL()) {
+            barText = ""
+            isBarFocused = false
+            Task { voiceAgent.statusLine = await SiteActions.run(m, on: tabManager) }
+        } else if VoiceAgent.isQuestion(text) || text.hasSuffix("?") {
+            barText = ""
+            isBarFocused = false
+            Task { await voiceAgent.answer(text) }
+        } else if let url = directNavigationURL(for: text) {
             Task { await tabManager.navigate(to: url) }
             barText = ""
             isBarFocused = false

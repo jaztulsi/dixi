@@ -51,6 +51,28 @@ struct VoiceCaptionView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            if let answer = voice.answer {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(answer.text)
+                        .font(.title3.weight(.medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // Where it came from, and whether the supporting quote was found on the page.
+                    Label(answer.grounded ? "From this page: \(answer.source)" : "Not confirmed on this page",
+                          systemImage: answer.grounded ? "checkmark.seal.fill" : "exclamationmark.triangle")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(answer.grounded ? Color.green : Color.orange)
+                        .lineLimit(1)
+                    if let quote = answer.quote {
+                        Text("\u{201C}\(quote)\u{201D}")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(12)
+                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+            }
+
             if let activity {
                 Label(activity, systemImage: "arrow.turn.down.right")
                     .font(.callout.weight(.medium))

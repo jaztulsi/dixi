@@ -78,6 +78,12 @@ final class TabManager {
         let config = WKWebViewConfiguration()
         config.preferences.isElementFullscreenEnabled = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        // Runic's clicks are synthetic, so WebKit's default "user gesture required" autoplay rule
+        // left videos opened by voice paused ("it went to the video but didn't play it").
+        config.mediaTypesRequiringUserActionForPlayback = []
+        #if os(iOS)
+        config.allowsInlineMediaPlayback = true
+        #endif
 
         // Scroll observer
         let observer = ScrollObserver()
@@ -437,6 +443,12 @@ final class TabManager {
         let config = WKWebViewConfiguration()
         config.preferences.isElementFullscreenEnabled = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        // Runic's clicks are synthetic, so WebKit's default "user gesture required" autoplay rule
+        // left videos opened by voice paused ("it went to the video but didn't play it").
+        config.mediaTypesRequiringUserActionForPlayback = []
+        #if os(iOS)
+        config.allowsInlineMediaPlayback = true
+        #endif
 
         let observer = ScrollObserver()
         scrollObservers[tab.id] = observer

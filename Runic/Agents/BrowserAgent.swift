@@ -130,6 +130,9 @@ final class BrowserAgent {
         messages.append(["role": "system", "content": systemPrompt])
 
         var done = false
+        // No-progress guards: the agent once clicked the same YouTube thumbnail 5 times in a row
+        // while rate-limited. Same move on the same page 3 times, or 2 API failures in a row, ends it.
+        var lastMove = "", sameMoveCount = 0, apiFailures = 0
 
         while currentStep < maxSteps && !done && isRunning {
             currentStep += 1
@@ -151,9 +154,16 @@ final class BrowserAgent {
             } catch {
                 logger.error("API error: \(error.localizedDescription, privacy: .public)")
                 log(.error, "API error: \(error.localizedDescription)")
+                apiFailures += 1
+                if apiFailures >= 2 {
+                    currentStatusLine = "Stopped: AI unavailable right now"
+                    log(.error, "Stopping after repeated API errors")
+                    break
+                }
                 try? await Task.sleep(for: .seconds(2))
                 continue
             }
+            apiFailures = 0
 
             guard let assistantMsg = response.choices.first?.message else {
                 log(.error, "No response from model")
@@ -189,6 +199,17 @@ final class BrowserAgent {
                             log(.success, "Task complete!")
                             log(.info, args.result)
                         }
+                        done = true
+                        break
+                    }
+
+                    let move = "\(fnName)|\(fnArgs)|\(tabManager.getCurrentURL())"
+                    sameMoveCount = move == lastMove ? sameMoveCount + 1 : 1
+                    lastMove = move
+                    if sameMoveCount >= 3 {
+                        finalResult = "I couldn't get that to work: the same action wasn't changing anything."
+                        currentStatusLine = "Stopped: no progress"
+                        log(.error, "Stopping: same action 3 times with no effect")
                         done = true
                         break
                     }

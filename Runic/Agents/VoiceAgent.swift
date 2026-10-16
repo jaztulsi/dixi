@@ -70,7 +70,11 @@ final class SessionContext {
 }
 
 private struct IntentResponse: Decodable {
-    let steps: [IntentStep]
+    let steps: [IntentStep]?
+    /// A question to answer from the page ("who made this video?"); answering never navigates.
+    let question: String?
+    /// A spoken check ("So you want me to…?") for unclear or risky requests; steps wait for a yes.
+    let confirm: String?
 }
 
 private struct StabilityCommand: Decodable {
@@ -170,6 +174,12 @@ final class VoiceAgent {
     /// True while the current speech is addressed to Runic (wake word heard, or a follow-up).
     var isAwake = false
     private var isStarting = false
+    /// Wall-clock time of audio second 0 in the Deepgram stream (Results carry audio-relative "start").
+    private var streamStartedAt = Date()
+    /// Latest spoken answer, shown in the caption with its source.
+    var answer: PageQA.Answer?
+    /// Steps waiting for the user's "yes" after Runic asked "So you want me to…?".
+    private var pendingSteps: [IntentStep] = []
 
     // --- Wake word ---
     /// The mic is always on, so only speech that starts with "Runic" (or comes within a few seconds of
@@ -237,6 +247,7 @@ final class VoiceAgent {
         logger.info("VoiceAgent: opening Deepgram...")
         try openDeepgram()
         logger.info("VoiceAgent: starting audio engine...")
+        streamStartedAt = Date()
         try startAudioEngine()
 
         isListening = true
@@ -443,6 +454,13 @@ final class VoiceAgent {
               let transcript = alts.first?["transcript"] as? String,
               !transcript.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
+        // Runic is talking (or its own words are arriving late): that's its voice, not a command.
+        let spokenAt = streamStartedAt.addingTimeInterval((json["start"] as? Double) ?? 0)
+        if Speaker.shared.isBusy || Speaker.shared.wasSpeaking(at: spokenAt) {
+            pendingFinal = ""
+            return
+        }
+
         let isFinal = (json["is_final"] as? Bool) ?? false
         let heard = pendingFinal + transcript
         liveTranscript = heard
@@ -498,6 +516,7 @@ final class VoiceAgent {
         }
         finalTranscript += command + " "
         currentUtterance = command
+        answer = nil
         handleFinalTranscript(command)
     }
 
@@ -518,6 +537,8 @@ final class VoiceAgent {
     // MARK: - Incremental Dispatch: Interim
 
     private func handleInterimTranscript(_ text: String) {
+        // "who made this video and how many subs" is one question, not two commands to act on early.
+        if Self.isQuestion(text) { return }
         // 1. Instant navigate to known sites, instant search on known sites
         tryInstantNavigate(text)
         tryInstantSearch(text, isFinal: false)
@@ -612,6 +633,27 @@ final class VoiceAgent {
         }
     }
 
+    /// "play the first video", "skip the ad", "add it to my cart"... done directly in the page
+    /// (see SiteActions) instead of a multi-step AI agent run. Final transcript only, in order.
+    private func trySiteActions(_ text: String) {
+        guard let tabManager else { return }
+        for clause in Self.splitOnConjunctions(text) where !isAlreadyHandled(clause) {
+            guard let m = SiteActions.match(clause, url: currentSiteURL()) else { continue }
+            handledInterimParts.insert(Self.clauseKey(clause))
+            actedThisUtterance = true
+            logger.info("[dispatch] Site action: \(m.label, privacy: .public)")
+            let previous = siteActionChain
+            siteActionChain = Task { [weak self] in
+                await previous?.value
+                self?.statusLine = m.label
+                let result = await SiteActions.run(m, on: tabManager)
+                logger.info("[dispatch] Site action result: \(result, privacy: .public)")
+                self?.statusLine = result
+            }
+        }
+    }
+    private var siteActionChain: Task<Void, Never>?
+
     /// "search for lofi beats" on a site with a known search URL → load that URL with no LLM call.
     /// On interim text it only takes clauses that are clearly finished: followed by "and/then", or
     /// ending in the period Deepgram adds once it thinks the sentence is over. Measured: that period
@@ -684,7 +726,26 @@ final class VoiceAgent {
     /// Processes the final transcript, skipping any parts already dispatched
     /// by instant navigate or the stability timer.
     private func handleFinalTranscript(_ transcript: String) {
+        if !pendingSteps.isEmpty, let yes = Self.yesOrNo(transcript) {
+            let steps = pendingSteps
+            pendingSteps = []
+            actedThisUtterance = true
+            if yes {
+                logger.info("[dispatch] Confirmed \(steps.count, privacy: .public) step(s)")
+                intentTask = Task { [weak self] in for step in steps { await self?.dispatch(step) } }
+            } else {
+                statusLine = "Okay, cancelled"
+                Speaker.shared.say("Okay, cancelled.")
+            }
+            return
+        }
+        pendingSteps = []  // anything else is a new command
+        if Self.isQuestion(transcript) {
+            intentTask = Task { [weak self] in await self?.answer(transcript) }
+            return
+        }
         tryInstantSearch(transcript, isFinal: true)
+        trySiteActions(transcript)
         let parts = Self.splitOnConjunctions(transcript)
         let unhandled = parts
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -709,9 +770,25 @@ final class VoiceAgent {
             logger.error("[dispatch] Final: unreadable LLM reply: \(content, privacy: .public)")
             return
         }
-        if parsed.steps.isEmpty { logger.info("[dispatch] Final: LLM found no action in \"\(text, privacy: .public)\"") }
+        let steps = parsed.steps ?? []
 
-        for step in parsed.steps {
+        if let question = parsed.question, !question.isEmpty {
+            await answer(question)
+        }
+        if let confirm = parsed.confirm, !confirm.isEmpty, !steps.isEmpty {
+            // Unclear or risky: say back what we'd do and wait for "yes" (no wake word needed).
+            logger.info("[dispatch] Asking to confirm: \(confirm, privacy: .public)")
+            pendingSteps = steps
+            actedThisUtterance = true
+            statusLine = confirm
+            Speaker.shared.say(confirm)
+            return
+        }
+        if steps.isEmpty && parsed.question == nil {
+            logger.info("[dispatch] Final: LLM found no action in \"\(text, privacy: .public)\"")
+        }
+
+        for step in steps {
             let fp = stepFingerprint(step)
             guard !dispatchedFingerprints.contains(fp) else {
                 logger.info("[dispatch] Final dedup: skipping \(fp, privacy: .public)")
@@ -723,45 +800,16 @@ final class VoiceAgent {
         }
     }
 
-    /// One JSON-mode call to the voice model. On a rate limit it falls back to the other Groq models
-    /// (each has its own free-tier budget) instead of silently dropping the command.
+    /// One JSON-mode call to the voice model, falling back to the other Groq models (each has its
+    /// own free-tier budget) instead of silently dropping the command.
     private func askVoiceLLM(system: String, transcript: String, timeout: TimeInterval) async -> String? {
-        guard let url = URL(string: "\(llmBaseURL)/chat/completions") else { return nil }
         let models = [Secrets.voiceModel] + ["openai/gpt-oss-120b", Secrets.agentModel].filter { $0 != Secrets.voiceModel }
-        for model in models {
-            var body: [String: Any] = [
-                "model": model,
-                "messages": [
-                    ["role": "system", "content": system],
-                    ["role": "user", "content": "\(buildContext())\n\nTranscript: \"\(transcript)\""],
-                ],
-                "response_format": ["type": "json_object"],
-                "max_tokens": 500,
-                "temperature": 0,
-            ]
-            if let effort = LLMService.reasoningEffort(for: model) { body["reasoning_effort"] = effort }
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.addValue("Bearer \(llmKey)", forHTTPHeaderField: "Authorization")
-            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.timeoutInterval = timeout
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
-                  let code = (response as? HTTPURLResponse)?.statusCode else { return nil }
-            if code == 429 { logger.warning("[voice] \(model, privacy: .public) rate limited, trying next"); continue }
-            guard code == 200 else {
-                logger.error("[voice] LLM API \(code, privacy: .public): \(String(data: data, encoding: .utf8) ?? "", privacy: .public)")
-                return nil
-            }
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let choices = json["choices"] as? [[String: Any]],
-                  let message = choices.first?["message"] as? [String: Any] else { return nil }
-            return message["content"] as? String
+        let reply = await GroqJSON.complete(system: system, user: "\(buildContext())\n\nTranscript: \"\(transcript)\"",
+                                            models: models, timeout: timeout)
+        if reply == nil, models.allSatisfy(GroqJSON.isCoolingDown) {
+            statusLine = "Groq rate limit: try again in a few seconds"
         }
-        statusLine = "Groq rate limit: try again in a few seconds"
-        return nil
+        return reply
     }
 
     // MARK: - Dispatch
@@ -782,6 +830,13 @@ final class VoiceAgent {
 
         switch step.action {
         case "open":
+            // "open YouTube" while already on YouTube used to reload the page.
+            if let want = URL(string: resolveURL(step.target) ?? step.target), want.path.count <= 1,
+               let here = URL(string: currentSiteURL()), let h1 = here.host, let h2 = want.host,
+               h1.replacingOccurrences(of: "www.", with: "") == h2.replacingOccurrences(of: "www.", with: "") {
+                logger.info("[dispatch] Already on \(h2, privacy: .public), not reloading")
+                return
+            }
             lastNavigatedSite = step.target
             await tabManager.navigate(to: step.target)
 
@@ -809,8 +864,7 @@ final class VoiceAgent {
         case "type", "click", "scroll", "send", "create":
             // Wait for page to be loaded before interacting
             await tabManager.waitUntilLoaded()
-            let task = "\(step.action) \(step.detail) in \(step.target)".trimmingCharacters(in: .whitespaces)
-            await browserAgent?.enqueue(task: task)
+            await browserAgent?.enqueue(task: Self.agentTask(for: step, said: currentUtterance))
 
         default:
             logger.warning("Unknown action: \(step.action, privacy: .public)")
@@ -826,6 +880,50 @@ final class VoiceAgent {
             detail: step.detail,
             pageTitle: pageTitle
         )
+    }
+
+    /// Answers a question from the current page and speaks it. Never navigates.
+    func answer(_ question: String) async {
+        guard let tabManager else { return }
+        actedThisUtterance = true
+        statusLine = "Reading the page…"
+        logger.info("[qa] Question: \(question, privacy: .public)")
+        let a = await PageQA.ask(question, tabs: tabManager)
+        logger.info("[qa] Answer (grounded=\(a.grounded, privacy: .public)): \(a.text, privacy: .public)")
+        answer = a
+        statusLine = ""
+        Speaker.shared.say(a.text)
+    }
+
+    /// "who made this video?", "how many subscribers…", "is this in stock?" → answer from the page.
+    /// "can you open YouTube" is a polite command, not a question.
+    static func isQuestion(_ text: String) -> Bool {
+        let t = text.lowercased().trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+        if t.range(of: #"^(can|could|would|will) you (please )?(open|go|search|play|click|add|scroll|skip|pause|type|navigate|show|find|buy|watch)\b"#, options: .regularExpression) != nil { return false }
+        return t.range(of: #"^(who|whose|what|what's|whats|when|where|why|how|which|is|are|was|were|does|do|did|can|could|will|would|should|tell me|explain)\b"#, options: .regularExpression) != nil
+    }
+
+    /// true = yes, false = no, nil = neither (treat as a new command).
+    static func yesOrNo(_ text: String) -> Bool? {
+        let t = text.lowercased().trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+        if t.range(of: #"^(yes|yeah|yep|yup|sure|correct|right|exactly|do it|go ahead|confirm|ok|okay|please do|that's right)\b"#, options: .regularExpression) != nil { return true }
+        if t.range(of: #"^(no|nope|nah|cancel|stop|never ?mind|don'?t|wrong)\b"#, options: .regularExpression) != nil { return false }
+        return nil
+    }
+
+    /// Plain-language task for the browser agent. Building it as "\(action) \(detail) in \(target)"
+    /// produced garbage like "click current page in first video", and the agent flailed.
+    static func agentTask(for step: IntentStep, said: String) -> String {
+        let junk: Set<String> = ["", "page", "current page", "current site", "browser"]
+        let target = junk.contains(step.target.lowercased()) ? "" : step.target
+        let detail = junk.contains(step.detail.lowercased()) ? "" : step.detail
+        let what: String
+        switch step.action {
+        case "type": what = "Type \"\(detail)\" into \(target.isEmpty ? "the right field" : target)"
+        case "click": what = "Click \([target, detail].filter { !$0.isEmpty }.joined(separator: ", "))"
+        default: what = [step.action.capitalized, target, detail].filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        return said.isEmpty ? what : "\(what). (The user said: \"\(said)\")"
     }
 
     static func friendlyStatus(_ step: IntentStep) -> String {
@@ -1069,6 +1167,16 @@ final class VoiceAgent {
     - github → https://github.com
     - amazon → https://www.amazon.com
     - facebook marketplace → https://www.facebook.com/marketplace
+
+    QUESTIONS: if the user asks something they want to know, especially about what's on screen \
+    ("who made this video?", "how many subscribers does he have?", "what's the price?", "what does \
+    this say?"), do NOT browse or click. Return {"steps": [], "question": "<the question, self-contained>"}. \
+    Answering never navigates, so a playing video keeps playing.
+    CLARIFY: if the request is genuinely ambiguous (several plausible meanings, missing target) or \
+    risky (buys, pays, checks out, sends, posts, deletes), return the steps you would take plus \
+    "confirm": one short spoken check, e.g. "So you want me to search lofi on YouTube and play the \
+    first video?". Never confirm clear, simple requests like opening a site or searching.
+    Full shape: {"steps": [...], "question": optional string, "confirm": optional string}
 
     If the text contains no browser commands, return: {"steps": []}
     Only return valid JSON. No explanation. Only return actions the user actually asked for.

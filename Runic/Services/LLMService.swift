@@ -100,23 +100,26 @@ final class LLMService {
         }
 
         // Groq's free tier gives each model its own ~8k tokens/min. On 429, move to the next model
-        // with budget left; only wait (and tell the UI) when every candidate is limited.
-        var (data, response) = (Data(), URLResponse())
+        // with budget left; models still cooling down are skipped, not retried (that used to fire up
+        // to 9 requests per agent step). Only wait, and tell the UI, when every model is limited.
+        var last: (Data, HTTPURLResponse)?
         rounds: for round in 0..<3 {
-            var wait = 30.0
-            for model in Self.candidateModels {
-                (data, response) = try await send(model: model)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 429 else { break rounds }
-                wait = min(wait, Double(http.value(forHTTPHeaderField: "retry-after") ?? "") ?? 10)
+            for model in Self.candidateModels where !GroqJSON.isCoolingDown(model) {
+                let (d, r) = try await send(model: model)
+                guard let http = r as? HTTPURLResponse else { throw LLMError.invalidResponse }
+                last = (d, http)
+                guard http.statusCode == 429 else { break rounds }
+                GroqJSON.noteRateLimit(model, retryAfter: http.value(forHTTPHeaderField: "retry-after"))
                 logger.warning("\(model) rate limited")
             }
             guard round < 2 else { break }
-            await onRateLimit?(Int(wait))
+            let wait = GroqJSON.secondsUntilAnyFree(Self.candidateModels)
+            await onRateLimit?(Int(wait.rounded(.up)))
             try await Task.sleep(for: .seconds(wait))
         }
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw LLMError.invalidResponse
+        guard let (data, httpResponse) = last else {
+            throw LLMError.apiError(statusCode: 429, message: "All Groq models are rate limited; try again in a few seconds.")
         }
 
         if httpResponse.statusCode != 200 {
