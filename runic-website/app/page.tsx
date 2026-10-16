@@ -8,20 +8,21 @@ import { MascotSprite } from '@/components/MascotSprite';
 import { Marker, Section, TwoTone } from '@/components/Section';
 import { ShuffleDeck, type UseCase } from '@/components/ShuffleDeck';
 
-// Website brand is "Dixi" (Latin: "I have spoken"). Copy claims only what the app ships today.
+// Website brand is "Dixi" (Latin: "I have spoken"). Every phrase below was run in the app on the live Apple sites.
 const CASES: UseCase[] = [
-  { kind: 'Listen', say: 'open Apple Music and play lofi beats', result: 'Playing on Apple Music' },
-  { kind: 'Shop', say: 'buy AirPods Pro on apple.com', result: 'Added to your bag' },
-  { kind: 'Pay', say: 'check out with Apple Pay', result: 'Apple Pay ready. You confirm.' },
-  { kind: 'Watch', say: 'play the second video', result: 'Playing the second video' },
-  { kind: 'Shop', say: 'go to Amazon and search for noise cancelling headphones', result: 'Results on amazon.com' },
-  { kind: 'Ask', say: 'who made this video?', result: 'Answered from the page, out loud' },
-  { kind: 'Compare', say: 'compare this laptop’s price on Amazon and eBay', result: 'Checked both, side by side' },
+  { kind: 'Listen', say: 'open Apple Music and search for lo fi beats', result: 'Results on Apple Music' },
+  { kind: 'Listen', say: 'play the first song', result: 'Playing a 30-second preview' },
+  { kind: 'Watch', say: 'search for Severance on Apple TV', result: 'Found it on Apple TV' },
+  { kind: 'Shop', say: 'buy AirPods Pro', result: 'AirPods Pro buy page open' },
+  { kind: 'Go', say: 'search for coffee on Apple Maps', result: 'Coffee nearby, on Apple Maps' },
+  { kind: 'Help', say: 'search for reset AirPods on Apple Support', result: 'Apple Support articles' },
+  { kind: 'Apps', say: 'search for Notes on the App Store', result: 'Results on the App Store' },
+  { kind: 'Listen', say: 'search for history on Apple Podcasts', result: 'Podcasts found' },
 ];
 
 const STEPS = [
   { numeral: 'I', title: 'Speak', body: 'Start with “Dixi.” No button. TV and conversation around you are ignored.' },
-  { numeral: 'II', title: 'Act', body: '“Open YouTube” fires the moment you say it. It reads the page’s real buttons and links, not pixels.' },
+  { numeral: 'II', title: 'Act', body: '“Open Apple Music” fires the moment you say it. It reads the page’s real buttons and links, not pixels.' },
   { numeral: 'III', title: 'Answer back', body: 'Ask about the page you’re on. Dixi answers from the page’s own text, out loud.' },
 ];
 

@@ -35,7 +35,7 @@ export function DemoWindow() {
         data-tone="dark"
         className="glass-dark relative z-10 min-h-[300px] rounded-[var(--radius-panel)] p-6 text-left sm:min-h-[320px] sm:p-8"
         role="img"
-        aria-label={`Demo: someone says “${SCRIPTS[0].words.join(' ')}” and Dixi opens Apple Music and starts playing while they are still talking.`}
+        aria-label={`Demo: someone says “${SCRIPTS[0].words.join(' ')}” and Dixi opens Apple Music and searches while they are still talking.`}
       >
         <div className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-3 text-[15px] text-fg">

@@ -14,18 +14,18 @@ test('island menu: keyboard open, Tab through links, Escape closes and restores 
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'How it works', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.locator('#island-menu').getByRole('link', { name: 'Launch Dixi' })).toHaveAttribute('href', 'runic://open');
+  await expect(page.locator('#island-menu').getByRole('link', { name: 'Launch Dixi' })).toHaveAttribute('href', 'dixi://open');
 
   await page.keyboard.press('Escape');
   await expect(page.locator('#island-menu')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /open menu/ })).toBeFocused();
 });
 
-test('Launch links only to runic://open (prefill, never a task)', async ({ page }) => {
+test('Launch links only to dixi://open (prefill, never a task)', async ({ page }) => {
   await page.goto('/');
   const hrefs = await page.locator('a', { hasText: 'Launch Dixi' }).evaluateAll((as) => as.map((a) => a.getAttribute('href')));
   expect(hrefs.length).toBeGreaterThan(0);
-  for (const h of hrefs) expect(h).toBe('runic://open');
+  for (const h of hrefs) expect(h).toBe('dixi://open');
 });
 
 for (const width of [320, 390, 1024, 1440]) {

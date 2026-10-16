@@ -8,10 +8,10 @@ use-case deck, the marble mascot throughout, and a shorter page.
 
 | | Path |
 |---|---|
-| Website | `runic-website/` (own npm package: Next.js 15 static export, TypeScript, Tailwind v4, shadcn Button, Motion) |
+| Website | `runic-website/` (package `dixi-website`: Next.js 15 static export, TypeScript, Tailwind v4, shadcn Button, Motion) |
 | Electron UI restyle (requested later by the owner) | `electron/src/renderer/{index.html,styles.css,app.js,ui/mascot.js,assets/}` + one test title assertion. No voice/agent/main-process logic, no `package.json`, no protocol changes. |
 
-"Launch Dixi" links to `runic://open` only (prefill, never runs a task). Both apps already register `runic://`.
+"Launch Dixi" links to `dixi://open` only (prefill, never runs a task). The Electron app registers `dixi://`.
 
 ## Tokens (`app/tokens.css`, the only file with color literals)
 
@@ -34,9 +34,9 @@ How-it-works cards, the deck's top card and the launch card. Dark glass on the d
 ## Page (4 sections + footer)
 
 1. **Hero**: island; giant "Dix" + the mascot as the last **i**; "The web, hands-free." top right; sub; Launch /
-   See how it works; dark-glass **demo window** (Apple Music → apple.com bag → Apple Pay → YouTube → Amazon) with
+   See how it works; dark-glass **demo window** (Apple Music search → play a preview → Apple TV → buy AirPods Pro) with
    the mascot hiding behind its edge and popping up to react.
-2. **II What you can say**: deck of glass cards that shuffles itself (Apple first, then YouTube/Amazon/ask/compare);
+2. **II What you can say**: deck of glass cards that shuffles itself (Apple Music, TV, Maps, Support, App Store, Podcasts, apple.com);
    reduced motion and screen readers get the plain list.
 3. **III How it works**: Speak / Act / Answer back cards; "Soon: Dixi learns the sites you use" with the shrug pose.
 4. **IV Launch**: deep link + fallback card (mascot holding a marble tablet over its edge) + one honest privacy paragraph.
@@ -59,14 +59,15 @@ high-res waving render with its painted eyes inpainted away, so the site draws l
 
 ## Demo honesty
 
-YouTube/Amazon phrases match the app's tested flows. Apple Music / apple.com / Apple Pay flows are **illustrative**
-(the agent drives any site but these weren't run end to end); Dixi stops at the payment sheet. Timing is labelled
-illustrative. The app's wake word is still **"Runic"**; the site says "Dixi" by the owner's request (open item).
+Every command on the site (demo + deck) is Apple and was run in the Dixi app against the live sites on 2026-10-15:
+Apple Music search, "play the first song" (30-second preview; full songs need a sign-in), Apple TV, Maps, Support,
+App Store, Podcasts, and "buy AirPods Pro" (opens the buy page; Dixi stops before options, bag and payment).
+Apple Pay is not claimed: it only works in Safari, not in an Electron app. The wake word is "Dixi" in the app too.
 
 ## Checks (`npm run check`)
 
 - `tests/contrast.spec.ts`: samples the rendered background under every text box at 1440/1024/390/320 (text hidden),
   fails below 4.5:1 (3:1 large); prints bright share per screen.
 - `tests/a11y.spec.ts`: island keyboard flow (Enter, Tab, Escape restores focus, 2px ring), launch links only
-  `runic://open`, no horizontal scroll and CLS < 0.01 at four widths, credits complete.
+  `dixi://open`, no horizontal scroll and CLS < 0.01 at four widths, credits complete.
 - Lighthouse (static export): mobile 93 perf / 100 a11y / 100 best practices / 100 SEO; desktop 100 / 100.

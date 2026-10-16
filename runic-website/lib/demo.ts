@@ -2,48 +2,28 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 
-/** Scripted demo shared by the hero window and the island. YouTube/Amazon phrases match the app's tested flows;
- *  the Apple flows are illustrative (the agent drives any site, but these were not run end to end on apple.com).
- *  Timing is a fixed, illustrative cadence, not a measurement. Follow-ups need no wake word (the app keeps
- *  listening for 8 s after it acts). */
+/** Scripted demo shared by the hero window and the island. Every command here was run in the Dixi app against the
+ *  live Apple sites (2026-10-15): Apple Music plays 30-second previews without a sign-in, and "buy" stops at the
+ *  product's buy page (options, bag and payment stay with you). Timing is a fixed, illustrative cadence. */
 export const SCRIPTS = [
-  // Apple first: music, shopping, paying. Dixi stops at the payment sheet; you confirm.
   {
-    words: ['Dixi,', 'open', 'Apple', 'Music', 'and', 'play', 'lofi', 'beats'],
+    words: ['Dixi,', 'open', 'Apple', 'Music', 'and', 'search', 'for', 'lo', 'fi', 'beats'],
     steps: [
       { after: 4, url: 'music.apple.com', text: 'Opened Apple Music' },
-      { after: 8, url: 'music.apple.com/search?term=lofi+beats', text: 'Playing “lofi beats”' },
+      { after: 10, url: 'music.apple.com/us/search?term=lo+fi+beats', text: 'Searched “lo fi beats”' },
     ],
   },
   {
-    words: ['Dixi,', 'go', 'to', 'apple.com', 'and', 'buy', 'AirPods', 'Pro'],
-    steps: [
-      { after: 4, url: 'apple.com', text: 'Opened apple.com' },
-      { after: 8, url: 'apple.com/shop/bag', text: 'AirPods Pro added to your bag' },
-    ],
+    words: ['play', 'the', 'first', 'song'],
+    steps: [{ after: 4, url: 'music.apple.com/us/album', text: 'Playing a preview' }],
   },
   {
-    words: ['check', 'out', 'with', 'Apple', 'Pay'],
-    steps: [{ after: 5, url: 'apple.com/shop/checkout', text: 'Apple Pay is ready. You confirm.' }],
-  },
-  // Then the rest of the web.
-  {
-    words: ['Dixi,', 'open', 'YouTube', 'and', 'search', 'for', 'lofi', 'beats'],
-    steps: [
-      { after: 3, url: 'youtube.com', text: 'Opened youtube.com' },
-      { after: 8, url: 'youtube.com/results?q=lofi+beats', text: 'Searched “lofi beats”' },
-    ],
+    words: ['Dixi,', 'search', 'for', 'Severance', 'on', 'Apple', 'TV'],
+    steps: [{ after: 7, url: 'tv.apple.com/us/search?term=Severance', text: 'Found Severance on Apple TV' }],
   },
   {
-    words: ['Dixi,', 'go', 'to', 'Amazon', 'and', 'search', 'for', 'noise', 'cancelling', 'headphones'],
-    steps: [
-      { after: 4, url: 'amazon.com', text: 'Opened amazon.com' },
-      { after: 10, url: 'amazon.com/s?k=noise+cancelling+headphones', text: 'Searched “noise cancelling headphones”' },
-    ],
-  },
-  {
-    words: ['add', 'it', 'to', 'my', 'cart'],
-    steps: [{ after: 5, url: 'amazon.com/cart', text: 'Added to cart' }],
+    words: ['Dixi,', 'buy', 'AirPods', 'Pro'],
+    steps: [{ after: 4, url: 'apple.com/shop/buy-airpods/airpods-pro-3', text: 'AirPods Pro buy page. Your call from here.' }],
   },
 ];
 

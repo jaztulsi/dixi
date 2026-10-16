@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-/** Opens the app through runic://open. The app only focuses and prefills; nothing runs.
+/** Opens the app through dixi://open. The app only focuses and prefills; nothing runs.
  *  If the page still has focus 1.5 s later, the protocol probably isn't installed. Say so politely. */
 export function LaunchButton({ className }: { className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -22,7 +22,7 @@ export function LaunchButton({ className }: { className?: string }) {
   return (
     <>
       <Button asChild className={cn('w-full sm:w-auto', className)}>
-        <a href="runic://open" onClick={onClick}>
+        <a href="dixi://open" onClick={onClick}>
           Launch Dixi
         </a>
       </Button>
