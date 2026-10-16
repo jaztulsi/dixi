@@ -20,8 +20,14 @@ export function ordinal(text) {
 }
 
 // Visible result links in page order; ads are excluded by the selectors.
-const YOUTUBE_VIDEOS = `[...document.querySelectorAll('ytd-video-renderer a#video-title, ytd-rich-item-renderer a#video-title-link, ytd-compact-video-renderer a#thumbnail')]
-  .filter(a => a.href && a.href.includes('/watch') && a.offsetParent !== null)`;
+// YouTube mixes old renderers with the new yt-lockup-view-model (the watch page has only the new one),
+// so: every visible /watch link in page order, one per video, minus ads and the video already playing.
+const YOUTUBE_VIDEOS = `(() => { const seen = new Set(), here = new URLSearchParams(location.search).get('v');
+  return [...document.querySelectorAll('a[href*="/watch?v="]')].filter(a => {
+    if (a.offsetParent === null || a.closest('ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-promoted-video-renderer, #player')) return false;
+    const v = new URL(a.href).searchParams.get('v');
+    if (!v || v === here || seen.has(v)) return false;
+    seen.add(v); return true; }); })()`;
 const AMAZON_RESULTS = `[...document.querySelectorAll('div[data-component-type="s-search-result"]')]
   .map(r => r.querySelector('h2 a, a.a-link-normal.s-link-style, a:has(h2)')).filter(a => a && a.href)`;
 const GOOGLE_RESULTS = `[...document.querySelectorAll('#search a:has(h3)')].filter(a => a.href && a.offsetParent !== null)`;
@@ -53,7 +59,37 @@ const MEDIA = [
   [/^(play|resume|unpause)( (the )?(video|it|music))?$/, 'Playing', 'v.play()'],
   [/^(unmute|sound on)( (the )?(video|it))?$/, 'Unmuted', 'v.muted = false'],
   [/^(mute|sound off)( (the )?(video|it))?$/, 'Muted', 'v.muted = true'],
+  [/^(volume up|louder|turn it up)$/, 'Louder', 'v.muted = false; v.volume = Math.min(1, v.volume + 0.2)'],
+  [/^(volume down|quieter|turn it down)$/, 'Quieter', 'v.volume = Math.max(0, v.volume - 0.2)'],
+  [/^(faster|speed (it )?up)$/, 'Faster', 'v.playbackRate = Math.min(2, v.playbackRate + 0.25)'],
+  [/^(slower|slow (it )?down)$/, 'Slower', 'v.playbackRate = Math.max(0.25, v.playbackRate - 0.25)'],
+  [/^rewind( (it|the video))?$/, 'Back 10 seconds', 'v.currentTime = Math.max(0, v.currentTime - 10)'],
+  [/^(skip ahead|fast forward)$/, 'Ahead 10 seconds', 'v.currentTime += 10'],
+  [/^(restart|start over)( (the )?video)?$/, 'From the start', 'v.currentTime = 0; v.play()'],
+  [/^next (video|song|one)$|^(skip|next)$/, 'Next video', "document.querySelector('.ytp-next-button').click()"],
+  [/^(captions|subtitles)( (on|off))?$|^turn (on|off) (captions|subtitles)$/, 'Captions', "document.querySelector('.ytp-subtitles-button').click()"],
 ];
+
+// Runic's own controls (tabs, zoom, settings), run by the app, not in the page.
+const APP = [
+  [/^(open )?(a )?new tab$/, 'New tab', 'newTab'],
+  [/^close (this |the )?tab$/, 'Closed tab', 'closeTab'],
+  [/^(next|switch) tab$/, 'Next tab', 'nextTab'],
+  [/^previous tab$/, 'Previous tab', 'prevTab'],
+  [/^zoom in$/, 'Zoomed in', 'zoomIn'],
+  [/^zoom out$/, 'Zoomed out', 'zoomOut'],
+  [/^reset zoom$/, 'Normal zoom', 'zoomReset'],
+  [/^(open )?settings$/, 'Settings', 'settings'],
+  [/^(cancel|stop everything|stop the agent)$/, 'Stopped', 'stopAgent'],
+];
+const clean = (command) => command.toLowerCase().trim().replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '');
+
+/** {label, app: name of the app action} or null. */
+export function matchAppAction(command) {
+  const c = clean(command);
+  const hit = APP.find(([re]) => re.test(c));
+  return hit ? { label: hit[1], app: hit[2] } : null;
+}
 const PAGE = [
   [/^scroll( (it|the page))? down$|^(page )?down$/, 'Scrolling down', "window.scrollBy({top: innerHeight * 0.8, behavior: 'smooth'})"],
   [/^scroll( (it|the page))? up$|^(page )?up$/, 'Scrolling up', "window.scrollBy({top: -innerHeight * 0.8, behavior: 'smooth'})"],
@@ -65,7 +101,7 @@ const PAGE = [
 
 /** {label, js, patience (s)} or null. js returns "ok: <message>" or "wait" (page not ready yet). */
 export function matchSiteAction(command, url) {
-  const c = command.toLowerCase().trim().replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '');
+  const c = clean(command);
   let host = '';
   try { host = new URL(url).hostname.toLowerCase(); } catch {}
   const onYouTube = host.endsWith('youtube.com'), onAmazon = host.includes('amazon.');
@@ -75,9 +111,9 @@ export function matchSiteAction(command, url) {
 
   const n = ordinal(c);
   if (n && /\b(play|open|watch|click|tap|go to|select)\b/.test(c) && /\b(video|result|one|link|item|product|song)\b/.test(c)) {
-    if (onYouTube) return { label: `Playing video ${n.label}`, js: openNth(YOUTUBE_VIDEOS, n.index), patience: 6 };
-    if (onAmazon) return { label: `Opening result ${n.label}`, js: openNth(AMAZON_RESULTS, n.index), patience: 6 };
-    if (onGoogle) return { label: `Opening result ${n.label}`, js: openNth(GOOGLE_RESULTS, n.index), patience: 6 };
+    if (onYouTube) return { label: `Playing video ${n.label}`, js: openNth(YOUTUBE_VIDEOS, n.index), patience: 6, navigates: true };
+    if (onAmazon) return { label: `Opening result ${n.label}`, js: openNth(AMAZON_RESULTS, n.index), patience: 6, navigates: true };
+    if (onGoogle) return { label: `Opening result ${n.label}`, js: openNth(GOOGLE_RESULTS, n.index), patience: 6, navigates: true };
   }
 
   if (onAmazon && /\badd\b.*\bto\b.*\bcart\b/.test(c)) return { label: 'Adding to cart', js: amazonAddToCart(n?.index), patience: 6 };
@@ -96,16 +132,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Runs a match, retrying while the page says "wait". Returns a short message for the caption. */
 export async function runSiteAction(match, tabs) {
-  // A navigation dispatched a moment ago ("search lofi and play the first video") has to land
-  // first, or the *old* page's first video gets played.
-  await sleep(300);
-  await tabs.waitUntilLoaded();
+  // Voice waits for its own queued navigation first; this only covers a page still loading.
+  if (tabs.isLoading()) await tabs.waitUntilLoaded();
   const deadline = Date.now() + match.patience * 1000;
   for (;;) {
     const r = String(await tabs.executeJS(match.js));
-    if (r.startsWith('ok')) return r.slice(3).trim();
+    if (r.startsWith('ok')) {
+      // The next command ("...and how many subs?") must see the new page, not the old one.
+      if (match.navigates && !r.startsWith('ok: only')) { await sleep(300); await tabs.waitUntilLoaded(); }
+      return r.slice(3).trim();
+    }
     if (r !== 'wait') return `Couldn't do that here (${r.slice(0, 60)})`;
     if (Date.now() >= deadline) return "Couldn't find that on this page";
-    await sleep(400);
+    await sleep(150);
   }
 }

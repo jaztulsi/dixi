@@ -26,6 +26,14 @@ if (process.env.RUNIC_FAKE_AUDIO) {
 // One window, one app: a runic:// link from the website focuses it instead of opening another copy.
 if (!app.requestSingleInstanceLock()) app.quit();
 
+// ponytail: a short list of the heaviest ad/tracking hosts, not a full blocklist; add hosts as they show up.
+const AD_URLS = [
+  'doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'google-analytics.com', 'googletagmanager.com',
+  'googletagservices.com', 'adservice.google.com', 'imasdk.googleapis.com', 'amazon-adsystem.com', 'adnxs.com',
+  'criteo.com', 'taboola.com', 'outbrain.com', 'scorecardresearch.com', 'moatads.com', 'vdo.ai', 'lijit.com', 'gumgum.com',
+].flatMap((h) => [`*://${h}/*`, `*://*.${h}/*`])
+  .concat(['*://www.youtube.com/pagead/*', '*://www.youtube.com/api/stats/ads*', '*://www.youtube.com/ptracking*']);
+
 let win = null;
 let pendingURL = null;
 const deepgram = new DeepgramBridge(config.deepgramAPIKey, (channel, data) => win?.webContents.send(channel, data));
@@ -83,6 +91,8 @@ app.whenReady().then(() => {
   session.fromPartition('persist:runic-tabs').setPermissionRequestHandler((_wc, permission, callback) => {
     callback(permission === 'fullscreen' || permission === 'clipboard-sanitized-write');
   });
+  // Ads and trackers never load in the tabs: lighter pages render sooner (and nothing to "skip").
+  session.fromPartition('persist:runic-tabs').webRequest.onBeforeRequest({ urls: AD_URLS }, (_details, callback) => callback({ cancel: true }));
 
   createWindow();
   handleDeepLink(process.argv.find(a => a.startsWith('runic://')));

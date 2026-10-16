@@ -42,9 +42,9 @@ test('generated scripts are valid JavaScript', () => {
 
 test('run retries while the page says wait, then reports', async () => {
   let calls = 0;
-  const tabs = { waitUntilLoaded: async () => {}, executeJS: async () => (++calls < 3 ? 'wait' : 'ok: lofi hip hop radio') };
+  const tabs = { isLoading: () => false, waitUntilLoaded: async () => {}, executeJS: async () => (++calls < 3 ? 'wait' : 'ok: lofi hip hop radio') };
   assert.equal(await runSiteAction({ js: 'x', patience: 5 }, tabs), 'lofi hip hop radio');
   assert.equal(calls, 3);
-  const never = { waitUntilLoaded: async () => {}, executeJS: async () => 'wait' };
+  const never = { isLoading: () => false, waitUntilLoaded: async () => {}, executeJS: async () => 'wait' };
   assert.equal(await runSiteAction({ js: 'x', patience: 0 }, never), "Couldn't find that on this page");
 });

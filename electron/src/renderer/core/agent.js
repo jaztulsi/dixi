@@ -59,8 +59,8 @@ export class BrowserAgent {
   addLog(kind, message) { this.log.push({ kind, message, time: new Date() }); this.onChange(); }
 
   /** Runs tasks one after another in the order they were spoken (start() alone drops a busy task). */
-  enqueue(task) {
-    this.queueTail = this.queueTail.then(() => this.start(task));
+  enqueue(task, maxSteps) {
+    this.queueTail = this.queueTail.then(() => this.start(task, maxSteps));
     return this.queueTail;
   }
 
@@ -70,8 +70,9 @@ export class BrowserAgent {
     this.addLog('info', 'Agent stopped by user');
   }
 
-  async start(task) {
+  async start(task, maxSteps = 15) {
     if (this.isRunning) return;
+    this.maxSteps = maxSteps;
     if (!this.tabs.activeTab) this.tabs.createTab('about:blank');
     this.isRunning = true;
     this.currentStep = 0;

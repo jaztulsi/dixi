@@ -106,6 +106,13 @@ svg { display: block; }
 @keyframes pulse { 50% { opacity: 0.45; } }
 .caption-transcript { font-size: 22px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .caption-transcript.ignored { color: var(--tertiary); }
+.caption-plan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 15px; font-weight: 500; }
+.caption-plan li { display: flex; align-items: center; gap: 8px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.caption-plan li .k { display: inline-flex; width: 16px; height: 16px; flex: none; align-items: center; justify-content: center; }
+.caption-plan li.queued .k { color: var(--tertiary); }
+.caption-plan li.running { color: var(--text); }
+.caption-plan li.done .k { color: var(--green, #34c759); }
+.caption-plan li.failed { color: var(--red); }
 .caption-activity { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: var(--secondary); white-space: nowrap; overflow: hidden; }
 .answer { padding: 12px; border-radius: 14px; background: var(--quaternary); display: flex; flex-direction: column; gap: 6px; }
 .answer-text { font-size: 19px; font-weight: 500; }

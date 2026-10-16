@@ -42,10 +42,13 @@ export function directNavigationURL(command) {
 // "um", "uh", and "like," / "you know," as filler (with the comma, so "songs like this" stays).
 const FILLER = /\b(?:um+|uh+|erm)\b[,.]?|(?<=[\s,])like,|\byou know,/gi;
 const CONJUNCTION = /[\s,;]+(?:and then|and|then|also|n)\b[\s,;]*/gi;
+// "open youtube search lofi": no "and", but a known site ends the first command.
+const SITE_KEYS = Object.keys(SITE_MAP).sort((a, b) => b.length - a.length).join('|');
+const SITE_THEN_VERB = new RegExp(`\\b((?:open|go to|navigate to|visit)\\s+(?:${SITE_KEYS})(?:\\.com)?)[\\s,.]+(?=(?:search|look up|find|play|click|watch|add|scroll|skip|pause|type|go back)\\b)`, 'gi');
 
 /** Clauses split on "and"/"then"/"also" (and Deepgram's "n,"), tolerating punctuation, minus fillers. */
 export function splitOnConjunctions(text) {
-  return text.replace(FILLER, ' ').replace(CONJUNCTION, '\u001f').split('\u001f')
+  return text.replace(FILLER, ' ').replace(SITE_THEN_VERB, '$1\u001f').replace(CONJUNCTION, '\u001f').split('\u001f')
     .map((s) => s.trim().replace(/^,+|,+$/g, '').trim())
     .filter(Boolean);
 }
@@ -138,7 +141,7 @@ export function friendlyStatus(step) {
   switch (step.action) {
     case 'open': { let host = step.target; try { host = new URL(step.target).hostname; } catch {} return `Opening ${step.detail || host}`; }
     case 'search': return `Searching for “${step.detail}”`;
-    case 'click': return `Clicking ${what}`;
+    case 'click': return `Clicking ${step.target || what}`;
     case 'type': return `Typing “${step.detail}”`;
     case 'scroll': return `Scrolling ${step.detail}`;
     case 'go_back': return 'Going back';

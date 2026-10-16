@@ -77,10 +77,10 @@ test('voice end to end: recorded speech → Deepgram → instant navigate + sear
   const { app, page, errors } = await launch({ RUNIC_FAKE_AUDIO: fixture('voice-youtube-lofi.wav') });
   try {
     await expect.poll(() => page.evaluate(() => window.__runic.voice.isListening), { timeout: 20_000 }).toBe(true);
-    await expect.poll(() => url(page), { timeout: 40_000 }).toMatch(/youtube\.com\/results\?search_query=lofi/);
+    await expect.poll(() => url(page), { timeout: 40_000 }).toMatch(/youtube\.com\/results\?search_query=lo(\+|%20)?fi/i);
     // History is recorded when each step finishes, so wait for both.
     const history = () => page.evaluate(() => window.__runic.voice.session.history.map((h) => `${h.action} ${h.target} ${h.detail}`));
-    await expect.poll(history, { timeout: 20_000 }).toContain('search youtube lofi beats');
+    await expect.poll(async () => (await history()).some((h) => /^search youtube lo ?fi beats$/i.test(h)), { timeout: 20_000 }).toBe(true);  // Flux spells it "Lo Fi"
     const heard = await history();
     console.log('Voice dispatched:', heard);
     expect(heard[0]).toMatch(/^open https:\/\/www\.youtube\.com/);

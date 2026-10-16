@@ -3,7 +3,7 @@
 class PCM16Chunker extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.buffer = new Int16Array(1600);
+    this.buffer = new Int16Array(1280);  // 80 ms at 16 kHz: Flux's recommended chunk
     this.length = 0;
   }
 

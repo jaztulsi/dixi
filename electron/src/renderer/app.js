@@ -8,6 +8,7 @@ import { LLM } from './core/llm.js';
 import { BrowserAgent } from './core/agent.js';
 import { VoiceAgent } from './core/voice.js';
 import { SiteCache } from './core/siteCache.js';
+import { IntentModel, ReplyCache } from './core/learn.js';
 import { matchSiteAction, runSiteAction } from './core/siteActions.js';
 import { isQuestion, directNavigationURL, looksLikeURL, parseSearch, searchURL } from './core/text.js';
 
@@ -26,7 +27,22 @@ const llm = new LLM((body) => window.runic.groqChat(body), config);
 const tabs = new TabManager($('tabs'), () => render());
 const speaker = new Speaker();
 const agent = new BrowserAgent({ tabs, llm, siteCache: new SiteCache(localStorage), onChange: () => render() });
-const voice = new VoiceAgent({ deepgram: window.runic.deepgram, mic: new Mic(), tabs, agent, speaker, llm, config, settings, onChange: () => render() });
+// Runic's own controls, for voice ("new tab", "zoom in", "cancel"...).
+const zoom = (delta) => { const w = tabs.activeTab?.webview; if (w) w.setZoomLevel(delta == null ? 0 : w.getZoomLevel() + delta); };
+const appActions = {
+  newTab: () => tabs.createTab('about:blank'),
+  closeTab: () => { if (tabs.activeTab) tabs.closeTab(tabs.activeTab.id); },
+  nextTab: () => tabs.switchBy(1),
+  prevTab: () => tabs.switchBy(-1),
+  zoomIn: () => zoom(0.5),
+  zoomOut: () => zoom(-0.5),
+  zoomReset: () => zoom(null),
+  settings: () => { renderSettings(); $('settings-sheet').showModal(); },
+  stopAgent: () => agent.stop(),
+};
+// Learned phrasings and remembered AI answers persist across launches, so repeats cost no API calls.
+const voice = new VoiceAgent({ deepgram: window.runic.deepgram, mic: new Mic(), tabs, agent, speaker, llm, config, settings,
+  app: appActions, model: new IntentModel(localStorage), cache: new ReplyCache(localStorage), onChange: () => render() });
 
 // ---- start page ----
 function renderExamples() {
@@ -93,11 +109,23 @@ function renderCaption() {
     $('answer-quote').hidden = !a.quote;
     $('answer-quote').textContent = a.quote ? `“${a.quote}”` : '';
   }
+  // Every command shows here the moment it's understood: queued → running → done / failed.
+  const plan = $('caption-plan');
+  plan.hidden = !voice.plan.length;
+  plan.replaceChildren(...voice.plan.map((p) => {
+    const li = document.createElement('li');
+    li.className = p.state;
+    li.innerHTML = `<span class="k">${p.state === 'running' ? '<span class="spinner"></span>' : PLAN_ICONS[p.state]}</span><span></span>`;
+    li.lastChild.textContent = p.label;
+    li.title = `You said: “${p.said}”`;
+    return li;
+  }));
   const activity = agent.isRunning && agent.statusLine ? agent.statusLine : voice.statusLine;
   $('caption-activity').hidden = !activity;
   $('activity-text').textContent = activity;
 }
 
+const PLAN_ICONS = { queued: icons.dot, done: icons.check, failed: icons.xmark };
 const LOG_ICONS = { action: icons.play, success: icons.check, error: icons.xmark, thinking: icons.brain, info: icons.dot };
 let renderedLog = 0;
 function renderAgentSheet() {
