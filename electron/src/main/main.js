@@ -13,6 +13,10 @@ const config = loadConfig();
 
 // Voice-opened videos must play without a real user click (same fix as the Swift app's WebKit setting).
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// Hands-free: Runic works while other apps are in front, so a covered window must not be paused.
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
 
 // End-to-end tests: play a WAV file as the microphone (RUNIC_FAKE_AUDIO=/path/to.wav).
 if (process.env.RUNIC_FAKE_AUDIO) {

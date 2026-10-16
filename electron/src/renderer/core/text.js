@@ -45,10 +45,19 @@ const CONJUNCTION = /[\s,;]+(?:and then|and|then|also|n)\b[\s,;]*/gi;
 // "open youtube search lofi": no "and", but a known site ends the first command.
 const SITE_KEYS = Object.keys(SITE_MAP).sort((a, b) => b.length - a.length).join('|');
 const SITE_THEN_VERB = new RegExp(`\\b((?:open|go to|navigate to|visit)\\s+(?:${SITE_KEYS})(?:\\.com)?)[\\s,.]+(?=(?:search|look up|find|play|click|watch|add|scroll|skip|pause|type|go back)\\b)`, 'gi');
+// Flux punctuates as you talk ("open YouTube, search lofi beats. Play the first video"): a comma or
+// period followed by a command word starts a new command.
+const COMMAND_WORD = '(?:open|go to|go back|navigate to|visit|search|look up|find|play|pause|stop|resume|unpause|click|tap|select|watch|scroll|skip|mute|unmute|add|close|zoom|turn|next|rewind|restart|reload|refresh|show|type|buy|cancel)';
+const PUNCT_THEN_COMMAND = new RegExp(`\\s*[,;.!?]\\s+(?=${COMMAND_WORD}\\b)`, 'gi');
+// With no punctuation at all, only phrases that can't be part of a search query start a new command
+// ("search lofi beats play the first video"; but "search how to play guitar" stays one search).
+const ORD_WORD = '(?:first|second|third|fourth|fifth|last|next|top|1st|2nd|3rd)';
+const BARE_COMMAND = new RegExp(`\\s+(?=(?:play (?:the )?${ORD_WORD}|play (?:the )?video|play it|pause (?:it|the video)|scroll (?:down|up)|go back|skip the ad|click (?:on )?the ${ORD_WORD}|add (?:it|this|that) to|turn it (?:up|down)|next video|zoom (?:in|out))\\b)`, 'gi');
 
-/** Clauses split on "and"/"then"/"also" (and Deepgram's "n,"), tolerating punctuation, minus fillers. */
+/** Clauses split on "and"/"then"/"also" (and Deepgram's "n,"), punctuation before a command, minus fillers. */
 export function splitOnConjunctions(text) {
-  return text.replace(FILLER, ' ').replace(SITE_THEN_VERB, '$1\u001f').replace(CONJUNCTION, '\u001f').split('\u001f')
+  return text.replace(FILLER, ' ').replace(SITE_THEN_VERB, '$1\u001f').replace(PUNCT_THEN_COMMAND, '\u001f')
+    .replace(BARE_COMMAND, '\u001f').replace(CONJUNCTION, '\u001f').split('\u001f')
     .map((s) => s.trim().replace(/^,+|,+$/g, '').trim())
     .filter(Boolean);
 }

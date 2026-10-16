@@ -14,6 +14,12 @@ test('splits clauses, tolerating Deepgram punctuation and fillers', () => {
     ['search for songs like this', ['search for songs like this']],
     ['search for android phones', ['search for android phones']],
     ['search for nintendo games', ['search for nintendo games']],
+    // No "and": Flux's commas/periods, or a command that can't be part of a query, start the next one.
+    ['open YouTube, search lofi beats, play the first video.', ['open YouTube', 'search lofi beats', 'play the first video.']],
+    ['Open YouTube. Search lofi beats. Play the first video', ['Open YouTube', 'Search lofi beats', 'Play the first video']],
+    ['open youtube search lofi beats play the first video', ['open youtube', 'search lofi beats', 'play the first video']],
+    ['search lofi beats, play the first one, turn it up', ['search lofi beats', 'play the first one', 'turn it up']],
+    ['search for how to play guitar', ['search for how to play guitar']],
   ];
   for (const [input, want] of cases) assert.deepEqual(splitOnConjunctions(input), want, input);
 });

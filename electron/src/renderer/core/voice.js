@@ -10,6 +10,12 @@ import { IntentModel, ReplyCache, intentForSteps, say } from './learn.js';
 import { askPage } from './pageQA.js';
 import { INTENT_PROMPT } from './prompts.js';
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** host + path + decoded query: "lofi%20beats" and YouTube's "lofi+beats" are the same page. */
+const sameDoc = (u) => {
+  try { const x = new URL(u); return `${x.hostname.replace(/^www\./, '')}${x.pathname}?${[...x.searchParams].join('&')}`; } catch { return u; }
+};
+
 /** Rolling action history fed to each intent call, so "the other one" resolves. */
 export class SessionContext {
   constructor(max = 6) { this.history = []; this.max = max; }
@@ -270,7 +276,7 @@ export class VoiceAgent {
       this.route(clause, []);
       return;
     }
-    if (!t.search) return;
+    if (!t.search || /[.?!]\s+\S/.test(clause)) return;  // "beats. Place": the next command, not a fix
     const s = parseSearch(clause, this.plannedSite());
     if (!s || s.platform !== t.search.platform || s.query === t.search.query) return;
     const step = { action: 'search', target: s.platform, detail: s.query };
@@ -469,9 +475,15 @@ export class VoiceAgent {
 
   // ---- dispatch ----
 
-  /** Starts loading without waiting for it: the next step only waits if it needs the page. */
+  /**
+   * Starts loading without waiting for it. Page actions wait only until the new page is committed
+   * (not fully loaded); their own retry waits for the elements they need ("play the first video").
+   */
   go(url) {
-    this.navigating = this.tabs.navigate(url).catch(() => {});
+    const loaded = this.tabs.navigate(url).catch(() => {});
+    const want = sameDoc(url);
+    const committed = (async () => { while (sameDoc(this.tabs.getCurrentURL()) !== want) await sleep(50); })();
+    this.navigating = Promise.race([loaded, committed]);  // a redirect never matches: full load then
   }
 
   /** `said` is just this step's clause: the agent must never see (and redo) the rest of the sentence. */

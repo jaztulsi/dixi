@@ -132,8 +132,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Runs a match, retrying while the page says "wait". Returns a short message for the caption. */
 export async function runSiteAction(match, tabs) {
-  // Voice waits for its own queued navigation first; this only covers a page still loading.
-  if (tabs.isLoading()) await tabs.waitUntilLoaded();
+  // No waiting for the whole page: the script says "wait" until what it needs exists, then acts.
   const deadline = Date.now() + match.patience * 1000;
   for (;;) {
     const r = String(await tabs.executeJS(match.js));
