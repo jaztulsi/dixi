@@ -78,8 +78,11 @@ const DOING = /\b(open|go to|search|buy|order|add|play|pause|click|scroll|naviga
 export function incomplete(text) {
   const t = tokens(text);
   if (fastPath(text) && !QUESTION.test(String(text).trim())) return false;
+  // A question may end on its preposition ("what is this video about", "who is it for").
+  if (QUESTION.test(String(text).trim()) && t.length >= 4 && STRANDED.has(t.at(-1))) return false;
   return t.length < 2 || FUNCTION.has(t.at(-1)) || DANGLING.has(t.at(-1));
 }
+const STRANDED = new Set(['about', 'for', 'from', 'at', 'in', 'on', 'to', 'with', 'into', 'up', 'out', 'by']);
 const DANGLING = new Set(['or', 'but', 'is', 'are', 'was', 'were', 'be', 'your', 'what', 'which', 'who', 'how', 'why', 'when', 'where', 'about', 'between', 'than', 'as', 'if', 'this', 'that', 'these', 'those', 'er', 'hmm', 'mm', 'tell', 'give', 'buy', 'order', 'add', 'play', 'want', 'need', 'i', 'we']);
 // Verbs and particles of the command itself; a query or item never starts with one.
 const LEAD_PARTICLE = new Set(['up', 'on', 'to', 'for', 'open', 'go', 'search', 'find', 'look', 'pull', 'bring', 'take', 'launch', 'visit', 'navigate', 'load']);

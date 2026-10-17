@@ -136,3 +136,17 @@ test('talking over Dixi: its own words are an echo, a new command is not', () =>
   assert.equal(isEcho('go to my cart', 'Added it to your cart at Zentora'), false);
   assert.equal(isEcho('search for lamps on Bykkar', 'Added it to your cart at Zentora'), false);
 });
+
+test('a turn cut off mid-sentence is finished by the next one; a whole question ending on "about" is answered', async () => {
+  const r = rig({ reply: JSON.stringify({ clarify: '', steps: [{ act: 'ask_page', said: '', guess: '', urls: [], query: '', item: '', qty: 0, n: 0, value: '' }] }) });
+  r.turn(1, [['Update', 'Can you tell me the features of, uh'], ['EndOfTurn', 'Can you tell me the features of, uh,']]);
+  await sleep(60);
+  assert.equal(r.runs.length, 0, 'held: the sentence is not finished');
+  r.turn(2, [['Update', 'the Zentora Pro'], ['EndOfTurn', 'the Zentora Pro.']]);
+  await sleep(120);
+  assert.equal(r.runs.length, 1);
+  assert.match(r.runs[0].value ?? '', /features of, uh,? the Zentora Pro/i);
+  r.turn(3, [['Update', 'what is this video about'], ['EndOfTurn', 'What is this video about?']]);
+  await sleep(120);
+  assert.equal(r.runs.length, 2);
+});

@@ -24,18 +24,20 @@ export const ENDPOINTS = {
 // USD per 1M tokens [input, output]. Estimates where the provider page didn't say; used only for the cap.
 const PRICES = {
   'groq:openai/gpt-oss-20b': [0.075, 0.3], 'groq:openai/gpt-oss-120b': [0.15, 0.6], 'groq:qwen/qwen3.8-27b': [0.29, 0.59],
-  'cerebras:gpt-oss-120b': [0.35, 0.75], 'cerebras:qwen-3.8-27b': [0.4, 0.8],
-  'anthropic:claude-haiku-5-5': [0.1, 0.5], 'anthropic:claude-sonnet-5-5': [3, 15],
+  // Deliberately on the high side so a per-provider cap (DIXI_CAP_CEREBRAS, DIXI_CAP_ANTHROPIC) trips early, never late.
+  'cerebras:gpt-oss-120b': [0.5, 1], 'cerebras:qwen-3.8-27b': [0.6, 1.2],
+  'anthropic:claude-haiku-5-5': [1.5, 7.5], 'anthropic:claude-sonnet-5-5': [4, 20],
 };
 
 const DEFAULT_TIERS = {
+  // Fastest first (Cerebras ~0.25 s with thinking off), free Groq quotas as fallbacks.
   fast: 'cerebras:qwen-3.8-27b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b',
-  strong: 'groq:openai/gpt-oss-120b,cerebras:gpt-oss-120b,anthropic:claude-haiku-5-5',
-  agent: 'groq:qwen/qwen3.8-27b,cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b',
-  // Spoken answers (page or general knowledge): the most knowledgeable first, every free quota as fallback.
-  answer: 'anthropic:claude-haiku-5-5,cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b',
+  strong: 'cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b,anthropic:claude-haiku-5-5',
+  agent: 'cerebras:gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-120b',
+  // Spoken answers (page or general knowledge): fast first; Claude Haiku is the hedge if it's slow.
+  answer: 'cerebras:gpt-oss-120b,anthropic:claude-haiku-5-5,groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b',
   // Reading screenshots when nothing on the page is labelled (icon-only buttons): strongest first.
-  vision: 'anthropic:claude-sonnet-5-5,groq:qwen/qwen3.8-27b',
+  vision: 'anthropic:claude-sonnet-5-5,anthropic:claude-haiku-5-5,groq:qwen/qwen3.8-27b',
 };
 
 export function tiers(config) {
@@ -52,17 +54,29 @@ export function keyStatus(config) {
   return Object.fromEntries(Object.keys(ENDPOINTS).map((p) => [p, Boolean(config.keys[p]) || !ENDPOINTS[p].key]));
 }
 
-// ---- spend meter (stops calls past the cap) ----
+// ---- spend meter (stops calls past the cap: overall, and per provider with DIXI_CAP_<PROVIDER>) ----
+// One ledger file for the app and every test run (re-read before each write), so caps hold across both.
 export class Spend {
-  constructor(file, capUSD) { this.file = file; this.cap = capUSD; try { this.total = JSON.parse(fs.readFileSync(file, 'utf8')).totalUSD ?? 0; } catch { this.total = 0; } }
+  constructor(file, capUSD, caps = {}) { this.file = file; this.cap = capUSD; this.caps = caps; this.read(); }
+  read() {
+    let d = {};
+    try { d = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch {}
+    this.total = d.totalUSD ?? 0; this.by = d.byProvider ?? {}; this.readAt = Date.now();
+  }
   add(model, usage) {
-    const [pin, pout] = PRICES[model] ?? [1, 3];
+    const [pin, pout] = PRICES[model] ?? [5, 25];
     const usd = ((usage?.prompt_tokens ?? usage?.input_tokens ?? 0) * pin + (usage?.completion_tokens ?? usage?.output_tokens ?? 0) * pout) / 1e6;
-    this.total += usd;
-    try { fs.mkdirSync(path.dirname(this.file), { recursive: true }); fs.writeFileSync(this.file, JSON.stringify({ totalUSD: this.total, updated: new Date().toISOString() })); } catch {}
+    this.read();
+    const p = model.split(':')[0];
+    this.total += usd; this.by[p] = (this.by[p] ?? 0) + usd;
+    try { fs.mkdirSync(path.dirname(this.file), { recursive: true }); fs.writeFileSync(this.file, JSON.stringify({ totalUSD: this.total, byProvider: this.by, updated: new Date().toISOString() })); } catch {}
     return usd;
   }
   get over() { return this.cap > 0 && this.total >= this.cap; }
+  overFor(provider) {
+    if (Date.now() - this.readAt > 5000) this.read();  // another Dixi (a test run) may have spent too
+    return this.over || (this.caps[provider] > 0 && (this.by[provider] ?? 0) >= this.caps[provider]);
+  }
 }
 
 // ---- record / replay (evals: same request → same answer, no cost) ----
@@ -85,13 +99,14 @@ export async function chat(config, spend, req, fetchImpl = fetch) {
   const key = config.keys[provider];
   if (!ep?.style) return { status: 400, json: { error: { message: `Unknown provider ${provider}` } } };
   if (!key) return { status: 401, json: { error: { message: `${ep.key} is not set` } } };
-  if (spend?.over) return { status: 402, json: { error: { message: `Spend cap of $${spend.cap} reached` } } };
+  if (spend?.overFor?.(provider)) return { status: 402, json: { error: { message: `Spend cap reached for ${provider}` } } };
   const mode = config.env.DIXI_LLM_CACHE;  // "replay" | "record" | "both"
   const file = mode && cacheFile(config.env.DIXI_LLM_CACHE_DIR, { m: req.model, b: req.body });
   if (file && mode !== 'record' && fs.existsSync(file)) return { ...JSON.parse(fs.readFileSync(file, 'utf8')), cached: true };
   if (mode === 'replay') return { status: 503, json: { error: { message: 'not in the replay cache' } } };
 
   const ctrl = new AbortController();
+  let res0 = false;  // the request went out (an abort after this may still be billed)
   if (req.id) inflight.set(req.id, ctrl);
   const t0 = performance.now();
   try {
@@ -99,6 +114,7 @@ export async function chat(config, spend, req, fetchImpl = fetch) {
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...forProvider(provider, req.body), model }),
     };
+    res0 = true;
     const res = await fetchImpl(ep.url, { method: 'POST', ...init, signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(60_000)]) });
     const text = await res.text();
     let json;
@@ -111,6 +127,7 @@ export async function chat(config, spend, req, fetchImpl = fetch) {
     }
     return out;
   } catch (err) {
+    if (err.name === 'AbortError' && res0) spend?.add(req.model, { prompt_tokens: Math.ceil(JSON.stringify(req.body).length / 3) });
     return { status: err.name === 'AbortError' ? 499 : 0, json: { error: { message: `Network error: ${err.message}` } }, ms: Math.round(performance.now() - t0) };
   } finally {
     if (req.id) inflight.delete(req.id);
@@ -120,7 +137,7 @@ export async function chat(config, spend, req, fetchImpl = fetch) {
 // Provider quirks kept here, not in the callers.
 function forProvider(provider, body) {
   const b = { ...body };
-  if (provider !== 'groq') delete b.reasoning_effort;
+  if (provider !== 'groq' && provider !== 'cerebras') delete b.reasoning_effort;
   if (provider === 'cerebras' && b.response_format?.type === 'json_schema') b.response_format = { ...b.response_format };
   return b;
 }
@@ -134,7 +151,8 @@ function anthropicRequest(key, model, body, workspace) {
     : { type: 'text', text: p.text ?? '' });
   const messages = body.messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: typeof m.content === 'string' ? m.content : m.content.map(part) }));
   const schema = body.response_format?.json_schema?.schema;
-  const payload = { model, max_tokens: body.max_tokens ?? 1024, system, messages, temperature: body.temperature ?? 0 };
+  // No temperature: current Claude models reject it.
+  const payload = { model, max_tokens: body.max_tokens ?? 1024, system, messages };
   if (schema) Object.assign(payload, { tools: [{ name: 'emit', description: 'Return the result.', input_schema: schema }], tool_choice: { type: 'tool', name: 'emit' } });
   return { headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', ...(workspace ? { 'anthropic-workspace-id': workspace } : {}) }, body: JSON.stringify(payload) };
 }

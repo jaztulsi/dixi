@@ -203,6 +203,7 @@ export class VoiceAgent {
     // Finishing the sentence the last turn left hanging (within a few seconds).
     const carried = this.carry && Date.now() - this.carry.at < 6000 && !this.clarify ? this.carry.text : '';
     const command = carried ? `${carried} ${cmd.trim()}` : cmd.trim();
+    if (carried) clearTimeout(this.carryTimer);
     if (final) this.carry = null;
     if (this.clarify) {   // answering a question Dixi asked: wait for the whole answer
       if (final || json.event === 'EagerEndOfTurn') { this.turnsDone.add(turn); this.handleText(command); }
@@ -231,7 +232,14 @@ export class VoiceAgent {
     clearTimeout(st.specTimer);
     st.timer = null;
     // The turn ended mid-sentence (a long "uh"): keep the words for the next turn to finish.
-    if (ended && incomplete(last)) { this.carry = { text: last, at: Date.now() }; return; }
+    if (ended && incomplete(last)) {
+      const c = { text: last, at: Date.now() };
+      this.carry = c;
+      // Nothing followed: do what was said anyway (a lone "can" or "uh" is dropped).
+      clearTimeout(this.carryTimer);
+      this.carryTimer = setTimeout(() => { if (this.carry === c) { this.carry = null; if (tokens(c.text).length >= 3) this.handleText(c.text); } }, 2500);
+      return;
+    }
     if (ended) this.dispatch(st, last);
     // Act at a pause only on a whole command: not half a sentence ("…the features of"), not a word
     // still being transcribed ("Amazon-", an open quote), and never a question (answered once, whole).
@@ -412,6 +420,7 @@ export class VoiceAgent {
     this.clarify = null;
     this.confirmQ = null;
     this.carry = null;
+    clearTimeout(this.carryTimer);
     if (this.agent?.isRunning) this.agent.stop();
     for (const p of this.plan) if (p.state === 'queued' || p.state === 'running') p.state = 'cancelled';
     this.plan = this.plan.filter((p) => p.state !== 'cancelled' && p.state !== 'failed');

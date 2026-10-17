@@ -30,7 +30,7 @@ export const readsImages = (model) => /qwen|claude/.test(model);
 
 /** Keeps reasoning models from spending latency on thinking. */
 export function reasoningEffort(model) {
-  if (!model.startsWith('groq:')) return null;
+  if (!/^(groq|cerebras):/.test(model)) return null;
   if (/qwen/.test(model)) return 'none';
   if (/gpt-oss/.test(model)) return 'low';
   return null;

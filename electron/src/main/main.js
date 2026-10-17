@@ -48,7 +48,9 @@ let pendingURL = null;
 const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');
 const emitToUI = (channel, data) => win?.webContents.send(channel, data);
 const deepgram = sttName === 'elevenlabs' ? new ElevenLabsBridge(config.keys.elevenlabs, emitToUI) : new DeepgramBridge(config.deepgramAPIKey, emitToUI);
-const spend = new Spend(EVAL ? path.join(root, 'eval/.cache/spend.json') : path.join(app.getPath('userData'), 'spend.json'), config.spendCapUSD);
+// One ledger for the app and test runs (whatever their profile), so per-provider caps hold across both.
+const spendCaps = Object.fromEntries(Object.keys(ENDPOINTS).map((p) => [p, Number(config.env[`DIXI_CAP_${p.toUpperCase()}`]) || 0]));
+const spend = new Spend(path.join(app.getPath('appData'), 'Dixi', 'spend.json'), config.spendCapUSD, spendCaps);
 if (!config.env.DIXI_LLM_CACHE_DIR) config.env.DIXI_LLM_CACHE_DIR = path.join(root, 'eval/.cache/llm');
 const tabsSession = () => session.fromPartition('persist:dixi-tabs');
 
@@ -172,7 +174,7 @@ handle('llm:chat', (req) => {
   return chat(config, spend, { model: req.model, body, id: req.id });
 });
 on('llm:abort', (id) => abort(id));
-handle('spend:get', () => ({ totalUSD: spend.total, capUSD: spend.cap }));
+handle('spend:get', () => ({ totalUSD: spend.total, capUSD: spend.cap, byProvider: spend.by, caps: spendCaps }));
 
 handle('resolve:site', (q) => resolver.resolve({ said: String(q?.said ?? '').slice(0, 120), guess: String(q?.guess ?? '').slice(0, 120), urls: (q?.urls ?? []).slice(0, 3).map(String).filter((u) => /^https?:\/\//i.test(u)), fast: Boolean(q?.fast) }));
 handle('registry:confirm', (said, hit) => resolver.confirm(String(said), { url: String(hit.url), host: String(hit.host), finalHost: String(hit.finalHost ?? hit.host), name: String(hit.name) }));

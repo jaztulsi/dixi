@@ -25,7 +25,16 @@ test('rate-limited models cool down and are skipped', async () => {
 test('reasoning effort per provider/model family', () => {
   assert.equal(reasoningEffort('groq:qwen/qwen3.8-27b'), 'none');
   assert.equal(reasoningEffort('groq:openai/gpt-oss-20b'), 'low');
-  assert.equal(reasoningEffort('cerebras:gpt-oss-120b'), null);
+  assert.equal(reasoningEffort('cerebras:gpt-oss-120b'), 'low');
+  assert.equal(reasoningEffort('cerebras:qwen-3.8-27b'), 'none');
+  assert.equal(reasoningEffort('anthropic:claude-haiku-5-5'), null);
+});
+
+test('per-provider cap: one provider past its cap is skipped, the others still run', () => {
+  const spend = new Spend('/dev/null/none', 25, { cerebras: 0.01 });
+  spend.add('cerebras:gpt-oss-120b', { prompt_tokens: 30000, completion_tokens: 0 });
+  assert.equal(spend.overFor('cerebras'), true);
+  assert.equal(spend.overFor('groq'), false);
 });
 
 test('providers: spend cap stops calls; keys never needed in the renderer', async () => {
