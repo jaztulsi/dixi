@@ -123,7 +123,7 @@ export class Resolver {
 
   setSearchTemplate(host, template) {
     const e = this.byHost(host);
-    if (e && /\{q\}/.test(template)) { e.searchTemplate = template; this.save(); }
+    if (e && /^https?:\/\/[^{]+\{q\}/.test(template)) { e.searchTemplate = template; this.save(); }
   }
 
   async probe(url, said, source) {

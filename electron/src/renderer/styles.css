@@ -149,7 +149,9 @@ svg { display: block; }
 .caption-plan li.queued .k { color: var(--tertiary); }
 .caption-plan li.running { color: var(--text); }
 .caption-plan li.done .k { color: var(--green); }
-.caption-plan li.failed { color: var(--red); }
+.caption-plan li.failed { color: var(--secondary); }
+.esc-btn { pointer-events: auto; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1; letter-spacing: 0.02em; color: var(--secondary); background: var(--quaternary); border: 0; border-radius: 7px; padding: 5px 9px; }
+.esc-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.16); }
 .caption-activity { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: var(--secondary); white-space: nowrap; overflow: hidden; }
 .answer { padding: 14px; border-radius: 20px; background: var(--quaternary); display: flex; flex-direction: column; gap: 6px; }
 .answer-text { font-size: 19px; font-weight: 600; }

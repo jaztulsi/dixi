@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
-import { chat, abort, tiers, keyStatus, Spend } from './providers.js';
+import { chat, abort, tiers, keyStatus, Spend, ENDPOINTS } from './providers.js';
 import { DeepgramBridge } from './deepgram.js';
 import { ElevenLabsBridge } from './stt.js';
 import { Resolver } from './resolve.js';
@@ -213,6 +213,21 @@ export function openSearchTemplate(xml) {
   return tpl.includes('{q}') ? tpl : null;
 }
 handle('tab:opensearch', async (url) => openSearchTemplate((await fetchPage(String(url)).catch(() => null))?.html ?? ''));
+// Spoken replies in an ElevenLabs voice (key stays here). DIXI_VOICE = voice id, DIXI_TTS_MODEL = model.
+// Returns mp3 bytes, or null (the renderer then falls back to the system voice).
+handle('tts:speak', async (text) => {
+  if (!config.keys.elevenlabs || spend.over) return null;
+  const voice = config.env.DIXI_VOICE || 'EXAVITQu4vr4xnSDxMaL';
+  try {
+    const res = await fetch(`${ENDPOINTS.elevenlabs.url}/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`, {
+      method: 'POST', signal: AbortSignal.timeout(8000),
+      headers: { 'xi-api-key': config.keys.elevenlabs, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      body: JSON.stringify({ text: String(text).slice(0, 400), model_id: config.env.DIXI_TTS_MODEL || 'eleven_flash_v2_5', voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.2, use_speaker_boost: true } }),
+    });
+    if (!res.ok) { console.warn('[tts]', res.status, (await res.text()).slice(0, 160)); return null; }
+    return new Uint8Array(await res.arrayBuffer());
+  } catch (err) { console.warn('[tts]', err.message); return null; }
+});
 // A site's search URL read from its home page HTML (no rendering), so a first search can skip the home page.
 handle('tab:discover-search', async (url) => {
   if (!/^https?:\/\//i.test(String(url))) return null;

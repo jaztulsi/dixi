@@ -169,7 +169,7 @@ export class Executor {
    * (typed for real, suggestions closed, submitted), then learn the template from the result URL.
    */
   async searchOn(site, query) {
-    let tpl = site.searchTemplate ?? site.entry?.searchTemplate;
+    let tpl = [site.searchTemplate, site.entry?.searchTemplate].find((t) => /^https?:\/\/[^{]+\{q\}/.test(t ?? '')) ?? null;
     // First visit: read the site's own search URL from its home page HTML (a few hundred ms) instead of
     // loading the whole home page and typing. Only a template on the site's own domain is trusted.
     const domain = (h) => String(h ?? '').split('.').slice(-2).join('.');
@@ -180,7 +180,7 @@ export class Executor {
     if (tpl) {
       await this.tabs.navigate(tpl.replace('{q}', encodeURIComponent(query)));
       if (await this.searchLanded(query)) {
-        if (!(site.searchTemplate ?? site.entry?.searchTemplate)) {
+        if (![site.searchTemplate, site.entry?.searchTemplate].includes(tpl)) {
           this.registry?.setSearchTemplate(site.host, tpl);
           if (site.optimistic) this.registry?.confirm?.(site.said, { url: site.url, host: site.host, finalHost: hostOf(this.tabs.getCurrentURL()), name: site.name });
         }
@@ -256,6 +256,7 @@ export class Executor {
 
   learnTemplate(site, query) {
     const url = this.tabs.getCurrentURL();
+    if (!tokens(query).length || !/^https?:/.test(url)) return;  // an empty query would "learn" {q} in front of the URL
     for (const e of [encodeURIComponent(query), encodeURIComponent(query).replace(/%20/g, '+')]) {
       if (url.includes(e)) { this.registry?.setSearchTemplate(hostOf(url), url.replace(e, '{q}')); return; }
     }

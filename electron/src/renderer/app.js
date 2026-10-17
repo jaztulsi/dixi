@@ -165,8 +165,8 @@ function renderCaption() {
   }
   // Every command shows here the moment it's understood: queued → running → done / failed.
   const plan = $('caption-plan');
-  // Only what's happening or done; failed or cancelled steps just disappear (no red ✕ in front of people).
-  const shown = voice.plan.filter((p) => (p.state === 'queued' || p.state === 'running' || p.state === 'done') && p.label);
+  // A step that didn't work says so in a calm grey line (no red ✕); cancelled ones just disappear.
+  const shown = voice.plan.filter((p) => p.state !== 'cancelled' && p.label);
   plan.hidden = !shown.length;
   plan.replaceChildren(...shown.map((p) => {
     const li = document.createElement('li');
@@ -181,7 +181,7 @@ function renderCaption() {
   $('activity-text').textContent = activity;
 }
 
-const PLAN_ICONS = { queued: icons.dot, done: icons.check, failed: icons.xmark };
+const PLAN_ICONS = { queued: icons.dot, done: icons.check, failed: icons.turnRight };
 const LOG_ICONS = { action: icons.play, success: icons.check, error: icons.xmark, thinking: icons.brain, info: icons.dot };
 let renderedLog = 0;
 function renderAgentSheet() {
@@ -251,12 +251,22 @@ function renderSettings() {
 }
 $('wake-toggle').addEventListener('change', (e) => { settings.requireWakeWord = e.target.checked; renderExamples(); render(); });
 
-// Escape: reset Dixi (stop everything, clear the caption, reconnect the mic). Works anywhere in the app.
+// Esc (the key, anywhere in the app, or the button on the caption): the first press stops whatever Dixi
+// is doing or thinking; pressed again (or when nothing is running) it resets Dixi: clears the caption
+// and reconnects the mic.
+let lastEsc = 0;
+function escape() {
+  const busy = voice.pending > 0 || agent.isRunning || speaker.isBusy() || voice.plan.some((p) => p.state === 'running' || p.state === 'queued');
+  speaker.stop();
+  if (busy && Date.now() - lastEsc > 2500) voice.cancelAll();
+  else voice.reset();
+  lastEsc = Date.now();
+}
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || document.querySelector('dialog[open]')) return;
-  voice.reset();
-  speaker.stop();
+  escape();
 });
+$('caption-esc').addEventListener('click', escape);
 
 // ---- dixi:// deep links: focus or prefill only, never run a task ----
 window.dixi.onOpenURL((url) => {

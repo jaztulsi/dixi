@@ -28,6 +28,14 @@ export function wakeEnd(text) {
   }
   return -1;
 }
+/** Heard words that are mostly Dixi's last sentence, in order (longest common subsequence ≥ 75%). */
+export function isEcho(heard, said) {
+  const h = tokens(heard), s = tokens(said);
+  if (!h.length) return true;
+  let prev = new Array(s.length + 1).fill(0);
+  for (const w of h) { const cur = [0]; for (let j = 1; j <= s.length; j++) cur[j] = w === s[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]); prev = cur; }
+  return prev[s.length] / h.length >= 0.75;
+}
 export function afterWakeWord(text) {
   const at = wakeEnd(text);
   return at < 0 ? null : String(text).slice(at).replace(/^[\s,.!?]+/, '');
@@ -78,7 +86,7 @@ export function describe(s) {
 
 export class VoiceAgent {
   constructor({ deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry = null, cache = null, agent = null,
-    onChange = () => {}, trace = () => {}, followUpMS = 8000, settleMS = 650, specMS = 300 }) {
+    onChange = () => {}, trace = () => {}, followUpMS = 15000, settleMS = 650, specMS = 300 }) {
     Object.assign(this, { deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry, cache, agent, onChange, trace, followUpMS, settleMS, specMS });
     this.spec = new Map();  // clause words → understanding started early, at a short pause
     this.isListening = false;
@@ -137,7 +145,9 @@ export class VoiceAgent {
   /** Escape key / "reset": stop everything, clear the screen, reconnect the microphone fresh. */
   async reset() {
     this.cancelAll({ quiet: true });
-    for (const t of this.turns.values()) clearTimeout(t.timer);
+    for (const s of this.spec.values()) s.ctrl.abort();
+    this.spec.clear();
+    for (const t of this.turns.values()) { clearTimeout(t.timer); clearTimeout(t.specTimer); }
     this.turns.clear();
     this.set({ plan: [], statusLine: '', liveTranscript: '', answer: null, isAwake: false, awakeUntil: 0 });
     if (this.isListening) { await this.stop(); await this.start().catch(() => {}); }
@@ -178,7 +188,8 @@ export class VoiceAgent {
     // While Dixi talks the mic also hears Dixi: ignore it, unless you barge in ("stop", or the wake word).
     if (this.speaker?.isBusy?.()) {
       if (STOP.test(text)) { this.speaker.stop(); this.cancelAll(); return; }
-      if (afterWakeWord(text) == null) return;
+      // Dixi's own words coming back through the mic: ignore. Anything else is you talking over it.
+      if (afterWakeWord(text) == null && isEcho(text, this.speaker.lastText ?? '')) return;
       this.speaker.stop();
     }
     if (json.event === 'StartOfTurn') { this.refreshAffordances(); return; }

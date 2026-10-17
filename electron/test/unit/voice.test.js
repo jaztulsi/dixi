@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { VoiceAgent, afterWakeWord, splitClauses } from '../../src/renderer/core/voice.js';
+import { VoiceAgent, afterWakeWord, splitClauses, isEcho } from '../../src/renderer/core/voice.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -128,4 +128,11 @@ test('understanding starts at a short pause and is reused when the turn ends (on
   await sleep(120);
   assert.equal(r.runs.length, 1);
   assert.equal(r.llmCalls.length, 1, 'the early understanding was used');
+});
+
+test('talking over Dixi: its own words are an echo, a new command is not', () => {
+  assert.equal(isEcho('added it to your car at Zentora', 'Added it to your cart at Zentora'), true);
+  assert.equal(isEcho('added it', 'Added it to your cart at Zentora'), true);
+  assert.equal(isEcho('go to my cart', 'Added it to your cart at Zentora'), false);
+  assert.equal(isEcho('search for lamps on Bykkar', 'Added it to your cart at Zentora'), false);
 });
