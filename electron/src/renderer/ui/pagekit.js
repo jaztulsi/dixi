@@ -189,8 +189,11 @@ function results() {
     if (seen.has(a.href)) return false; seen.add(a.href); return true;
   }).map(({ a }) => {
     // A result that sells straight from the list has its own "Buy" link (never "Buy now"): orders go there.
-    const buy = [...itemRoot(a).querySelectorAll('a[href]')].find((x) => x !== a && visible(x) && /^buy\b(?!\s+(now|it now|with))/i.test(name(x)));
-    return { ref: ref(a), text: clean((a.querySelector('h1,h2,h3,h4') || a.closest('h1,h2,h3,h4') || a).innerText).slice(0, 90), href: a.href, match: matching.length > 0, q: qw.length > 0, buy: buy ? ref(buy) : null };
+    const root = itemRoot(a);
+    const buy = [...root.querySelectorAll('a[href]')].find((x) => x !== a && visible(x) && /^buy\b(?!\s+(now|it now|with))/i.test(name(x)));
+    // ...or an add button of its own (Amazon, Target, Best Buy lists): add without opening the product.
+    const add = [...root.querySelectorAll('button, [role=button], input[type=submit], input[type=button]')].find((x) => shown(x) && !x.disabled && /^(add( to( your| my)?)? (cart|bag|basket|trolley)\b|add$)/i.test(name(x)));
+    return { ref: ref(a), text: clean((a.querySelector('h1,h2,h3,h4') || a.closest('h1,h2,h3,h4') || a).innerText).slice(0, 90), href: a.href, match: matching.length > 0, q: qw.length > 0, buy: buy ? ref(buy) : null, add: add ? ref(add) : null };
   });
 }
 function scrollResultsToEnd() {

@@ -22,20 +22,39 @@ export function makeCatalog(data, { now = Date.now() } = {}) {
   return {
     storeURL: data.storeURL,
     stale: ageDays > 30,
-    /** {family} | {ask} | null */
+    names: data.families.map((f) => f.name),  // for speech recognition: "HomePod", not "home view"
+    /**
+     * {family, url?} | {ask} | null. Of every family whose name (or base name) was said, the closest:
+     * most of your words in its full name, then fewest of its words you didn't say ("AirPod 3s" →
+     * AirPods Pro 3, not AirPods Max 2). url = its own store page, only when its full name was said.
+     */
     match(item) {
       const w = tokens(item).map(sing);
+      let best = null;
       for (const f of families) {
         for (let i = 0; i < w.length; i++) {
           for (let j = i; j < Math.min(w.length, i + 4); j++) {
             if (!f.keys.includes(w.slice(i, j + 1).join(''))) continue;
             // "a charger for my iPhone": an accessory FOR the product — whose accessory?
             if (w.slice(0, i).some((x) => x === 'for' || x === 'with' || x === 'fit')) return { ask: `Do you want Apple's own one, or any brand that fits your ${f.name}?` };
-            return { family: f.name };
+            const fw = tokens(f.name).map(sing).filter((x) => x !== 'apple');
+            const said = fw.filter((x) => w.includes(x) || w.join('').includes(x)).length;
+            const score = said * 10 - (fw.length - said);
+            if (!best || score > best.score) best = { f, score, full: said === fw.length };
           }
         }
       }
-      return null;
+      if (!best) return null;
+      let url = best.full ? best.f.url : null;
+      // "AirPods Max" → the one current "AirPods Max 2" page; "iPhone" (many models, none closest) → none.
+      if (best.full && !url) {
+        const kids = families.filter((g) => g.url && g.name.toLowerCase().startsWith(`${best.f.name.toLowerCase()} `));
+        const extra = (g) => tokens(g.name).length - tokens(best.f.name).length;
+        const fewest = Math.min(...kids.map(extra));
+        const closest = kids.filter((g) => extra(g) === fewest);
+        if (closest.length === 1) url = closest[0].url;
+      }
+      return url ? { family: best.f.name, url } : { family: best.f.name };
     },
   };
 }

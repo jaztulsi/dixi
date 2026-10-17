@@ -150,3 +150,13 @@ test('a turn cut off mid-sentence is finished by the next one; a whole question 
   await sleep(120);
   assert.equal(r.runs.length, 2);
 });
+
+test('a site never used before waits for its whole name ("Maya" is not "Maya Indian Kitchen")', async () => {
+  const r = rig({ reply: JSON.stringify({ clarify: '', steps: [{ act: 'open', said: 'Maya Indian Kitchen', guess: '', urls: [], query: '', item: '', qty: 0, n: 0, value: '' }] }) });
+  r.turn(1, [['Update', 'take me to Maya']]);
+  await sleep(800);
+  assert.equal(r.runs.length, 0, 'not opened on the first word of the name');
+  r.turn(1, [['Update', 'take me to Maya Indian Kitchen'], ['EndOfTurn', 'Take me to Maya Indian Kitchen.']]);
+  await sleep(150);
+  assert.equal(r.runs.length, 1);
+});

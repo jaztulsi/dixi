@@ -168,12 +168,14 @@ export class Resolver {
         const r = await this.fetchPage(tpl.replace('{q}', encodeURIComponent(query)), { probe: true });
         for (const m of (r?.html ?? '').matchAll(/<a\s[^>]*href=["']([^"']+)["']/gi)) {
           let href = decode(m[1]);
+          if (/\/y\.js|aclick|ad_domain|ad_provider/i.test(href)) continue;   // ads are never the site you named
           if (href.startsWith('//')) href = `https:${href}`;
           try {
             const u = new URL(href, `https://${engine}/`);
             const wrapped = [...u.searchParams.values()].find((v) => /^https?:\/\//.test(v));   // redirect wrappers (?uddg=...)
             const target = new URL(wrapped ?? u.href);
-            if (/^https?:$/.test(target.protocol) && target.hostname !== engine) out.push(target.href);
+            const base = (h) => h.split('.').slice(-2).join('.');
+            if (/^https?:$/.test(target.protocol) && base(target.hostname) !== base(engine)) out.push(target.href);
           } catch {}
         }
       }

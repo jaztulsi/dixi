@@ -37,17 +37,24 @@ export function quoteIsOnPage(quote, page) {
   return Boolean(quote?.trim()) && normalized(page).includes(normalized(quote));
 }
 
-export async function askPage(question, { tabs, llm, models }) {
+export async function askPage(question, { tabs, llm, models, webAnswer = globalThis.window?.dixi?.webAnswer }) {
   const source = await tabs.getTitle();
   const onPage = /^https?:/.test(tabs.getCurrentURL());
   const full = onPage ? String(await tabs.executeJS(PAGE_TEXT_JS) ?? '') : '';
   const page = full.startsWith('JS error') ? '' : relevantText(full, question);
   // The page when it has the answer (freshest: this product, this video); else general knowledge.
   const user = page.length > 40 ? `Question: ${question}\n<page url="${tabs.getCurrentURL()}">\n${page}\n</page>` : `Question: ${question}\n(no page text)`;
-  const raw = await llm.json(PAGE_QA_PROMPT, user, models, 500, { hedgeMs: 1500 });
+  const raw = await llm.json(PAGE_QA_PROMPT.replace('{today}', new Date().toDateString()), user, models, 500, { hedgeMs: 1500 });
   let reply;
   try { reply = JSON.parse(raw); } catch { reply = null; }
+  const verified = reply?.found === true && quoteIsOnPage(reply.quote, page);
+  if (verified) return { text: reply.answer, quote: reply.quote.trim(), source, grounded: true };
+  // Something recent the page doesn't cover: the model's memory is out of date, so search the web.
+  if (TIMELY.test(question) && webAnswer) {
+    const web = await webAnswer(question).catch(() => null);
+    if (web) return { text: web, quote: null, source, grounded: false, web: true };
+  }
   if (!reply?.answer) return { text: 'The AI service is busy (rate limit). Ask me again in a few seconds.', quote: null, source, grounded: false, failed: true };
-  const verified = reply.found === true && quoteIsOnPage(reply.quote, page);
-  return { text: reply.answer, quote: verified ? reply.quote.trim() : null, source, grounded: verified, general: !verified };
+  return { text: reply.answer, quote: null, source, grounded: false, general: true };
 }
+const TIMELY = /\b(latest|newest|new|recent|recently|current|currently|today|tonight|tomorrow|yesterday|this (week|month|year)|right now|now|upcoming|release[sd]?|launch(ed)?|announce[sd]?|price|prices|cost|score|news|weather|open now|hours|20\d\d)\b/i;

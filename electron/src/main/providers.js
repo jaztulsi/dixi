@@ -63,15 +63,17 @@ export class Spend {
     try { d = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch {}
     this.total = d.totalUSD ?? 0; this.by = d.byProvider ?? {}; this.readAt = Date.now();
   }
-  add(model, usage) {
+  add(model, usage, flat = 0) {
     const [pin, pout] = PRICES[model] ?? [5, 25];
-    const usd = ((usage?.prompt_tokens ?? usage?.input_tokens ?? 0) * pin + (usage?.completion_tokens ?? usage?.output_tokens ?? 0) * pout) / 1e6;
+    const usd = flat + ((usage?.prompt_tokens ?? usage?.input_tokens ?? 0) * pin + (usage?.completion_tokens ?? usage?.output_tokens ?? 0) * pout) / 1e6;
     this.read();
     const p = model.split(':')[0];
     this.total += usd; this.by[p] = (this.by[p] ?? 0) + usd;
     try { fs.mkdirSync(path.dirname(this.file), { recursive: true }); fs.writeFileSync(this.file, JSON.stringify({ totalUSD: this.total, byProvider: this.by, updated: new Date().toISOString() })); } catch {}
     return usd;
   }
+  /** A flat fee (a provider's web search), not tokens. */
+  addUSD(provider, usd) { return this.add(`${provider}:fee`, null, usd); }
   get over() { return this.cap > 0 && this.total >= this.cap; }
   overFor(provider) {
     if (Date.now() - this.readAt > 5000) this.read();  // another Dixi (a test run) may have spent too

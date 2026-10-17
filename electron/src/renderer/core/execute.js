@@ -13,7 +13,7 @@ const fail = (message, extra = {}) => ({ ok: false, message, ...extra });
 const title = (s) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 
 // Generic meanings of buttons, by accessible name (language, not sites).
-const ADD = /^(add( to)?( (cart|bag|basket|order|trolley|meal))?|add item|añadir( al carrito)?|ajouter( au panier)?|in den warenkorb)\b/i;
+const ADD = /^(add( to( your| my)?)? (cart|bag|basket|order|trolley|meal)\b|add( item| to order)?(\s*[+$€£]?\s*[\d.,]+)?$|pre-?order( now)?$|añadir( al carrito)?|ajouter( au panier)?|in den warenkorb)/i;
 const CHECKOUT = /^(check ?out|proceed to (check ?out|checkout|payment)|go to (cart|bag|checkout)|view (cart|bag)|continue to checkout|review (order|bag)|pagar|commander)\b/i;
 const TO_STORE = /^(buy(?!\s+(now|it now|with))|configure|(see|choose|view) (all )?(options|models))\b/i;
 const DECLINE = /^(no,? thanks?( you)?|no thank you|skip|not now|maybe later|decline|continue without|no protection|no coverage)\b/i;
@@ -35,6 +35,7 @@ export class Executor {
     if (!fn) return fail(`I don't know how to ${step.act} yet`);
     if (!this.tabs.activeTab) this.tabs.createTab('about:blank');
     this.signal = signal;
+    this.t0 = Date.now();
     let r;
     try { r = await fn.call(this, step, said, signal); } catch (err) { r = fail(err.message || String(err)); }
     // A human check in the way explains whatever happened (or didn't): hand it over, never solve it.
@@ -43,6 +44,9 @@ export class Executor {
     }
     return r;
   }
+
+  /** Timing marks inside a step (in traces), to see where the seconds go. */
+  mark(label) { this.trace?.('mark', { label, ms: Date.now() - (this.t0 ?? Date.now()) }); }
 
   /** Stop here if this command was cancelled (a newer command, "stop", or Escape). */
   check() { if (this.signal?.aborted) throw new Error('Stopped'); }
@@ -160,9 +164,22 @@ export class Executor {
   }
 
   async do_find_item(step) {
-    const s = await this.site(step);
+    const s = await this.storeFor(step);
     if (s.error) return s.error;
     return this.searchOn(s, step.item);
+  }
+
+  /**
+   * Where to shop: the store you named; else the store you're on; else the store the AI suggested
+   * for this item (its maker's own store, or a big retailer), checked like any other site.
+   */
+  async storeFor(step) {
+    if (step.said || step.guess) return this.site(step);
+    if (await this.isStore()) return this.site(step);
+    const url = (step.urls ?? []).find((u) => /^https?:\/\//.test(u));
+    if (!url) return { error: fail(`Which store should I get ${step.item} from?`, { needsStore: true }) };
+    const label = hostOf(url).split('.').slice(-2, -1)[0] ?? '';  // "bestbuy" from www.bestbuy.com
+    return this.site({ said: label, guess: '', urls: step.urls });
   }
 
   /**
@@ -188,7 +205,7 @@ export class Executor {
         return ok(`${site.name}: “${query}”`);
       }
     }
-    if (!site.here || tpl) { const l = await this.land({ ...site, here: false }); if (!l.ok) return l; if (site.optimistic) this.registry?.confirm?.(site.said, { url: site.url, host: site.host, finalHost: hostOf(this.tabs.getCurrentURL()), name: l.name ?? site.name }); }
+    if (!site.here || tpl) { const l = await this.land({ ...site, here: false }); if (!l.ok) return l; if (l.name) site.name = l.name; if (site.optimistic) this.registry?.confirm?.(site.said, { url: site.url, host: site.host, finalHost: hostOf(this.tabs.getCurrentURL()), name: l.name ?? site.name }); }
     await this.tabs.dx('dismissOverlays');
     // Shop sites build their header with JavaScript after the page arrives: look for a few seconds.
     let f = await this.waitFor(() => this.tabs.dx('findSearch'), (x) => x && typeof x === 'object' && (x.how !== 'none' || x.opensearch), 3000);
@@ -271,11 +288,17 @@ export class Executor {
     if (!step.said && this.catalog) {
       const fam = this.catalog.match(step.item);
       if (fam?.ask) return fail(fam.ask);
+      // Its own store page: one page load, then add (search is the fallback).
+      if (fam?.url) {
+        await this.tabs.navigate(fam.url);
+        this.mark('store page');
+        const r = await this.addToCart({ ...step, picked: fam.family, viaBuy: true }, said, 'Apple Store');
+        if (r.ok || r.needsStore || r.login) return r;
+      }
       if (fam) s = { url: this.catalog.storeURL, host: hostOf(this.catalog.storeURL), name: 'Apple Store', here: hostOf(this.tabs.getCurrentURL()) === hostOf(this.catalog.storeURL), searchTemplate: this.registry?.byHost?.(hostOf(this.catalog.storeURL))?.searchTemplate };
     }
     if (!s) {
-      if (!step.said && !(await this.isStore())) return fail(`Which store should I get ${step.item} from?`, { needsStore: true });
-      s = await this.site(step);
+      s = await this.storeFor(step);
       if (s.error) return s.error;
     }
     let found = await this.searchOn(s, step.item);
@@ -296,6 +319,10 @@ export class Executor {
     if (!found.ok) return found;
     const pick = await this.pickResult(step.item);
     if (!pick) return fail(`I searched ${s.name} for “${step.item}” but didn't see it in the results`);
+    if (pick.add) {
+      const r = await this.addToCart({ ...step, picked: pick.text, addRef: pick.add }, said, s.name);
+      if (r.ok || r.needsStore || r.login) return r;
+    }
     await this.clickAndWait(pick.buy ?? pick.ref);
     return this.addToCart({ ...step, picked: pick.text }, said, s.name);
   }
@@ -315,15 +342,23 @@ export class Executor {
   }
 
   async addToCart(step, said, where) {
+    if (step.addRef) return this.pressAdd({ ref: step.addRef, name: 'Add to cart' }, step, where);
     await this.tabs.dx('dismissOverlays');
     if (step.qty > 1) await this.tabs.dx('setQty', step.qty);
     const t0 = Date.now();
     let opened = false;
+    // Wait for the add button, or for choices the page needs first (stores enable "Add" only after them).
     const ready = await this.waitFor(async () => {
       const b = await this.tabs.dx('findButton', ADD, { links: false });
-      if (!b && !opened && Date.now() - t0 > 600) opened = String(await this.tabs.dx('reveal', ADD)).startsWith('opened');
-      return b;
+      if (b) return b;
+      if (Date.now() - t0 > 300 && !this.tabs.isLoading()) {
+        const o = await this.tabs.dx('options');
+        if (Array.isArray(o) && o.some((g) => !g.chosen)) return { needsChoices: true };
+      }
+      if (!opened && Date.now() - t0 > 600) opened = String(await this.tabs.dx('reveal', ADD)).startsWith('opened');
+      return null;
     }, (b) => b, 3000);
+    this.mark(ready ? 'add button' : 'no add button yet');
     // Most pages let you add straight away (defaults chosen); only a page that blocks it needs choices.
     const blocked = !ready || (await this.tabs.exec(null, `(() => { const b = window.__dx.get(${ready?.ref ?? 0}); return !b || b.disabled || b.getAttribute('aria-disabled') === 'true'; })()`)) === true;
     const opts = blocked || /\b(size|color|colour|storage|capacity|model)\b/i.test(said) ? ((await this.tabs.dx('options')) ?? []) : [];
@@ -334,12 +369,16 @@ export class Executor {
       const spoken = g.values.find((v) => normName(v) && tokens(said).join(' ').includes(normName(v)));
       const value = spoken ?? g.values.find((v) => /^(no|none|without|skip|not now)\b|^no[A-Z]/i.test(v)) ?? g.values[0] ?? '';
       await this.tabs.dx('choose', g.name, value);
-      if (value && !/^(no|none|without)\b|^no[A-Z]/i.test(value)) picked.push(value);
+      // Said back short: "Silver", not "Apple HomeView Footnote 4 $299".
+      const shortV = value.replace(/[\u200b-\u200d\ufeff]/g, '').replace(/\bfootnote\s*\S*/gi, '').replace(/[$€£]\s?[\d,.]+(\/mo\.?)?/g, '').replace(/\s+/g, ' ').trim();
+      const product = normName(step.picked || step.item || '');
+      if (shortV && !/^(no|none|without)\b|^no[A-Z]/i.test(shortV) && !(product && normName(shortV).includes(product))) picked.push(shortV);
       await sleep(150);
     }
     const what0 = step.item || step.picked || 'it';
     if (await this.tabs.dx('storePicker')) return ok(`${where} wants you to pick a store or address first. Choose one and say "add it again"`, { needsStore: true });
-    let add = await this.tabs.dx('findButton', ADD, { links: false });
+    // After choices the button takes a moment to switch on.
+    let add = await this.waitFor(() => this.tabs.dx('findButton', ADD, { links: false }), (x) => x, opts.length ? 2000 : 0);
     if (!add && String(await this.tabs.dx('reveal', ADD)).startsWith('opened')) add = await this.waitFor(() => this.tabs.dx('findButton', ADD, { links: false }), (x) => x, 1500);
     // A product's overview page sells through a "Buy" link to its store page (never "Buy now"): follow it once.
     if (!add && !step.viaBuy) {
@@ -357,12 +396,19 @@ export class Executor {
       }
     }
     if (!add) return fail(`I couldn't find an add-to-cart button on ${where}`);
+    return this.pressAdd(add, step, where, picked);
+  }
+
+  /** Press an add button and make sure the cart changed (upsell sheets declined, a real click if needed). */
+  async pressAdd(add, step, where, picked = []) {
+    this.mark('press add');
     const before = await this.cartSignal();
     const r = await this.tabs.dx('clickRef', add.ref, false);
     if (typeof r === 'string' && r.startsWith('confirm')) return this.confirmThen(add.ref, r.slice(9));
     const url0 = this.tabs.getCurrentURL();
     const changed = (s) => (s != null && s !== before) || this.tabs.getCurrentURL() !== url0;
     let after = await this.waitFor(() => this.cartSignal(), changed, 2500);
+    this.mark(changed(after) ? 'cart changed' : 'cart not changed yet');
     for (let round = 0; round < 2 && !changed(after); round++) {
       // An upsell sheet ("Add protection?") holds the add until answered: no paid extras, as with options.
       const no = await this.tabs.dx('findButton', DECLINE, { links: false });
@@ -375,7 +421,8 @@ export class Executor {
       } else break;
       after = await this.waitFor(() => this.cartSignal(), changed, 3000);
     }
-    const what = (step.picked || step.item || 'it').split(/\s[-–—|]\s|[|,(]/)[0].trim().slice(0, 40);
+    // The product's name without a trailing " - Apple" / "| Best Buy" (the store), cut at a word.
+    const what = (step.picked || step.item || 'it').replace(/\s+[-–—|]\s+[^-–—|]{1,25}$/, (m) => (tokens(m).some((w) => tokens(where).includes(w) || w === 'apple') ? '' : m)).replace(/\s+/g, ' ').trim().replace(/^(.{60}).+$/, (m, head) => head.replace(/\s+\S*$/, ''));
     if (await this.tabs.dx('storePicker')) return ok(`${where} wants you to pick a store or address before adding ${what}. Choose one and say "add it again"`, { needsStore: true });
     if (await this.tabs.dx('loginWall')) return ok(`${where} wants you to sign in before adding ${what}. Sign in and say "add it again"`, { login: true });
     const choice = picked.length ? ` (${picked.join(', ')})` : '';

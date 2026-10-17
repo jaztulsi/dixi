@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('dixi', {
   openSearchTemplate: (url) => ipcRenderer.invoke('tab:opensearch', url),
   discoverSearch: (url) => ipcRenderer.invoke('tab:discover-search', url),
   tts: (text) => ipcRenderer.invoke('tts:speak', text),
+  webAnswer: (question) => ipcRenderer.invoke('answer:web', question),
   preconnect: (url) => ipcRenderer.send('net:preconnect', url),
   catalog: () => ipcRenderer.invoke('catalog:get'),
   trace: (line) => ipcRenderer.send('trace:write', line),

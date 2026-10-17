@@ -52,7 +52,7 @@ Rules:
 - "said": the site, app, store or product name EXACTLY as spoken, copied word for word. Leave out verbs, particles like "up", articles, possessives, "website"/"site"/"app" and politeness. "" when they mean the current page or name nothing.
 - Keep multi-word names whole. Never shorten a name to a word inside it, never swap it for a more famous name.
 - "guess": only if "said" looks misheard by speech recognition: a respelling of the SAME sounds (different spacing or letters), never a different or more famous name. Usually "".
-- "urls": up to 3 likely official home page URLs for "said" from your knowledge, [] if unsure.
+- "urls": up to 3 likely official home page URLs for "said" from your knowledge, [] if unsure. For order / find_item with no store named: "said" stays "" and "urls" is the online store where that exact item is usually bought (the maker's own store for a branded product, else a big retailer that sells it).
 - "query" / "item": only the words for the thing itself, copied from the command. Never verbs, particles, filler, quantities, "on <site>" or the site's name.
 - Corrections ("no wait", "actually", "I mean") and negations ("don't open X, open Y"): only the final intent.
 - Several requests: one step each, in the order spoken. Add nothing they did not ask for.
@@ -175,7 +175,7 @@ const CONTROLS = [
   [/^zoom in$/, 'zoom', 'in'], [/^zoom out$/, 'zoom', 'out'], [/^(reset zoom|normal zoom)$/, 'zoom', 'reset'],
   [/^(stop|cancel|never ?mind|stop everything|cancel that|stop that)$/, 'stop', ''],
   [/^((go to|open|show( me)?|view|check) )?(my |the )?(shopping )?(cart|bag|basket)$/, 'cart', ''],
-  [/^((go|proceed|continue) (to|with) )?(the )?(purchase|checkout|check out)$|^(check out|checkout|buy it|purchase it|buy this|purchase this)$/, 'checkout', ''],
+  [/^((go|proceed|continue) (to|with) )?(the )?(purchase|checkout|check out)$|^(check out|checkout)$/, 'checkout', ''],
   [/^(increase|raise|bump up) the (quantity|amount|number)$|^(add )?one more( of (these|this|them|it))?$/, 'quantity', 'up'],
   [/^(decrease|lower|reduce) the (quantity|amount|number)$|^one (less|fewer)$/, 'quantity', 'down'],
 ];
@@ -192,6 +192,10 @@ export function fastPath(text, ctx = {}) {
   const t = String(text).toLowerCase().replace(LEAD, '').replace(TAIL, '').replace(/[“”"]/g, '').trim();
   if (!t) return null;
   for (const [re, act, value] of CONTROLS) if (re.test(t)) return { steps: [step(act, { value })], clarify: '' };
+  // "Buy it", "pre-order this one": what's on the page goes in the cart, then to checkout (which stops
+  // before anything is placed). "Add it" only adds.
+  if (/^(can you |please )?(buy|purchase|pre-?order|order|get) (me )?(it|this|that|this one|that one)( for me| now| please)?$/.test(t)) return { steps: [step('add_to_cart'), step('checkout')], clarify: '' };
+  if (/^(can you |please )?add (it|this|that|this one|that one)( to (my |the )?(cart|bag|basket))?( please)?$/.test(t)) return { steps: [step('add_to_cart')], clarify: '' };
   // A plain question (no command in it) needs no parse: it goes straight to the answerer.
   if (QUESTION.test(t) && !DOING.test(t)) return { steps: [step('ask_page', { value: String(text).trim() })], clarify: '' };
   const nth = t.match(NTH);
@@ -244,7 +248,8 @@ export function validate(raw, text) {
     let saidAt = s.said ? findSpan(words, s.said) : null;
     // A site the user never said (the model borrowed it from the page or its own guess) is dropped;
     // only "open" can't do without one.
-    if (s.said && !saidAt && s.act !== 'open') { s.said = ''; s.guess = ''; s.urls = []; saidAt = null; }
+    // (A store suggested for something to buy stays as a suggestion in "urls"; it's checked before use.)
+    if (s.said && !saidAt && s.act !== 'open') { s.said = ''; s.guess = ''; if (s.act !== 'order' && s.act !== 'find_item') s.urls = []; saidAt = null; }
     if (s.said && !saidAt) errors.push(`"${s.said}" was not said`);
     for (const k of ['query', 'item']) {
       if (!s[k]) continue;

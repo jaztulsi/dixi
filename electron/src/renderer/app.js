@@ -84,7 +84,7 @@ const executor = new Executor({
 const agent = new BrowserAgent({ tabs, llm, executor, onChange: () => render() });
 executor.agent = agent;
 // Remembered understandings persist across launches, so repeats cost no AI call.
-const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic(), tabs, speaker, llm, tiers: config.tiers, executor, settings,
+const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic(), tabs, speaker, llm, tiers: config.tiers, executor, settings, terms: catalog?.names ?? [],
   registry, cache: new ParseCache(localStorage), agent, trace, onChange: () => render() });
 window.dixi.onPopup((url) => tabs.createTab(url));
 
@@ -158,9 +158,9 @@ function renderCaption() {
   if (a) {
     $('answer-text').textContent = a.text;
     const src = $('answer-source');
-    src.className = `answer-source ${a.grounded || a.general ? 'ok' : 'unverified'}`;
-    src.innerHTML = `${a.grounded ? icons.seal : a.general ? icons.brain : icons.warning}<span></span>`;
-    src.lastChild.textContent = a.grounded ? `From this page: ${a.source}` : a.general ? 'General knowledge' : 'Not confirmed on this page';
+    src.className = `answer-source ${a.grounded || a.general || a.web ? 'ok' : 'unverified'}`;
+    src.innerHTML = `${a.grounded ? icons.seal : a.web ? icons.safari : a.general ? icons.brain : icons.warning}<span></span>`;
+    src.lastChild.textContent = a.grounded ? `From this page: ${a.source}` : a.web ? 'From a web search' : a.general ? 'General knowledge' : 'Not confirmed on this page';
     $('answer-quote').hidden = !a.quote;
     $('answer-quote').textContent = a.quote ? `“${a.quote}”` : '';
   }

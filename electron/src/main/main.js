@@ -230,6 +230,30 @@ handle('tts:speak', async (text) => {
     return new Uint8Array(await res.arrayBuffer());
   } catch (err) { console.warn('[tts]', err.message); return null; }
 });
+// A spoken answer about something recent ("latest Apple products"): Claude with one web search.
+// About $0.01 per search plus tokens, counted against the Anthropic cap. DIXI_WEB_MODEL to change.
+handle('answer:web', async (question) => {
+  if (!config.keys.anthropic || spend.overFor('anthropic')) return null;
+  const model = config.env.DIXI_WEB_MODEL || 'claude-haiku-5-5';
+  const ws = config.env.ANTHROPIC_WORKSPACE_ID;
+  try {
+    const res = await fetch(ENDPOINTS.anthropic.url, {
+      method: 'POST', signal: AbortSignal.timeout(15000),
+      headers: { 'x-api-key': config.keys.anthropic, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', ...(ws ? { 'anthropic-workspace-id': ws } : {}) },
+      body: JSON.stringify({
+        model, max_tokens: 400, thinking: { type: 'disabled' },
+        system: `Today is ${new Date().toDateString()}. Answer the spoken question in 1-3 short sentences that sound natural read aloud. Use one web search for anything recent. No lists, no markdown, no links.`,
+        messages: [{ role: 'user', content: String(question).slice(0, 300) }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }],
+      }),
+    });
+    const j = await res.json();
+    if (!res.ok) { console.warn('[web answer]', res.status, j.error?.message); return null; }
+    spend.add(`anthropic:${model}`, j.usage);
+    spend.addUSD('anthropic', 0.01 * (j.usage?.server_tool_use?.web_search_requests ?? 1));
+    return (j.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('').replace(/\s+/g, ' ').trim() || null;
+  } catch (err) { console.warn('[web answer]', err.message); return null; }
+});
 // A site's search URL read from its home page HTML (no rendering), so a first search can skip the home page.
 handle('tab:discover-search', async (url) => {
   if (!/^https?:\/\//i.test(String(url))) return null;

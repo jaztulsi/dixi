@@ -8,61 +8,145 @@
    "name": "AirPods"
   },
   {
+   "name": "AirPods 5",
+   "url": "https://www.apple.com/us/shop/goto/buy_airpods/airpods_5"
+  },
+  {
+   "name": "AirPods 5 wireless charging case",
+   "url": "https://www.apple.com/us/shop/goto/buy_airpods/airpods_5/with_wireless_charging_case"
+  },
+  {
    "name": "AirPods Max"
+  },
+  {
+   "name": "AirPods Max 2",
+   "url": "https://www.apple.com/us/shop/goto/buy_airpods/airpods_max_2"
   },
   {
    "name": "AirPods Pro"
   },
   {
-   "name": "AirTag"
+   "name": "AirPods Pro 3",
+   "url": "https://www.apple.com/us/shop/goto/buy_airpods/airpods_pro_3"
+  },
+  {
+   "name": "AirTag",
+   "url": "https://www.apple.com/us/shop/goto/buy_airtag/airtag"
+  },
+  {
+   "name": "Apple HomeView",
+   "aliases": [
+    "HomeView"
+   ],
+   "url": "https://www.apple.com/us/shop/goto/buy_home/apple_homeview"
   },
   {
    "name": "Apple TV"
   },
   {
-   "name": "Apple TV 4K"
+   "name": "Apple TV 4K",
+   "url": "https://www.apple.com/us/shop/goto/buy_tv/apple_tv_4k"
   },
   {
    "name": "Apple Vision Pro"
   },
   {
-   "name": "Apple Watch Series 12"
+   "name": "Apple Watch Series 12",
+   "url": "https://www.apple.com/us/shop/goto/buy_watch/apple_watch_series_12"
   },
   {
-   "name": "Apple Watch Ultra 4"
+   "name": "Apple Watch Ultra 4",
+   "url": "https://www.apple.com/us/shop/goto/buy_watch/apple_watch_ultra_4"
   },
   {
-   "name": "HomePod"
+   "name": "Apple Watch se 3",
+   "url": "https://www.apple.com/us/shop/goto/buy_watch/apple_watch_se"
   },
   {
-   "name": "HomePod Mini 2"
+   "name": "HomePod",
+   "url": "https://www.apple.com/us/shop/goto/buy_homepod/homepod"
+  },
+  {
+   "name": "HomePod Mini 2",
+   "url": "https://www.apple.com/us/shop/goto/buy_homepod/homepod_mini"
+  },
+  {
+   "name": "Mac Mini",
+   "url": "https://www.apple.com/us/shop/goto/buy_mac/mac_mini"
+  },
+  {
+   "name": "Mac Studio",
+   "url": "https://www.apple.com/us/shop/goto/buy_mac/mac_studio"
+  },
+  {
+   "name": "MacBook Air",
+   "url": "https://www.apple.com/us/shop/goto/buy_mac/macbook_air"
+  },
+  {
+   "name": "MacBook Neo",
+   "url": "https://www.apple.com/us/shop/goto/buy_mac/macbook_neo"
+  },
+  {
+   "name": "MacBook Pro",
+   "url": "https://www.apple.com/us/shop/goto/buy_mac/macbook_pro"
+  },
+  {
+   "name": "Studio Display",
+   "url": "https://www.apple.com/us/shop/goto/buy_mac/mac_studio_display"
+  },
+  {
+   "name": "Studio Display XDR",
+   "url": "https://www.apple.com/us/shop/goto/buy_mac/studio_display_xdr"
+  },
+  {
+   "name": "iMac",
+   "url": "https://www.apple.com/us/shop/goto/buy_mac/imac"
   },
   {
    "name": "iPad"
   },
   {
-   "name": "iPad Air"
+   "name": "iPad 11",
+   "url": "https://www.apple.com/us/shop/goto/buy_ipad/ipad"
+  },
+  {
+   "name": "iPad Air",
+   "url": "https://www.apple.com/us/shop/goto/buy_ipad/ipad_air"
+  },
+  {
+   "name": "iPad Mini",
+   "url": "https://www.apple.com/us/shop/goto/buy_ipad/ipad_mini"
+  },
+  {
+   "name": "iPad Pro",
+   "url": "https://www.apple.com/us/shop/goto/ipad_pro/select"
   },
   {
    "name": "iPhone"
   },
   {
-   "name": "iPhone 16"
+   "name": "iPhone 16",
+   "url": "https://www.apple.com/us/shop/goto/buy_iphone/iphone_16"
   },
   {
-   "name": "iPhone 17"
+   "name": "iPhone 17",
+   "url": "https://www.apple.com/us/shop/goto/buy_iphone/iphone_17"
   },
   {
-   "name": "iPhone 17e"
+   "name": "iPhone 17e",
+   "url": "https://www.apple.com/us/shop/goto/buy_iphone/iphone_17e"
   },
   {
-   "name": "iPhone 18 Pro"
+   "name": "iPhone 18 Pro",
+   "url": "https://www.apple.com/us/shop/goto/buy_iphone/iphone_18_pro"
   },
   {
-   "name": "iPhone Air"
+   "name": "iPhone Air",
+   "url": "https://www.apple.com/us/shop/goto/buy_iphone/iphone_air"
   },
   {
-   "name": "iPhone Duo"
+   "name": "iPhone Duo",
+   "url": "https://www.apple.com/us/shop/goto/buy_iphone/iphone_duo"
   }
  ]
 }

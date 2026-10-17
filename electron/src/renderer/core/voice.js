@@ -86,8 +86,8 @@ export function describe(s) {
 
 export class VoiceAgent {
   constructor({ deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry = null, cache = null, agent = null,
-    onChange = () => {}, trace = () => {}, followUpMS = 15000, settleMS = 650, specMS = 300 }) {
-    Object.assign(this, { deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry, cache, agent, onChange, trace, followUpMS, settleMS, specMS });
+    onChange = () => {}, trace = () => {}, followUpMS = 10000, settleMS = 650, specMS = 300, terms = [] }) {
+    Object.assign(this, { deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry, cache, agent, onChange, trace, followUpMS, settleMS, specMS, terms });
     this.spec = new Map();  // clause words → understanding started early, at a short pause
     this.isListening = false;
     this.isStarting = false;
@@ -157,7 +157,7 @@ export class VoiceAgent {
   keyterms() {
     const names = [...(this.registry?.names() ?? [])].slice(-40);
     const titles = (this.tabs?.visibleTabs ?? []).map((t) => (t.title || '').split(/\s[|–—:·-]\s/)[0]).filter((s) => s && s.length < 30);
-    return [...new Set(['Dixi', 'Hey Dixi', ...names, ...titles].map((s) => s.replace(/,/g, ' ').trim()).filter(Boolean))].slice(0, 50);
+    return [...new Set(['Dixi', 'Hey Dixi', ...(this.terms ?? []), ...names, ...titles].map((s) => s.replace(/,/g, ' ').trim()).filter(Boolean))].slice(0, 50);
   }
   updateKeyterms() { if (this.isListening && this.deepgram?.control) this.deepgram.control({ type: 'Configure', keyterms: this.keyterms() }); }
 
@@ -195,6 +195,8 @@ export class VoiceAgent {
     if (json.event === 'StartOfTurn') { this.refreshAffordances(); return; }
     if (json.event === 'TurnResumed') return;
     if (!text || this.turnsDone.has(turn)) return;
+    // Mostly another language (people talking nearby; Dixi listens for English): not for Dixi.
+    if ((text.match(/[^\u0000-\u024f\s\d\p{P}\p{S}]/gu) ?? []).length > text.replace(/\s/g, '').length * 0.3) return;
     const cmd = this.addressed(text);
     this.set({ liveTranscript: text, isAwake: cmd != null });
     const final = json.event === 'EndOfTurn';
@@ -243,11 +245,22 @@ export class VoiceAgent {
     if (ended) this.dispatch(st, last);
     // Act at a pause only on a whole command: not half a sentence ("…the features of"), not a word
     // still being transcribed ("Amazon-", an open quote), and never a question (answered once, whole).
-    else if (!incomplete(last) && !QUESTION.test(last) && !/[-–—]["”']?\s*$/.test(command) && ((command.match(/"/g) ?? []).length % 2 === 0)) {
-      st.timer = setTimeout(() => { st.timer = null; this.dispatch(st, last); }, this.settleMS);
-      // Start understanding at a short pause; acting still waits for the settle (or the end of the turn).
+    else if (!incomplete(last) && !/[-–—]["”']?\s*$/.test(command) && ((command.match(/"/g) ?? []).length % 2 === 0)) {
+      if (!QUESTION.test(last) && !this.namesUnknownSite(last)) st.timer = setTimeout(() => { st.timer = null; this.dispatch(st, last); }, this.settleMS);
+      // Start understanding at a short pause (ready by the end of the sentence); acting waits.
       if (this.specMS < this.settleMS) st.specTimer = setTimeout(() => this.speculate(last), this.specMS);
     }
+  }
+
+  /**
+   * "take me to Maya…", "…on Zentora": a site you haven't used yet may still be growing ("Maya Indian
+   * Kitchen"), so it waits for the end of the sentence. Sites you've used open while you talk.
+   */
+  namesUnknownSite(clause) {
+    const m = clause.match(/\b(?:open|go to|take me to|show me|pull up|bring up|launch|visit|navigate to|head to|(?:website|site) (?:of|for)|on|at|from)\s+(?:up\s+)?(?:the\s+)?(.+)$/i);
+    if (!m) return false;
+    const name = normName(m[1].replace(/\s+(website|site|app|page)$/i, ''));
+    return Boolean(name) && !(this.registry?.names() ?? []).some((n) => normName(n) === name);
   }
 
   speculate(text) {
