@@ -165,7 +165,8 @@ export class VoiceAgent {
   handleMessage(raw) {
     let json;
     try { json = JSON.parse(raw); } catch { return; }
-    if (json.type === 'Error' || json.type === 'FatalError') { console.warn('[voice]', json.description ?? json.message); return; }
+    // Say it on screen: a silent speech-service error looks like Dixi ignoring you.
+    if (json.type === 'Error' || json.type === 'FatalError') { console.warn('[voice]', json.description ?? json.message); this.set({ statusLine: `Voice problem: ${String(json.description ?? json.message ?? 'speech service error').slice(0, 120)}` }); return; }
     if (json.type === 'TurnInfo') this.handleTurn(json);
   }
 

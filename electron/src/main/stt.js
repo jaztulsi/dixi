@@ -21,7 +21,8 @@ export class ElevenLabsBridge {
     if (!this.apiKey) return Promise.resolve({ ok: false, error: 'ELEVENLABS_API_KEY is not set in .env' });
     this.close();
     const q = new URLSearchParams({ model_id: 'scribe_v2_realtime', audio_format: 'pcm_16000', commit_strategy: 'vad', vad_silence_threshold_secs: this.silenceSecs, language_code: 'en' });
-    for (const k of keyterms.slice(0, 50)) q.append('keyterms', String(k).slice(0, 40));
+    // ElevenLabs refuses the whole connection over one bad keyterm (at most 20 characters each).
+    for (const k of keyterms.map((x) => String(x).trim()).filter((x) => x && x.length <= 20).slice(0, 50)) q.append('keyterms', k);
     const ws = new WebSocket(`${ENDPOINTS.elevenlabs.stt}?${q}`, { headers: { 'xi-api-key': this.apiKey } });
     this.ws = ws;
     const send = (event, transcript) => this.emit('deepgram:message', JSON.stringify({ type: 'TurnInfo', event, turn_index: this.turn, transcript }));
@@ -34,7 +35,7 @@ export class ElevenLabsBridge {
         try { m = JSON.parse(data.toString()); } catch { return; }
         if (m.message_type === 'partial_transcript' && m.text?.trim()) send('Update', m.text);
         else if (m.message_type === 'committed_transcript') { if (m.text?.trim()) { send('EndOfTurn', m.text); this.turn++; } }
-        else if (/error|exceeded|throttled|limited|overflow|exhausted/.test(m.message_type ?? '')) this.emit('deepgram:message', JSON.stringify({ type: 'Error', description: `${m.message_type}: ${m.error ?? ''}` }));
+        else if (/error|invalid|exceeded|throttled|limited|overflow|exhausted|unauthori[sz]ed|quota/.test(m.message_type ?? '')) this.emit('deepgram:message', JSON.stringify({ type: 'Error', description: `${m.message_type}: ${m.error ?? ''}` }));
       });
       ws.on('close', (code) => { if (this.ws === ws) { this.ws = null; this.emit('deepgram:closed', code); } });
     });
