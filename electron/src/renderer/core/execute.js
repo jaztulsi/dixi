@@ -39,10 +39,35 @@ export class Executor {
     let r;
     try { r = await fn.call(this, step, said, signal); } catch (err) { r = fail(err.message || String(err)); }
     // A human check in the way explains whatever happened (or didn't): hand it over, never solve it.
-    if (/^https?:/.test(this.tabs.getCurrentURL()) && !['media', 'scroll', 'zoom', 'tab', 'stop'].includes(step.act) && await this.tabs.dx('botWall') === true) {
+    // Only when it can matter (a step that failed, or a site just opened): on a busy page this check
+    // waits for the page's scripts (~2 s on a heavy results page), so a success never pays for it.
+    if ((!r.ok || step.act === 'open') && /^https?:/.test(this.tabs.getCurrentURL()) && await this.tabs.dx('botWall') === true) {
       return ok('The site wants you to prove you’re human first. Do the check on screen, then say it again', { botWall: true });
     }
     return r;
+  }
+
+  /**
+   * Called while you're still talking (from the early understanding): look up the site, its search
+   * address and open a connection, so acting at the end of the sentence starts from there.
+   * Read-only: nothing on screen changes. Errors are ignored.
+   */
+  prefetch(intent) {
+    for (const st of intent?.steps ?? []) {
+      if (st.act === 'order' && !st.said && this.catalog) {
+        const fam = this.catalog.match(st.item);
+        if (fam?.url) window.dixi?.preconnect?.(fam.url);
+        if (fam) continue;
+      }
+      if (!['open', 'search', 'find_item', 'order'].includes(st.act)) continue;
+      const said = st.said || st.guess || (st.urls?.[0] ? hostOf(st.urls[0]).split('.').slice(-2, -1)[0] : '');
+      if (!said) continue;
+      this.resolve({ said, guess: st.guess ?? '', urls: st.urls ?? [], fast: !st.noFast }).then((r) => {
+        if (r?.status !== 'ok') return;
+        window.dixi?.preconnect?.(r.url);
+        if (st.act !== 'open' && !r.searchTemplate) window.dixi?.discoverSearch?.(r.url);
+      }).catch(() => {});
+    }
   }
 
   /** Timing marks inside a step (in traces), to see where the seconds go. */
@@ -206,6 +231,7 @@ export class Executor {
       }
     }
     if (!site.here || tpl) { const l = await this.land({ ...site, here: false }); if (!l.ok) return l; if (l.name) site.name = l.name; if (site.optimistic) this.registry?.confirm?.(site.said, { url: site.url, host: site.host, finalHost: hostOf(this.tabs.getCurrentURL()), name: l.name ?? site.name }); }
+    this.mark('landed');
     await this.tabs.dx('dismissOverlays');
     // Shop sites build their header with JavaScript after the page arrives: look for a few seconds.
     let f = await this.waitFor(() => this.tabs.dx('findSearch'), (x) => x && typeof x === 'object' && (x.how !== 'none' || x.opensearch), 3000);
@@ -222,7 +248,17 @@ export class Executor {
       if (v) { await this.tabs.dx('clickRef', v.ref, false); await sleep(400); f = await this.tabs.dx('findSearch'); }
     }
     if (f?.how !== 'input') return fail(`I couldn't find a search box on ${site.name}`);
+    this.mark('search box');
     const before = this.tabs.getCurrentURL();
+    // Its form says where results live: go there directly (no typing, no waiting on Enter).
+    const ft = await this.tabs.dx('formTemplate', f.ref);
+    if (typeof ft === 'string' && /^https?:\/\/[^{]+\{q\}/.test(ft)) {
+      await this.tabs.navigate(ft.replace('{q}', encodeURIComponent(query)));
+      if (await this.searchLanded(query, before, 4000)) { this.mark('form results'); this.learnTemplate(site, query); return ok(`${site.name}: “${query}”`); }
+      await this.tabs.goBack();
+      f = await this.waitFor(() => this.tabs.dx('findSearch'), (x) => x?.how === 'input', 2000);
+      if (f?.how !== 'input') return fail(`I couldn't find a search box on ${site.name}`);
+    }
     // Type for real; if the page rebuilt itself meanwhile (the box was replaced or emptied), find it again once.
     for (let attempt = 0; ; attempt++) {
       const focused = await this.tabs.dx('focus', f.ref);
@@ -236,20 +272,26 @@ export class Executor {
       f = await this.tabs.dx('findSearch');
       if (f?.how !== 'input') return fail(`I couldn't find a search box on ${site.name}`);
     }
+    this.mark('typed');
     // An autocomplete with a highlighted suggestion would swap your words for its own on Enter.
     await sleep(120);
+    // Did the page start going somewhere? (A navigation or a new address within ~0.7 s.)
+    const t = this.tabs.activeTab;
+    const going = () => this.tabs.next(t, ['start', 'navigate'], 700).then((r) => Boolean(r && r !== 'fail') || this.tabs.getCurrentURL() !== before);
+    let went = going();
     if (await this.tabs.dx('suggesting', f.ref) && (await this.tabs.dx('closeSuggestions', f.ref)) === 'open') await this.tabs.dx('submitSearch', f.ref);
     else await this.tabs.key('Return');
-    if (!(await this.searchLanded(query, before, 2500))) {
+    if (!(await went)) {
       const form = await this.tabs.dx('formURL', f.ref);
+      went = going();
       await this.tabs.dx('submitSearch', f.ref);   // some boxes only submit with their button
-      if (!(await this.searchLanded(query, before, 2500))) {
+      if (!(await went)) {
         // Last resort: what the browser itself would load for this form (the page's script swallowed both).
         if (typeof form !== 'string' || !/^https?:/.test(form)) return fail(`I typed “${query}” on ${site.name} but no results came up`);
         await this.tabs.navigate(form);
-        if (!(await this.searchLanded(query, before))) return fail(`I typed “${query}” on ${site.name} but no results came up`);
       }
     }
+    if (!(await this.searchLanded(query, before))) return fail(`I typed “${query}” on ${site.name} but no results came up`);
     this.learnTemplate(site, query);
     return ok(`${site.name}: “${query}”`);
   }
@@ -317,7 +359,9 @@ export class Executor {
       return this.addToCart({ ...step, picked: hit.name }, said, s.name);
     }
     if (!found.ok) return found;
+    this.mark('searched');
     const pick = await this.pickResult(step.item);
+    this.mark('picked');
     if (!pick) return fail(`I searched ${s.name} for “${step.item}” but didn't see it in the results`);
     if (pick.add) {
       const r = await this.addToCart({ ...step, picked: pick.text, addRef: pick.add }, said, s.name);
@@ -527,12 +571,26 @@ export class Executor {
   }
 
   /** The result that best matches the words (all words present, fewest extra), else the first one. */
+  /**
+   * The result that best matches what you asked for. No waiting for the list to settle: the moment a
+   * result has all your words it's the one; otherwise the best partial match once ~2.5 s have passed.
+   */
   async pickResult(words) {
-    const list = await this.stableResults(1);
-    if (!list?.length) return null;
     const want = tokens(words).map((w) => w.replace(/s$/, ''));
     const score = (r) => { const have = tokens(r.text).map((w) => w.replace(/s$/, '')); const hits = want.filter((w) => have.includes(w)).length; return hits === want.length ? 100 - have.length : hits; };
-    return [...list].sort((a, b) => score(b) - score(a))[0];
+    const t0 = Date.now();
+    let best = null;
+    for (;;) {
+      this.check();
+      const list = await this.tabs.dx('results');
+      if (Array.isArray(list) && list.length) {
+        const top = [...list].sort((a, b) => score(b) - score(a))[0];
+        if (score(top) >= 20) return top;
+        best = top;
+      }
+      if (Date.now() - t0 > (best ? 2500 : 6000)) return best;
+      await sleep(200);
+    }
   }
 
   async waitFor(get, good, ms) {

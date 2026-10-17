@@ -14,7 +14,8 @@
     "demo": "node eval/demo.js",
     "eval": "node eval/run.js",
     "stt": "node eval/audio.js",
-    "refresh-apple-catalog": "node scripts/refresh-apple-catalog.js"
+    "refresh-apple-catalog": "node scripts/refresh-apple-catalog.js",
+    "refresh-blocklist": "node scripts/refresh-blocklist.js"
   },
   "dependencies": {
     "dotenv": "18.0.8",

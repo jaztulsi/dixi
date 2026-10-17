@@ -86,7 +86,7 @@ export function describe(s) {
 
 export class VoiceAgent {
   constructor({ deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry = null, cache = null, agent = null,
-    onChange = () => {}, trace = () => {}, followUpMS = 10000, settleMS = 650, specMS = 300, terms = [] }) {
+    onChange = () => {}, trace = () => {}, followUpMS = 10000, settleMS = 550, specMS = 250, terms = [] }) {
     Object.assign(this, { deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry, cache, agent, onChange, trace, followUpMS, settleMS, specMS, terms });
     this.spec = new Map();  // clause words → understanding started early, at a short pause
     this.isListening = false;
@@ -270,7 +270,10 @@ export class VoiceAgent {
     const ctrl = new AbortController();
     this.ctrl.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
     const url = this.tabs.getCurrentURL();
-    this.spec.set(key, { ctrl, url, at: Date.now(), parsing: interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal: ctrl.signal }) });
+    const parsing = interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal: ctrl.signal });
+    this.spec.set(key, { ctrl, url, at: Date.now(), parsing });
+    // Warm up what acting will need (site lookup, search address, connection) while you finish talking.
+    parsing.then((p) => { if (!ctrl.signal.aborted && p?.intent) this.executor?.prefetch?.(p.intent); }).catch(() => {});
   }
 
   /** An early understanding of exactly these words, if the page hasn't changed since it started. */

@@ -255,17 +255,58 @@ handle('answer:web', async (question) => {
   } catch (err) { console.warn('[web answer]', err.message); return null; }
 });
 // A site's search URL read from its home page HTML (no rendering), so a first search can skip the home page.
-handle('tab:discover-search', async (url) => {
-  if (!/^https?:\/\//i.test(String(url))) return null;
-  // The whole page: big sites put the link after ~1 MB of inline script (fetchPage stops at 400 KB).
-  const home = await tabsSession().fetch(String(url), { redirect: 'follow', signal: AbortSignal.timeout(2500) })
-    .then(async (r) => ({ ok: r.ok, url: r.url || url, html: await r.text() })).catch(() => null);
-  const tag = !home?.ok ? null : home.html.match(/<link\b[^>]*\btype=["']application\/opensearchdescription\+xml["'][^>]*>/i)?.[0];
-  const href = tag?.match(/\bhref=["']([^"']+)["']/i)?.[1];
-  if (!href) return null;
-  let abs; try { abs = new URL(href.replace(/&amp;/g, '&'), home.url).href; } catch { return null; }
-  return openSearchTemplate((await fetchPage(abs).catch(() => null))?.html ?? '');
+// A site's search URL read from its home page HTML (no rendering), so a first search skips the home
+// page: its OpenSearch link, else its own GET search form. One lookup per site (also while you talk).
+const discovered = new Map();  // origin → Promise<template | null>
+handle('tab:discover-search', (url) => {
+  let origin; try { origin = new URL(String(url)).origin; } catch { return null; }
+  if (!/^https?:/.test(origin)) return null;
+  if (!discovered.has(origin)) discovered.set(origin, discoverSearch(String(url)).catch(() => null));
+  return discovered.get(origin);
 });
+async function discoverSearch(url) {
+  // The whole page: big sites put the link after ~1 MB of inline script (fetchPage stops at 400 KB).
+  const home = await tabsSession().fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(2500) })
+    .then(async (r) => ({ ok: r.ok, url: r.url || url, html: await r.text() })).catch(() => null);
+  if (!home?.ok) return null;
+  const tag = home.html.match(/<link\b[^>]*\btype=["']application\/opensearchdescription\+xml["'][^>]*>/i)?.[0];
+  const href = tag?.match(/\bhref=["']([^"']+)["']/i)?.[1];
+  if (href) {
+    try {
+      const t = openSearchTemplate((await fetchPage(new URL(href.replace(/&amp;/g, '&'), home.url).href).catch(() => null))?.html ?? '');
+      if (t) return t;
+    } catch {}
+  }
+  return searchFormTemplate(home.html, home.url);
+}
+/** The page's own search form as a URL template: GET, a real action, its search box as {q}, hidden fields kept. */
+export function searchFormTemplate(html, base) {
+  const attr = (tag, a) => tag.match(new RegExp(`\\b${a}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1] ?? '';
+  const BOX = /^(q|query|search|searchterm|search_query|keyword|keywords|field-keywords|k|st|_nkw|term|text|s|p|w|ss|kw|searchtext|search-term)$/i;
+  let best = null;
+  for (const m of String(html).matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)) {
+    const form = m[1], body = m[2];
+    if ((attr(form, 'method') || 'get').toLowerCase() !== 'get') continue;
+    const action = attr(form, 'action').replace(/&amp;/g, '&');
+    if (!action || action === '#' || /^(javascript|mailto):/i.test(action)) continue;
+    const inputs = [...body.matchAll(/<input\b[^>]*>/gi)].map((x) => x[0]);
+    const box = inputs.find((i) => /type\s*=\s*["']search/i.test(i) && attr(i, 'name'))
+      ?? inputs.find((i) => BOX.test(attr(i, 'name')) && !/type\s*=\s*["'](hidden|submit|checkbox|radio)/i.test(i))
+      ?? inputs.find((i) => /search/i.test(`${attr(i, 'placeholder')} ${attr(i, 'aria-label')} ${attr(i, 'id')}`) && attr(i, 'name') && !/type\s*=\s*["'](hidden|submit)/i.test(i));
+    if (!box) continue;
+    const score = (/role\s*=\s*["']search/i.test(form) ? 2 : 0) + (/search|\/s\b|results|find/i.test(action) ? 2 : 0) + (/type\s*=\s*["']search/i.test(box) ? 1 : 0);
+    if (best && best.score >= score) continue;
+    let u;
+    try { u = new URL(action, base); } catch { continue; }
+    if (!/^https?:$/.test(u.protocol)) continue;
+    const params = new URLSearchParams(u.search);
+    for (const h of inputs.filter((i) => /type\s*=\s*["']hidden/i.test(i) && attr(i, 'name'))) params.set(attr(h, 'name'), attr(h, 'value').replace(/&amp;/g, '&'));
+    params.set(attr(box, 'name'), '__Q__');
+    u.search = params.toString();
+    best = { score, tpl: u.href.replace('__Q__', '{q}') };
+  }
+  return best?.tpl ?? null;
+}
 on('net:preconnect', (url) => { if (/^https?:\/\//i.test(url)) tabsSession().preconnect({ url, numSockets: 2 }); });
 
 handle('deepgram:open', (params) => deepgram.open({ keyterms: (params?.keyterms ?? []).slice(0, 50).map(String) }));

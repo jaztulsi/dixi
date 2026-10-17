@@ -43,6 +43,7 @@ export class TabManager {
     wv.addEventListener('did-navigate', (e) => { if (e.url.startsWith('data:')) return; tab.url = e.url; tab.title = ''; fire('navigate'); this.onChange(); });
     wv.addEventListener('did-navigate-in-page', (e) => { if (e.isMainFrame) { tab.url = e.url; fire('navigate'); this.onChange(); } });
     wv.addEventListener('did-start-loading', () => { tab.loading = true; this.onChange(); });
+    wv.addEventListener('did-start-navigation', (e) => { if (e.isMainFrame && !e.isInPlace && !e.isSameDocument) fire('start'); });
     wv.addEventListener('did-stop-loading', () => { tab.loading = false; fire('stop'); this.onChange(); });
     wv.addEventListener('did-fail-load', (e) => { if (e.isMainFrame && e.errorCode !== -3) { tab.failed = e.errorDescription; fire('fail'); } });
     wv.addEventListener('render-process-gone', () => { tab.crashed = true; tab.loading = false; fire('fail'); this.onChange(); });

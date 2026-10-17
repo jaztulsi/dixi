@@ -80,10 +80,14 @@ export function incomplete(text) {
   if (fastPath(text) && !QUESTION.test(String(text).trim())) return false;
   // A question may end on its preposition ("what is this video about", "who is it for").
   if (QUESTION.test(String(text).trim()) && t.length >= 4 && STRANDED.has(t.at(-1))) return false;
-  return t.length < 2 || FUNCTION.has(t.at(-1)) || DANGLING.has(t.at(-1));
+  if (t.length < 2 || FUNCTION.has(t.at(-1)) || DANGLING.has(t.at(-1))) return true;
+  // A verb still waiting for its object ("can you buy", "I want to order"), not a name ending in one
+  // ("Best Buy", "Google Play").
+  return VERB_END.has(t.at(-1)) && (t.length < 3 || FUNCTION.has(t.at(-2)) || ['i', 'we', 'to', 'you', 'me', 'please'].includes(t.at(-2)));
 }
+const VERB_END = new Set(['tell', 'give', 'buy', 'order', 'add', 'play', 'want', 'need', 'show', 'get', 'find']);
 const STRANDED = new Set(['about', 'for', 'from', 'at', 'in', 'on', 'to', 'with', 'into', 'up', 'out', 'by']);
-const DANGLING = new Set(['or', 'but', 'is', 'are', 'was', 'were', 'be', 'your', 'what', 'which', 'who', 'how', 'why', 'when', 'where', 'about', 'between', 'than', 'as', 'if', 'this', 'that', 'these', 'those', 'er', 'hmm', 'mm', 'tell', 'give', 'buy', 'order', 'add', 'play', 'want', 'need', 'i', 'we']);
+const DANGLING = new Set(['or', 'but', 'is', 'are', 'was', 'were', 'be', 'your', 'what', 'which', 'who', 'how', 'why', 'when', 'where', 'about', 'between', 'than', 'as', 'if', 'this', 'that', 'these', 'those', 'er', 'hmm', 'mm', 'i', 'we']);
 // Verbs and particles of the command itself; a query or item never starts with one.
 const LEAD_PARTICLE = new Set(['up', 'on', 'to', 'for', 'open', 'go', 'search', 'find', 'look', 'pull', 'bring', 'take', 'launch', 'visit', 'navigate', 'load']);
 const OPENING = /\b(open|go to|pull up|bring up|launch|visit|take me to|load up|navigate to|head to|fire up)\b/i;

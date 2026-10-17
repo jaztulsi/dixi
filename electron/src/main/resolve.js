@@ -200,7 +200,19 @@ export class Resolver {
    * @param said the name as spoken; guess = likely intended name if misheard; urls = interpreter's guesses
    * @returns {status:'ok', url, host, name, source, ms, entry} | {status:'ambiguous', options} | {status:'notfound'}
    */
-  async resolve({ said, guess = '', urls = [], fast = false }) {
+  /** Same question within a minute (asked early while you talk, then again to act): one lookup. */
+  resolve(q) {
+    const key = JSON.stringify([q.said, q.guess ?? '', q.urls ?? [], Boolean(q.fast)]);
+    this.memo ??= new Map();
+    const hit = this.memo.get(key);
+    if (hit && this.now() - hit.at < 60_000) return hit.p;
+    const p = this.resolveNow(q);
+    this.memo.set(key, { at: this.now(), p });
+    p.then((r) => { if (r?.status !== 'ok') this.memo.delete(key); }, () => this.memo.delete(key));
+    return p;
+  }
+
+  async resolveNow({ said, guess = '', urls = [], fast = false }) {
     const t0 = this.now();
     this.pages = new Map();
     const done = (r) => ({ ...r, ms: this.now() - t0 });

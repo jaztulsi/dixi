@@ -143,6 +143,20 @@ function formURL(k) {
   return u.href;
 }
 
+/** The search form as a URL template ({q} for the box): a GET form with a real action, fields kept. */
+function formTemplate(k) {
+  const el = get(k), form = el && el.closest('form');
+  const action = form?.getAttribute('action');
+  if (!form || !el.name || !action || action === '#' || /^javascript:/i.test(action) || (form.getAttribute('method') || 'get').toLowerCase() !== 'get') return null;
+  const u = new URL(action, location.href);
+  if (!/^https?:$/.test(u.protocol)) return null;
+  const p = new URLSearchParams(u.search);
+  for (const [n, v] of new FormData(form)) if (typeof v === 'string' && n !== el.name) p.set(n, v);
+  p.set(el.name, '__Q__');
+  u.search = p.toString();
+  return u.href.replace('__Q__', '{q}');
+}
+
 // ---- result lists: the biggest group of similar links in the main content ----
 const SPONSORED = /^(sponsored|ad|ads|advertisement|promoted|patrocinado)\b/i;
 function results() {
@@ -419,7 +433,7 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
+window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
   media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)) };
 })();`;
 
