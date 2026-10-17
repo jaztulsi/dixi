@@ -117,3 +117,15 @@ test('wake word by sound, at the start or after a sentence break; alone it opens
   await sleep(150);
   assert.equal(r.runs.length, 1, 'the command after "Hey Dixi" alone was heard');
 });
+
+test('understanding starts at a short pause and is reused when the turn ends (one model call)', async () => {
+  const r = rig();
+  r.turn(1, [['Update', 'open Zentora']]);
+  await sleep(380);
+  assert.equal(r.llmCalls.length, 1, 'started early');
+  assert.equal(r.runs.length, 0, 'but nothing done yet');
+  r.turn(1, [['EndOfTurn', 'Open Zentora.']]);
+  await sleep(120);
+  assert.equal(r.runs.length, 1);
+  assert.equal(r.llmCalls.length, 1, 'the early understanding was used');
+});

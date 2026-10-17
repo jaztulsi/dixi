@@ -33,7 +33,7 @@ export const INTENT_SCHEMA = {
 export const INTERPRET_PROMPT = `You turn one spoken command for a web browser into JSON steps. The words come from speech recognition: expect filler, false starts and misheard names.
 
 Acts:
-open: go to a website, web app or online product.
+open: go to a website, web app or online product. A named part of it ("the <site> menu", "<site> deals", "my <site> orders") is open, then click with value = that part's words.
 search: search a site for "query".
 find_item: only look at / find a product ("item") on a store, no buying words.
 order: they want to buy / order / get / grab / "I want" / "can I get" something ("item", qty if said): add it to the cart. "said" = the store, or "" if no store is named (still an order).
@@ -161,6 +161,7 @@ const CONTROLS = [
   [/^zoom in$/, 'zoom', 'in'], [/^zoom out$/, 'zoom', 'out'], [/^(reset zoom|normal zoom)$/, 'zoom', 'reset'],
   [/^(stop|cancel|never ?mind|stop everything|cancel that|stop that)$/, 'stop', ''],
   [/^((go to|open|show( me)?|view|check) )?(my |the )?(shopping )?(cart|bag|basket)$/, 'cart', ''],
+  [/^((go|proceed|continue) (to|with) )?(the )?(purchase|checkout|check out)$|^(check out|checkout|buy it|purchase it|buy this|purchase this)$/, 'checkout', ''],
   [/^(increase|raise|bump up) the (quantity|amount|number)$|^(add )?one more( of (these|this|them|it))?$/, 'quantity', 'up'],
   [/^(decrease|lower|reduce) the (quantity|amount|number)$|^one (less|fewer)$/, 'quantity', 'down'],
 ];
@@ -246,6 +247,11 @@ export function validate(raw, text) {
     if (s.act === 'search' && !s.query) errors.push('search needs a query');
     if ((s.act === 'order' || s.act === 'find_item') && !s.item) errors.push(`${s.act} needs an item`);
     if (s.act === 'nth' && !s.n) errors.push('nth needs n');
+    // What to click comes from the words, not from a button the model saw on the page.
+    if (s.act === 'click' && s.value && !findSpan(words, s.value)) errors.push(`click "${s.value}" was not said`);
+    // "the Burger King menu": a part of the site squeezed into the open step becomes open, then click it.
+    const part = s.act === 'open' && (s.query || s.item || s.value);
+    if (part) { steps.push({ ...s, query: '', item: '', value: '' }); steps.push({ ...step('click'), value: part }); continue; }
     steps.push(s);
   }
   return { intent: { steps, clarify: String(raw.clarify ?? '').trim() }, errors };
@@ -273,6 +279,10 @@ export async function interpret(text, ctx = {}, { llm, tiers, signal = null, cac
     let raw = null;
     try { raw = JSON.parse(content); } catch {}
     const v = validate(raw, text);
+    // A question the model filed as "not a browser request": answer it (from the page if one is open).
+    if (v.intent && v.intent.steps.length && v.intent.steps.every((x) => x.act === 'none') && /\?\s*$|^(what|who|whose|how|when|where|why|which|is|are|does|do|did|can|tell me)\b/i.test(text.trim())) {
+      v.intent.steps = [step(ctx.url ? 'ask_page' : 'ask_web')];
+    }
     // A question instead of steps on the fast tier: let the stronger tier try to act first.
     if (v.intent && !v.intent.steps.length && v.intent.clarify && tier === 'llm' && tiers.strong?.length) { last = v; continue; }
     if (v.intent && !v.errors.length) return done(v.intent, tier);

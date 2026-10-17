@@ -213,6 +213,18 @@ export function openSearchTemplate(xml) {
   return tpl.includes('{q}') ? tpl : null;
 }
 handle('tab:opensearch', async (url) => openSearchTemplate((await fetchPage(String(url)).catch(() => null))?.html ?? ''));
+// A site's search URL read from its home page HTML (no rendering), so a first search can skip the home page.
+handle('tab:discover-search', async (url) => {
+  if (!/^https?:\/\//i.test(String(url))) return null;
+  // The whole page: big sites put the link after ~1 MB of inline script (fetchPage stops at 400 KB).
+  const home = await tabsSession().fetch(String(url), { redirect: 'follow', signal: AbortSignal.timeout(2500) })
+    .then(async (r) => ({ ok: r.ok, url: r.url || url, html: await r.text() })).catch(() => null);
+  const tag = !home?.ok ? null : home.html.match(/<link\b[^>]*\btype=["']application\/opensearchdescription\+xml["'][^>]*>/i)?.[0];
+  const href = tag?.match(/\bhref=["']([^"']+)["']/i)?.[1];
+  if (!href) return null;
+  let abs; try { abs = new URL(href.replace(/&amp;/g, '&'), home.url).href; } catch { return null; }
+  return openSearchTemplate((await fetchPage(abs).catch(() => null))?.html ?? '');
+});
 on('net:preconnect', (url) => { if (/^https?:\/\//i.test(url)) tabsSession().preconnect({ url, numSockets: 2 }); });
 
 handle('deepgram:open', (params) => deepgram.open({ keyterms: (params?.keyterms ?? []).slice(0, 50).map(String) }));

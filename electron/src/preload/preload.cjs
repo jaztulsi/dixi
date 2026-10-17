@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('dixi', {
   },
   tabExec: (id, code, timeoutMs) => ipcRenderer.invoke('tab:exec', id, code, timeoutMs),
   openSearchTemplate: (url) => ipcRenderer.invoke('tab:opensearch', url),
+  discoverSearch: (url) => ipcRenderer.invoke('tab:discover-search', url),
   preconnect: (url) => ipcRenderer.send('net:preconnect', url),
   catalog: () => ipcRenderer.invoke('catalog:get'),
   trace: (line) => ipcRenderer.send('trace:write', line),

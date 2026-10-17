@@ -29,10 +29,12 @@ const PRICES = {
 };
 
 const DEFAULT_TIERS = {
-  fast: 'groq:qwen/qwen3.8-27b,cerebras:qwen-3.8-27b,groq:openai/gpt-oss-20b',
+  fast: 'cerebras:qwen-3.8-27b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b',
   strong: 'groq:openai/gpt-oss-120b,cerebras:gpt-oss-120b,anthropic:claude-haiku-5-5',
   agent: 'groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-120b',
   answer: 'groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b',
+  // Reading screenshots when nothing on the page is labelled (icon-only buttons): strongest first.
+  vision: 'anthropic:claude-sonnet-5-5,groq:qwen/qwen3.8-27b',
 };
 
 export function tiers(config) {
@@ -125,7 +127,10 @@ function forProvider(provider, body) {
 // Anthropic Messages API ⇄ OpenAI chat shape (system prompt, JSON-schema output via a forced tool).
 function anthropicRequest(key, model, body) {
   const system = body.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
-  const messages = body.messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: typeof m.content === 'string' ? m.content : m.content.map((p) => p.text ?? '').join('\n') }));
+  const part = (p) => (p.type === 'image_url'
+    ? { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: String(p.image_url.url).replace(/^data:image\/\w+;base64,/, '') } }
+    : { type: 'text', text: p.text ?? '' });
+  const messages = body.messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: typeof m.content === 'string' ? m.content : m.content.map(part) }));
   const schema = body.response_format?.json_schema?.schema;
   const payload = { model, max_tokens: body.max_tokens ?? 1024, system, messages, temperature: body.temperature ?? 0 };
   if (schema) Object.assign(payload, { tools: [{ name: 'emit', description: 'Return the result.', input_schema: schema }], tool_choice: { type: 'tool', name: 'emit' } });

@@ -228,7 +228,12 @@ export class Resolver {
     // (the product's own site "music.<brand>.com" over the brand's page about it).
     // ...and the fewest host words you didn't say ("selection.<brand>.com" for just "<Brand>").
     const rank = (h) => (h.exact ? 0 : 10) + h.extra - 0.4 * hostWords(h.host, names) + 0.6 * extraHostWords(h.host, names) + (h.signIn ? 0.5 : 0);
-    let hits = urls.length ? await tryAll(urls, 'model') : [];
+    // The name run together as a .com is the commonest home: one evidence-checked fetch instead of a ~2 s
+    // web search when the model offered no address. A page that doesn't name itself so is still rejected.
+    // ponytail: .com only; other TLDs come from the model's urls or the search fallback.
+    const joined = names.map((n) => content(n).join('')).filter((j) => /^[a-z0-9]{3,30}$/.test(j)).map((j) => `https://www.${j}.com/`);
+    const first = [...new Set([...urls, ...joined])];
+    let hits = first.length ? await tryAll(first, 'model') : [];
     if (!hits.length || !hits[0].exact) {
       const more = await Promise.all(names.flatMap((n) => [this.searchCandidates(`${n} official site`), this.wikidataCandidates(n)]));
       const found = await tryAll([...new Set(more.flat())].filter((u) => !hits.some((h) => u.includes(h.host))), 'search');

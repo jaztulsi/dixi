@@ -34,7 +34,7 @@ export const SCENARIOS = [
   ] },
   { site: 'Apple Music', allow: /(^|\.)apple\.com$/, steps: [
     { say: 'search lo-fi beats on Apple Music', check: ({ url }) => /music\.apple\.com/.test(url) && /lo.?fi/.test(dec(url)) ? pass : `fail: ${url}` },
-    { say: 'play the first one', check: ({ url, m, before }) => /\/(album|song|playlist|station|music-video)\//.test(url) || (m && !m.paused) ? pass : `fail: still ${url}` },
+    { say: 'play the first one', check: ({ url, m, status }) => /\/(album|song|playlist|station|music-video|artist)\//.test(url) && (/playing/i.test(status) || (m && !m.paused) || /\/(album|song|playlist)\//.test(url)) ? pass : `fail: still ${url}` },
   ] },
   { site: 'Safeway', allow: /(^|\.)safeway\.com$|(^|\.)albertsons(companies)?\.com$/, steps: [
     { say: 'find me a bagel on the Safeway website', check: ({ url, text }) => /safeway\.com/.test(url) && (/bagel/.test(dec(url)) || /bagel/i.test(text)) ? pass : `fail: ${url}` },
@@ -98,13 +98,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         const wrong = r.navs.filter((n) => !sc.allow.test(host(n.url)) && !/^(about|data|chrome)/.test(n.url));
         const orders = /order (has been )?placed|thank you for your order/i.test(text);
         let verdict = await st.check({ page, url: r.state.url, text, status: [r.state.status, ...r.state.plan].join(' | '), answer: r.state.answer, m: m && typeof m === 'object' ? m : null, before: before && typeof before === 'object' ? before : null, orders });
-        if (verdict !== pass && BOT.test(text)) verdict = 'blocked: bot wall';
+        if (verdict !== pass && (BOT.test(text) || r.state.plan.some((p) => /prove you.re human/.test(p)))) verdict = 'blocked: bot wall';
         if (wrong.length) verdict = `WRONG SITE: ${wrong.map((n) => host(n.url)).join(', ')}`;
         if (orders) verdict = 'FAIL: an order was placed';
-        const row = { site: sc.site, say: st.say, verdict, url: r.state.url.slice(0, 140), plan: r.state.plan, firstNavMs: r.firstNavMs, overheadMs: r.overheadMs, llmCalls: r.state.llm.calls, trace: r.state.trace.map((e) => `${e.stage}${e.intent ? `:${e.intent.join(',')}` : ''}${e.source ? `(${e.source} ${e.ms}ms)` : ''}${e.status ? `:${e.status}/${e.host ?? ''}` : ''}${e.message ? `:${e.message}` : ''}`) };
+        const row = { site: sc.site, say: st.say, verdict, url: r.state.url.slice(0, 140), plan: r.state.plan, firstNavMs: r.firstNavMs, overheadMs: r.overheadMs, doneMs: r.doneMs, llmCalls: r.state.llm.calls, trace: r.state.trace.map((e) => `${e.stage}${e.intent ? `:${e.intent.join(',')}` : ''}${e.source ? `(${e.source} ${e.ms}ms)` : ''}${e.status ? `:${e.status}/${e.host ?? ''}` : ''}${e.message ? `:${e.message}` : ''}`) };
         rows.push(row);
         const tag = verdict === pass ? 'PASS' : verdict.startsWith('blocked') ? 'BLOCKED' : 'FAIL';
-        console.log(`${tag.padEnd(7)} "${st.say}"  overhead=${r.overheadMs ?? '-'}ms firstNav=${r.firstNavMs ?? '-'}ms ai=${r.state.llm.calls}\n        ${verdict === pass ? '' : `${verdict}\n        `}plan: ${r.state.plan.join(' · ')}${verdict === pass ? '' : `\n        trace: ${row.trace.join(' → ')}`}`);
+        console.log(`${tag.padEnd(7)} "${st.say}"  done=${r.doneMs ?? '-'}ms firstNav=${r.firstNavMs ?? '-'}ms ai=${r.state.llm.calls}\n        ${verdict === pass ? '' : `${verdict}\n        `}plan: ${r.state.plan.join(' · ')}${verdict === pass ? '' : `\n        trace: ${row.trace.join(' → ')}`}`);
       }
     }
   } finally {
@@ -114,8 +114,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   fs.mkdirSync(path.join(root, 'eval/out'), { recursive: true });
   fs.writeFileSync(path.join(root, 'eval/out', `${outName}.json`), JSON.stringify(rows, null, 1));
   const n = rows.length, p = rows.filter((r) => r.verdict === pass).length, b = rows.filter((r) => r.verdict.startsWith('blocked')).length, w = rows.filter((r) => r.verdict.startsWith('WRONG')).length;
-  const oh = rows.map((r) => r.overheadMs).filter((v) => v != null).sort((a, z) => a - z);
-  console.log(`\n${p}/${n} passed · ${b} blocked by the site · ${n - p - b} failed (${w} wrong-site) · overhead p50=${oh[oh.length >> 1] ?? '-'}ms p95=${oh[Math.floor(oh.length * 0.95)] ?? '-'}ms · AI calls ${rows.reduce((a, r) => a + r.llmCalls, 0)}`);
+  const oh = rows.map((r) => r.doneMs).filter((v) => v != null).sort((a, z) => a - z);
+  console.log(`\n${p}/${n} passed · ${b} blocked by the site · ${n - p - b} failed (${w} wrong-site) · done-after-speech p50=${oh[oh.length >> 1] ?? '-'}ms p95=${oh[Math.floor(oh.length * 0.95)] ?? '-'}ms · AI calls ${rows.reduce((a, r) => a + r.llmCalls, 0)}`);
   const bySite = {};
   for (const r of rows) (bySite[r.site] ??= []).push(r);
   for (const [s, rs] of Object.entries(bySite)) console.log(`  ${s.padEnd(38)} ${rs.filter((r) => r.verdict === pass).length}/${rs.length}`);

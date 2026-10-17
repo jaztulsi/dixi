@@ -78,8 +78,9 @@ export function describe(s) {
 
 export class VoiceAgent {
   constructor({ deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry = null, cache = null, agent = null,
-    onChange = () => {}, trace = () => {}, followUpMS = 8000, settleMS = 450 }) {
-    Object.assign(this, { deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry, cache, agent, onChange, trace, followUpMS, settleMS });
+    onChange = () => {}, trace = () => {}, followUpMS = 8000, settleMS = 650, specMS = 300 }) {
+    Object.assign(this, { deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry, cache, agent, onChange, trace, followUpMS, settleMS, specMS });
+    this.spec = new Map();  // clause words → understanding started early, at a short pause
     this.isListening = false;
     this.isStarting = false;
     this.isAwake = false;
@@ -213,9 +214,32 @@ export class VoiceAgent {
     for (const c of clauses.slice(0, -1)) this.dispatch(st, c);
     const last = clauses.at(-1);
     clearTimeout(st.timer);
+    clearTimeout(st.specTimer);
     st.timer = null;
     if (ended) this.dispatch(st, last);
-    else st.timer = setTimeout(() => { st.timer = null; this.dispatch(st, last); }, this.settleMS);
+    // A word still being transcribed ("Amazon-", an open quote) isn't a pause: wait for more.
+    else if (!/[-–—]["”']?\s*$/.test(command) && ((command.match(/"/g) ?? []).length % 2 === 0)) {
+      st.timer = setTimeout(() => { st.timer = null; this.dispatch(st, last); }, this.settleMS);
+      // Start understanding at a short pause; acting still waits for the settle (or the end of the turn).
+      if (this.specMS < this.settleMS) st.specTimer = setTimeout(() => this.speculate(last), this.specMS);
+    }
+  }
+
+  speculate(text) {
+    const key = normName(text);
+    if (!key || this.spec.has(key) || this.clarify || STOP.test(text)) return;
+    for (const [k, s] of this.spec) if (key.startsWith(`${k} `) || Date.now() - s.at > 15000) { s.ctrl.abort(); this.spec.delete(k); }  // outgrown or stale
+    const ctrl = new AbortController();
+    this.ctrl.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+    const url = this.tabs.getCurrentURL();
+    this.spec.set(key, { ctrl, url, at: Date.now(), parsing: interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal: ctrl.signal }) });
+  }
+
+  /** An early understanding of exactly these words, if the page hasn't changed since it started. */
+  takeSpec(text) {
+    const key = normName(text), s = this.spec.get(key);
+    this.spec.delete(key);
+    return s && !s.ctrl.signal.aborted && s.url === this.tabs.getCurrentURL() ? s.parsing : null;
   }
 
   dispatch(st, clause) {
@@ -278,7 +302,7 @@ export class VoiceAgent {
     const gen = this.generation;
     const signal = this.ctrl.signal;
     const t0 = performance.now();
-    const parsing = interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal });
+    const parsing = this.takeSpec(text) ?? interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal });
     this.set({ answer: null });
     this.pending++;
     this.queue = this.queue.then(async () => {

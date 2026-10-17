@@ -26,7 +26,7 @@ export const TOOLS = [
   tool('done', 'Stop. success=false if the task could not be done; result says what happened in one short sentence.', { success: { type: 'boolean' }, result: str }),
 ];
 
-export const readsImages = (model) => /qwen/.test(model);
+export const readsImages = (model) => /qwen|claude/.test(model);
 
 /** Keeps reasoning models from spending latency on thinking. */
 export function reasoningEffort(model) {

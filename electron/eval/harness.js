@@ -73,7 +73,7 @@ export async function launchApp({ appRoot = root, extraArgs = [], env = {}, prof
 /** Say something and wait until Dixi is done (idle for idleMs) or the timeout. Returns timings. */
 export async function say(app, page, text, { wordMS = 240, idleMs = 1500, timeoutMs = 25000, style = 'flux' } = {}) {
   const navsBefore = (await app.evaluate(() => globalThis.__navs.length));
-  const { end, eot, start } = await page.evaluate(({ text, ms, style }) => (style === 'elevenlabs' ? window.__sayEL(text, ms) : window.__say(text, ms)), { text, ms: wordMS, style });
+  const { end, eot, start = Date.now() } = await page.evaluate(({ text, ms, style }) => (style === 'elevenlabs' ? window.__sayEL(text, ms) : window.__say(text, ms)), { text, ms: wordMS, style });
   let idleSince = null;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -89,12 +89,13 @@ export async function say(app, page, text, { wordMS = 240, idleMs = 1500, timeou
       url: tabs.getCurrentURL(), title: tabs.activeTab?.title ?? '', status: voice.statusLine, answer: voice.answer?.text ?? '',
       plan: (voice.plan ?? []).map((p) => `${p.label} [${p.state}]`), clarify: voice.clarify?.question ?? null, confirm: voice.confirm?.question ?? null,
       llm: window.__llm, timedOut: window.__busy(),
-      trace: tr.filter((e) => ['interpret', 'resolve', 'step_start', 'step_end', 'eot'].includes(e.stage)).map((e) => ({ ...e, intent: e.intent ? e.intent.steps.map((x) => [x.act, x.said, x.query || x.item || x.value || x.n].filter(Boolean).join('/')) : undefined })),
+      doneT: tr.filter((e) => e.stage === 'step_end').at(-1)?.t ?? null,
+    trace: tr.filter((e) => ['interpret', 'resolve', 'step_start', 'step_end', 'eot'].includes(e.stage)).map((e) => ({ ...e, intent: e.intent ? e.intent.steps.map((x) => [x.act, x.said, x.query || x.item || x.value || x.n].filter(Boolean).join('/')) : undefined })),
     };
   });
   const stepStart = state.trace.find((e) => e.stage === 'step_start');
   const eotT = state.trace.find((e) => e.stage === 'eot')?.t;
-  return { start, end, eot, navs, state, firstNavMs: navs[0] ? navs[0].t - end : null, overheadMs: stepStart && eotT ? stepStart.t - eotT : null };
+  return { start, end, eot, navs, state, firstNavMs: navs[0] ? navs[0].t - end : null, overheadMs: stepStart && eotT ? stepStart.t - eotT : null, doneMs: state.doneT && state.doneT > start - 1 ? state.doneT - end : null };
 }
 
 /** Run page code in the active tab (isolated world). */

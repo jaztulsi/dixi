@@ -133,6 +133,15 @@ function submitSearch(k) {
   if (near) { near.click(); return 'clicked'; }
   return 'none';
 }
+/** The URL a native GET submit of this box's form would load (for pages whose script swallows Enter and the button). */
+function formURL(k) {
+  const el = get(k), form = el && el.closest('form');
+  if (!form || (form.getAttribute('method') || 'get').toLowerCase() !== 'get' || !el.name) return null;
+  const u = new URL(form.getAttribute('action') || location.href, location.href);
+  if (!/^https?:$/.test(u.protocol)) return null;
+  u.search = new URLSearchParams(new FormData(form)).toString();
+  return u.href;
+}
 
 // ---- result lists: the biggest group of similar links in the main content ----
 const SPONSORED = /^(sponsored|ad|ads|advertisement|promoted|patrocinado)\b/i;
@@ -150,10 +159,22 @@ function results() {
   // Real result lists name each result in a heading; filter chips, pills and footers don't. So the
   // biggest group of heading links wins outright; only without any, the biggest group with images.
   const headed = (x) => x.a.querySelector('h1,h2,h3,h4') || x.a.closest('h1,h2,h3,h4');
-  const withHeads = [...groups.values()].filter((g) => g.length >= 2 && g.filter(headed).length >= g.length / 2);
-  const pool = withHeads.length ? withHeads : [...groups.values()].filter((g) => g.length >= 2);
+  // Products and articles show a picture or a price; category strips and menus don't.
+  const looksLikeResult = (x) => x.card.querySelector('img, picture, video') || /[$€£¥]\s?\d|\d+(\.\d\d)?\s?(USD|EUR)/.test(x.card.innerText || '');
+  // Strongest sign of all: results name what was searched. The query is read from this page's own URL
+  // (?q=, ?searchTerm=, /search/<words>), so category strips and channel cards lose to the real hits.
+  const segs = location.pathname.split('/');
+  const after = segs.findIndex((s) => /search/i.test(s));
+  let qs = [...new URLSearchParams(location.search).values()].join(' ') + ' ' + (after >= 0 ? segs.slice(after + 1).join(' ') : '');
+  try { qs = decodeURIComponent(qs.replace(/\+/g, ' ')); } catch {}
+  const qw =[...new Set(qs.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && /[a-z]/.test(w)))];
+  const hits = (g) => g.filter((x) => { const t = clean(x.a.innerText).toLowerCase(); return qw.some((w) => t.includes(w.slice(0, 5))); }).length;
+  const matching = [...groups.values()].filter((g) => g.length >= 1 && hits(g) >= Math.max(1, g.length / 3));
+  const resultLike = [...groups.values()].filter((g) => g.length >= 2 && g.filter(looksLikeResult).length >= g.length / 2);
+  const withHeads = (resultLike.length ? resultLike : [...groups.values()]).filter((g) => g.length >= 2 && g.filter(headed).length >= g.length / 2);
+  const pool = matching.length ? matching : withHeads.length ? withHeads : [...groups.values()].filter((g) => g.length >= 2);
   for (const g of pool) {
-    const score = g.length + g.filter((x) => x.card.querySelector('img')).length;
+    const score = g.length + g.filter((x) => x.card.querySelector('img')).length + 4 * hits(g);
     if (score > (best.score || 0)) { best = g; best.score = score; }
   }
   // One or two results is a real answer too: then the few content links are the list.
@@ -166,7 +187,7 @@ function results() {
   return best.filter(({ a, card }) => {
     if (SPONSORED.test(clean(card.innerText)) || sponsored(itemRoot(a))) return false;
     if (seen.has(a.href)) return false; seen.add(a.href); return true;
-  }).map(({ a }) => ({ ref: ref(a), text: clean((a.querySelector('h1,h2,h3,h4') || a.closest('h1,h2,h3,h4') || a).innerText).slice(0, 90), href: a.href }));
+  }).map(({ a }) => ({ ref: ref(a), text: clean((a.querySelector('h1,h2,h3,h4') || a.closest('h1,h2,h3,h4') || a).innerText).slice(0, 90), href: a.href, match: matching.length > 0, q: qw.length > 0 }));
 }
 function scrollResultsToEnd() {
   const s = [...document.querySelectorAll('*')].filter((e) => e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY) && visible(e)).sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
@@ -209,6 +230,17 @@ function reveal(re) {
   return 'none';
 }
 function clickRef(k, force) { const el = get(k); if (!el) return 'gone'; return click(el, force); }
+/** Where a real mouse click on this control lands (its own box, or the sized wrapper of a 0×0 control). Gated like click. */
+function pointOf(k, force) {
+  const el = get(k); if (!el) return 'gone';
+  const g = gate(el, force); if (g) return g;
+  let box = el;
+  for (let i = 0; i < 3 && box && !visible(box); i++) box = box.parentElement;
+  if (!box || !visible(box)) return null;
+  box.scrollIntoView({ block: 'center', inline: 'nearest' });
+  const r = rect(box);
+  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+}
 /** Best visible clickable whose name contains the words (for "click X" and items in lists). */
 function findByWords(words) {
   let best = null, score = 0;
@@ -259,22 +291,31 @@ function choose(group, value) {
 }
 /** Current quantity on an item/cart page (first visible quantity field), or null. */
 function qtyField() {
-  return all('input[type=number], input[name*=qty i], input[id*=qty i], input[name*=quantity i], input[aria-label*=quantity i], select[name*=qty i], select[name*=quantity i], select[id*=quantity i], select[aria-label*=quantity i], [role=spinbutton]').find(visible) || null;
+  const c = all('input[type=number], input[name*=qty i], input[id*=qty i], input[name*=quantity i], input[aria-label*=quantity i], select[name*=qty i], select[name*=quantity i], select[id*=quantity i], select[aria-label*=quantity i], [role=spinbutton]');
+  return c.find(visible) || c.find(shown) || null;   // stores often hide the real <select> behind a styled "Qty" button
 }
 function getQty() { const q = qtyField(); if (!q) return null; const v = Number(q.value ?? q.getAttribute('aria-valuenow')); return Number.isFinite(v) ? v : null; }
 /** The count a quantity stepper shows: a field's value, or a short text that is only a number. */
 function numberIn(box) {
-  const f = box.querySelector('input[type=number], input[name*=qty i], input[name*=quantity i], select, [role=spinbutton]');
-  if (f) { const v = Number(f.value ?? f.getAttribute('aria-valuenow')); if (Number.isFinite(v) && (f.value !== '' || f.getAttribute('aria-valuenow'))) return v; }
+  // What the shopper sees wins: stores often leave a hidden field at the old count after the stepper updates.
+  const fields = [...box.querySelectorAll('input[type=number], input[name*=qty i], input[name*=quantity i], select, [role=spinbutton]')];
+  const val = (f) => { const v = Number(f.value ?? f.getAttribute('aria-valuenow')); return Number.isFinite(v) && (f.value !== '' || f.getAttribute('aria-valuenow')) ? v : null; };
+  for (const f of fields.filter(visible)) if (val(f) != null) return val(f);
   for (const el of box.querySelectorAll('span, div, output, b, strong')) { const t = (el.innerText || '').trim(); if (/^\d{1,3}$/.test(t) && !el.children.length) return Number(t); }
+  for (const f of fields) if (val(f) != null) return val(f);
   return null;
 }
-function qtyIn(k) { const b = get(k); return b ? numberIn(b) : getQty(); }
+/** The page's own +/- control and the box around it that shows the count. */
+function stepper(dir) {
+  const re = dir > 0 ? /^(\+|increase|increment|add one|plus|more|add 1)\b|increase quantity|add one more/i : /^(-|−|decrease|decrement|remove one|minus|less|subtract)\b|decrease quantity/i;
+  const b = all('button, [role=button], a[role=button], span[role=button]').find((x) => shown(x) && !x.disabled && x.getAttribute('aria-disabled') !== 'true' && re.test(name(x)) && !/to cart|to bag|checkout/i.test(name(x)));
+  return { b, box: b && (b.closest('[role=group], fieldset, form, li, tr, [class*=quantity i], [class*=qty i], [class*=stepper i]') || b.parentElement?.parentElement) };
+}
+// Steppers often redraw after a press: a box that left the page is found again.
+function qtyIn(k) { let b = get(k); if (!b?.isConnected) b = stepper(1).box || stepper(-1).box; return b ? numberIn(b) : getQty(); }
 /** One more / one fewer: the page's own +/- control first (it updates the cart properly), else the field. */
 function stepQty(dir) {
-  const re = dir > 0 ? /^(\+|increase|increment|add one|plus|more|add 1)\b|increase quantity|add one more/i : /^(-|−|decrease|decrement|remove one|minus|less|subtract)\b|decrease quantity/i;
-  const b = all('button, [role=button]').find((x) => visible(x) && !x.disabled && re.test(name(x)) && !/to cart|to bag|checkout/i.test(name(x)));
-  const box = b && (b.closest('[role=group], fieldset, form, li, tr, [class*=quantity i], [class*=qty i], [class*=stepper i]') || b.parentElement?.parentElement);
+  const { b, box } = stepper(dir);
   const before = box ? numberIn(box) ?? getQty() : getQty();
   if (b) { b.click(); return { how: 'button', before, box: box ? ref(box) : null }; }
   const q = qtyField();
@@ -318,6 +359,12 @@ function identity() {
     logo: [...document.querySelectorAll('img[alt*=logo i]')].map((i) => i.alt).join(' '), host: location.hostname.replace(/^www\./, ''), url: location.href };
 }
 function loginWall() { return all('input[type=password]').some(visible); }
+/** A "prove you're human" check. Dixi never solves these; it hands them to you. The check often lives in a frame. */
+function botWall() {
+  const HUMAN = /captcha|are you a (human|robot)|confirm you('re| are) (a )?human|verify (that )?you('re| are) (a )?human|not a (ro)?bot|press (&|and) hold|unusual traffic|robot check|quick verification/i;
+  if (HUMAN.test(clean(document.title) + ' ' + clean((document.body?.innerText || '').slice(0, 3000)))) return true;
+  return [...document.querySelectorAll('iframe')].some((f) => visible(f) && /captcha|challenge|turnstile|px-cdn|perimeterx|datadome|arkose/i.test([f.src, f.title, f.id, f.name].join(' ')));
+}
 /** A store / location / address picker standing between you and the menu or cart. */
 function storePicker() {
   if (/store-?locator|locations?|find-a-store|select-?store|choose-?(a-)?(store|location)|restaurants?\/?$/i.test(location.pathname)) return true;
@@ -365,7 +412,7 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window.__dx = { findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, results, scrollResultsToEnd, findButton, clickRef, findByWords, options, choose, setQty,
+window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
   media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)) };
 })();`;
 

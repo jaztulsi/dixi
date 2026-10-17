@@ -61,3 +61,8 @@ test('interpret: fast path first, then the fast tier, escalates to strong when v
   const c = await interpret('pause', {}, { llm, tiers: { fast: ['fast'], strong: ['strong'] } });
   assert.equal(c.source, 'fast');
 });
+
+test('a part of a site squeezed into "open" becomes open + click', () => {
+  const { intent } = validate({ clarify: '', steps: [{ act: 'open', said: 'Zentora', guess: '', urls: [], query: 'menu', item: '', qty: 0, n: 0, value: '' }] }, 'show me the Zentora menu');
+  assert.deepEqual(intent.steps.map((s) => [s.act, s.said || s.value]), [['open', 'Zentora'], ['click', 'menu']]);
+});

@@ -133,7 +133,7 @@ export class TabManager {
     // A brand-new tab can't take loadURL until its blank page is attached; until then, set src instead.
     if (!t.ready) await this.next(t, ['dom-ready'], 1500);
     const committed = this.next(t, ['navigate'], 15000);
-    if (t.ready) t.webview.loadURL(target).catch(() => { if (!t.url.startsWith(target.slice(0, 20))) t.webview.src = target; });
+    if (t.ready) t.webview.loadURL(target).catch((err) => { if (/attached|dom-ready/i.test(err?.message ?? '')) t.webview.src = target; });
     else { t.url = target; t.webview.src = target; }
     const r = await committed;
     if (r === 'fail' || t.failed) throw new Error(t.failed ? `The page didn't load (${t.failed})` : 'The page didn\'t load');
@@ -169,6 +169,17 @@ export class TabManager {
     t.webview.focus();
     await t.webview.insertText(text);
     if (submit) await this.key('Return', tabId);
+  }
+  /** A real (trusted) mouse click at page coordinates, for controls that ignore script clicks. */
+  async clickAt({ x, y }, tabId) {
+    const t = this.tab(tabId);
+    if (!t?.ready) return;
+    const z = t.webview.getZoomFactor?.() ?? 1;
+    const p = { x: Math.round(x * z), y: Math.round(y * z), button: 'left', clickCount: 1 };
+    t.webview.sendInputEvent({ type: 'mouseMove', ...p });
+    t.webview.sendInputEvent({ type: 'mouseDown', ...p });
+    t.webview.sendInputEvent({ type: 'mouseUp', ...p });
+    await sleep(30);
   }
   async key(keyCode, tabId) {
     const t = this.tab(tabId);
