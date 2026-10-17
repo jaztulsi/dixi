@@ -32,7 +32,8 @@ const DEFAULT_TIERS = {
   fast: 'cerebras:qwen-3.8-27b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b',
   strong: 'groq:openai/gpt-oss-120b,cerebras:gpt-oss-120b,anthropic:claude-haiku-5-5',
   agent: 'groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-120b',
-  answer: 'groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b',
+  // Spoken answers (page or general knowledge): the most knowledgeable first, every free quota as fallback.
+  answer: 'anthropic:claude-haiku-5-5,cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b',
   // Reading screenshots when nothing on the page is labelled (icon-only buttons): strongest first.
   vision: 'anthropic:claude-sonnet-5-5,groq:qwen/qwen3.8-27b',
 };

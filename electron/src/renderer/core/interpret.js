@@ -70,6 +70,17 @@ export const normName = (s) => tokens(s).join(' ');
 const FUNCTION = new Set(['a', 'an', 'the', 'some', 'any', 'my', 'me', 'up', 'on', 'to', 'for', 'of', 'in', 'at', 'from', 'with', 'and', 'then', 'so', 'please',
   'can', 'could', 'would', 'will', 'you', 'go', 'open', 'pull', 'bring', 'search', 'find', 'look', 'show', 'get', 'take', 'launch', 'visit', 'navigate', 'load',
   'fire', 'head', 'over', 'jump', 'hop', 'um', 'uh', 'like', 'okay', 'ok', 'hey', 'just', 'now', 'really', 'quick', 'real', 'website', 'site', 'app', 'page', 'thanks']);
+// A question opener (grammar, not content): answered once the sentence is whole, never from half of it.
+export const QUESTION = /^(?:(?:hey|ok|okay|so|um|uh|and|now|dixi)[\s,]+)*(?:(?:can|could|would|will) you (?:please )?(?:tell|explain|describe|compare|summari[sz]e|let me know)|tell me|describe|explain|compare|summari[sz]e|what|what's|whats|how|why|when|where|who|whose|which|is|are|does|do|did|was|were|should|i (?:want|wanna|need) to know)\b/i;
+// ...unless it asks Dixi to do something on the way ("what's on Amazon, open it").
+const DOING = /\b(open|go to|search|buy|order|add|play|pause|click|scroll|navigate|take me|pull up|bring up|checkout|check out)\b/i;
+/** Words so far that can't be a whole command yet ("can you", "…the features of", "uh"). */
+export function incomplete(text) {
+  const t = tokens(text);
+  if (fastPath(text) && !QUESTION.test(String(text).trim())) return false;
+  return t.length < 2 || FUNCTION.has(t.at(-1)) || DANGLING.has(t.at(-1));
+}
+const DANGLING = new Set(['or', 'but', 'is', 'are', 'was', 'were', 'be', 'your', 'what', 'which', 'who', 'how', 'why', 'when', 'where', 'about', 'between', 'than', 'as', 'if', 'this', 'that', 'these', 'those', 'er', 'hmm', 'mm', 'tell', 'give', 'buy', 'order', 'add', 'play', 'want', 'need', 'i', 'we']);
 // Verbs and particles of the command itself; a query or item never starts with one.
 const LEAD_PARTICLE = new Set(['up', 'on', 'to', 'for', 'open', 'go', 'search', 'find', 'look', 'pull', 'bring', 'take', 'launch', 'visit', 'navigate', 'load']);
 const OPENING = /\b(open|go to|pull up|bring up|launch|visit|take me to|load up|navigate to|head to|fire up)\b/i;
@@ -178,6 +189,8 @@ export function fastPath(text, ctx = {}) {
   const t = String(text).toLowerCase().replace(LEAD, '').replace(TAIL, '').replace(/[“”"]/g, '').trim();
   if (!t) return null;
   for (const [re, act, value] of CONTROLS) if (re.test(t)) return { steps: [step(act, { value })], clarify: '' };
+  // A plain question (no command in it) needs no parse: it goes straight to the answerer.
+  if (QUESTION.test(t) && !DOING.test(t)) return { steps: [step('ask_page', { value: String(text).trim() })], clarify: '' };
   const nth = t.match(NTH);
   if (nth) return { steps: [step('nth', { n: ORDINAL[nth[2]], value: /^(play|watch|listen to)$/.test(nth[1] ?? '') ? 'play' : '' })], clarify: '' };
   // "open up <exact learned name>": the whole rest must be the name, else the AI decides.

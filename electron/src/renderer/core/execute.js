@@ -568,15 +568,11 @@ export class Executor {
     const a = await askPage(said, { tabs: this.tabs, llm: this.llm, models: this.tiers.answer });
     this.onAnswer?.(a);
     this.speaker?.say(a.text);
-    return { ok: a.grounded || /doesn'?t (show|say)|not (on|in) (the|this) page/i.test(a.text), message: a.text.slice(0, 120), answer: a };
+    return { ok: !a.failed, message: a.text.slice(0, 120), answer: a };
   }
 
-  async do_ask_web(step, said) {
-    if (!this.webSearch) return fail('No web search is set up');
-    await this.tabs.navigate(this.webSearch.replace('{q}', encodeURIComponent(said)));
-    await this.tabs.waitForDom(null, 5000);
-    return this.do_ask_page(step, said);
-  }
+  // A question about the world: the same answerer (general knowledge; the page if it happens to help).
+  async do_ask_web(step, said) { return this.do_ask_page(step, said); }
 
   async do_stop() { return ok('Stopped'); }
   async do_none() { return ok('Not a browser request', { none: true }); }

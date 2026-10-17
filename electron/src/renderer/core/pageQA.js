@@ -1,6 +1,6 @@
-// Answers questions about the page you're on ("who made this video, and how many subscribers?")
-// from the page's own text. No navigation, no clicks: a playing video keeps playing. The model sees
-// only that text, must quote it, and the quote is checked against the page (ported from PageQA.swift).
+// Answers spoken questions. About the page you're on ("how many subscribers?"): from the page's own
+// text, quoted, and the quote is checked against the page. Anything else ("features of the iPhone 18
+// Pro?"): from the model's general knowledge, labelled so. No navigation, no clicks.
 
 import { PAGE_QA_PROMPT } from './prompts.js';
 
@@ -39,20 +39,15 @@ export function quoteIsOnPage(quote, page) {
 
 export async function askPage(question, { tabs, llm, models }) {
   const source = await tabs.getTitle();
-  const full = String(await tabs.executeJS(PAGE_TEXT_JS) ?? '');
-  const page = relevantText(full, question);
-  if (page.startsWith('JS error') || page.length <= 40) {
-    return { text: "I can't read this page's text, so I can't answer that.", quote: null, source, grounded: false };
-  }
-  const user = `Question: ${question}\n<page url="${tabs.getCurrentURL()}">\n${page}\n</page>`;
-  const raw = await llm.json(PAGE_QA_PROMPT, user, models, 700);
+  const onPage = /^https?:/.test(tabs.getCurrentURL());
+  const full = onPage ? String(await tabs.executeJS(PAGE_TEXT_JS) ?? '') : '';
+  const page = full.startsWith('JS error') ? '' : relevantText(full, question);
+  // The page when it has the answer (freshest: this product, this video); else general knowledge.
+  const user = page.length > 40 ? `Question: ${question}\n<page url="${tabs.getCurrentURL()}">\n${page}\n</page>` : `Question: ${question}\n(no page text)`;
+  const raw = await llm.json(PAGE_QA_PROMPT, user, models, 500, { hedgeMs: 1500 });
   let reply;
   try { reply = JSON.parse(raw); } catch { reply = null; }
-  if (!reply?.answer) return { text: "I couldn't get an answer right now. Try again in a moment.", quote: null, source, grounded: false };
-
+  if (!reply?.answer) return { text: 'The AI service is busy (rate limit). Ask me again in a few seconds.', quote: null, source, grounded: false, failed: true };
   const verified = reply.found === true && quoteIsOnPage(reply.quote, page);
-  if (reply.found && !verified) {
-    return { text: `${reply.answer} (I couldn't verify that on the page.)`, quote: null, source, grounded: false };
-  }
-  return { text: reply.answer, quote: verified ? reply.quote.trim() : null, source, grounded: verified };
+  return { text: reply.answer, quote: verified ? reply.quote.trim() : null, source, grounded: verified, general: !verified };
 }

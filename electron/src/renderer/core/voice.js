@@ -5,7 +5,7 @@
 // A new command cancels whatever was still running (it never waits behind an old task).
 // UI-free: deepgram (speech bridge), mic, tabs, speaker, llm, executor are injected.
 
-import { interpret, normName, tokens } from './interpret.js';
+import { interpret, normName, tokens, incomplete, QUESTION } from './interpret.js';
 
 // ---- the wake word ("Dixi"), matched by sound: speech recognition writes it many ways ----
 // Consonant skeleton: "dixi", "dixie", "dicksy", even "headaches" (hey-dixie) all become "dks".
@@ -199,8 +199,11 @@ export class VoiceAgent {
     this.set({ liveTranscript: text, isAwake: cmd != null });
     const final = json.event === 'EndOfTurn';
     if (cmd == null) { if (final) this.turnsDone.add(turn); return; }
-    const command = cmd.trim();
-    if (STOP.test(command)) { this.cancelAll(); this.turnsDone.add(turn); return; }
+    if (STOP.test(cmd.trim())) { this.cancelAll(); this.carry = null; this.turnsDone.add(turn); return; }
+    // Finishing the sentence the last turn left hanging (within a few seconds).
+    const carried = this.carry && Date.now() - this.carry.at < 6000 && !this.clarify ? this.carry.text : '';
+    const command = carried ? `${carried} ${cmd.trim()}` : cmd.trim();
+    if (final) this.carry = null;
     if (this.clarify) {   // answering a question Dixi asked: wait for the whole answer
       if (final || json.event === 'EagerEndOfTurn') { this.turnsDone.add(turn); this.handleText(command); }
       return;
@@ -227,9 +230,12 @@ export class VoiceAgent {
     clearTimeout(st.timer);
     clearTimeout(st.specTimer);
     st.timer = null;
+    // The turn ended mid-sentence (a long "uh"): keep the words for the next turn to finish.
+    if (ended && incomplete(last)) { this.carry = { text: last, at: Date.now() }; return; }
     if (ended) this.dispatch(st, last);
-    // A word still being transcribed ("Amazon-", an open quote) isn't a pause: wait for more.
-    else if (!/[-–—]["”']?\s*$/.test(command) && ((command.match(/"/g) ?? []).length % 2 === 0)) {
+    // Act at a pause only on a whole command: not half a sentence ("…the features of"), not a word
+    // still being transcribed ("Amazon-", an open quote), and never a question (answered once, whole).
+    else if (!incomplete(last) && !QUESTION.test(last) && !/[-–—]["”']?\s*$/.test(command) && ((command.match(/"/g) ?? []).length % 2 === 0)) {
       st.timer = setTimeout(() => { st.timer = null; this.dispatch(st, last); }, this.settleMS);
       // Start understanding at a short pause; acting still waits for the settle (or the end of the turn).
       if (this.specMS < this.settleMS) st.specTimer = setTimeout(() => this.speculate(last), this.specMS);
@@ -405,6 +411,7 @@ export class VoiceAgent {
     this.clarify?.resolve(null);
     this.clarify = null;
     this.confirmQ = null;
+    this.carry = null;
     if (this.agent?.isRunning) this.agent.stop();
     for (const p of this.plan) if (p.state === 'queued' || p.state === 'running') p.state = 'cancelled';
     this.plan = this.plan.filter((p) => p.state !== 'cancelled' && p.state !== 'failed');

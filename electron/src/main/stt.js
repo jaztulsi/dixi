@@ -9,7 +9,7 @@ import WebSocket from 'ws';
 import { ENDPOINTS } from './providers.js';
 
 export class ElevenLabsBridge {
-  constructor(apiKey, emit, { silenceSecs = '0.55' } = {}) {
+  constructor(apiKey, emit, { silenceSecs = '0.9' } = {}) {
     this.apiKey = apiKey;
     this.emit = emit;
     this.silenceSecs = silenceSecs;

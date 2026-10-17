@@ -157,9 +157,9 @@ function renderCaption() {
   if (a) {
     $('answer-text').textContent = a.text;
     const src = $('answer-source');
-    src.className = `answer-source ${a.grounded ? 'ok' : 'unverified'}`;
-    src.innerHTML = `${a.grounded ? icons.seal : icons.warning}<span></span>`;
-    src.lastChild.textContent = a.grounded ? `From this page: ${a.source}` : 'Not confirmed on this page';
+    src.className = `answer-source ${a.grounded || a.general ? 'ok' : 'unverified'}`;
+    src.innerHTML = `${a.grounded ? icons.seal : a.general ? icons.brain : icons.warning}<span></span>`;
+    src.lastChild.textContent = a.grounded ? `From this page: ${a.source}` : a.general ? 'General knowledge' : 'Not confirmed on this page';
     $('answer-quote').hidden = !a.quote;
     $('answer-quote').textContent = a.quote ? `“${a.quote}”` : '';
   }
