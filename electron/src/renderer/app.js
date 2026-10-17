@@ -58,7 +58,8 @@ const registry = {
   lookup(name) { const k = normName(name); return this.entries.find((e) => normName(e.name) === k || (e.said ?? []).includes(k)) ?? null; },
   outcome: (host, ok) => window.dixi.registry.outcome(host, ok),
   confirm: (said, hit) => window.dixi.registry.confirm(said, hit).then(() => registry.refresh()),
-  setSearchTemplate: (host, tpl) => window.dixi.registry.template(host, tpl),
+  setSearchTemplate: (host, tpl) => window.dixi.registry.template(host, tpl).then(() => registry.refresh()),
+  byHost(host) { const h = String(host).replace(/^www\./, ''); return this.entries.find((e) => e.host === h || e.finalHost === h) ?? null; },
 };
 registry.refresh();
 const catalog = makeCatalog(await window.dixi.catalog());

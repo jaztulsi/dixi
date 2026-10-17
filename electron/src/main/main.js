@@ -179,7 +179,7 @@ handle('spend:get', () => ({ totalUSD: spend.total, capUSD: spend.cap, byProvide
 handle('resolve:site', (q) => resolver.resolve({ said: String(q?.said ?? '').slice(0, 120), guess: String(q?.guess ?? '').slice(0, 120), urls: (q?.urls ?? []).slice(0, 3).map(String).filter((u) => /^https?:\/\//i.test(u)), fast: Boolean(q?.fast) }));
 handle('registry:confirm', (said, hit) => resolver.confirm(String(said), { url: String(hit.url), host: String(hit.host), finalHost: String(hit.finalHost ?? hit.host), name: String(hit.name) }));
 handle('registry:names', () => resolver.names());
-handle('registry:all', () => [...new Set(Object.values(resolver.entries))].filter((e) => e.fail < 2).map(({ name, said, url, host }) => ({ name, said, url, host })));
+handle('registry:all', () => [...new Set(Object.values(resolver.entries))].filter((e) => e.fail < 2).map(({ name, said, url, host, finalHost, searchTemplate }) => ({ name, said, url, host, finalHost, searchTemplate })));
 handle('registry:lookup', (name) => resolver.lookup(String(name)));
 handle('registry:outcome', (host, ok) => resolver.outcome(String(host), Boolean(ok)));
 handle('registry:template', (host, tpl) => resolver.setSearchTemplate(String(host), String(tpl)));

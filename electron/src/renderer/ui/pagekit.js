@@ -187,7 +187,11 @@ function results() {
   return best.filter(({ a, card }) => {
     if (SPONSORED.test(clean(card.innerText)) || sponsored(itemRoot(a))) return false;
     if (seen.has(a.href)) return false; seen.add(a.href); return true;
-  }).map(({ a }) => ({ ref: ref(a), text: clean((a.querySelector('h1,h2,h3,h4') || a.closest('h1,h2,h3,h4') || a).innerText).slice(0, 90), href: a.href, match: matching.length > 0, q: qw.length > 0 }));
+  }).map(({ a }) => {
+    // A result that sells straight from the list has its own "Buy" link (never "Buy now"): orders go there.
+    const buy = [...itemRoot(a).querySelectorAll('a[href]')].find((x) => x !== a && visible(x) && /^buy\b(?!\s+(now|it now|with))/i.test(name(x)));
+    return { ref: ref(a), text: clean((a.querySelector('h1,h2,h3,h4') || a.closest('h1,h2,h3,h4') || a).innerText).slice(0, 90), href: a.href, match: matching.length > 0, q: qw.length > 0, buy: buy ? ref(buy) : null };
+  });
 }
 function scrollResultsToEnd() {
   const s = [...document.querySelectorAll('*')].filter((e) => e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY) && visible(e)).sort((a, b) => b.scrollHeight - a.scrollHeight)[0];

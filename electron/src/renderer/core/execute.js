@@ -15,6 +15,7 @@ const title = (s) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 // Generic meanings of buttons, by accessible name (language, not sites).
 const ADD = /^(add( to)?( (cart|bag|basket|order|trolley|meal))?|add item|añadir( al carrito)?|ajouter( au panier)?|in den warenkorb)\b/i;
 const CHECKOUT = /^(check ?out|proceed to (check ?out|checkout|payment)|go to (cart|bag|checkout)|view (cart|bag)|continue to checkout|review (order|bag)|pagar|commander)\b/i;
+const TO_STORE = /^(buy(?!\s+(now|it now|with))|configure|(see|choose|view) (all )?(options|models))\b/i;
 const DECLINE = /^(no,? thanks?( you)?|no thank you|skip|not now|maybe later|decline|continue without|no protection|no coverage)\b/i;
 const CART = /^(cart|bag|basket|your (cart|bag)|shopping (cart|bag)|carrito)\b|\b(cart|bag|basket)\s*\(?\d+\)?$/i;
 const BUY_NOW = /^(buy now|purchase|order now|buy it now|comprar( ahora)?)\b/i;
@@ -169,7 +170,7 @@ export class Executor {
    * (typed for real, suggestions closed, submitted), then learn the template from the result URL.
    */
   async searchOn(site, query) {
-    let tpl = [site.searchTemplate, site.entry?.searchTemplate].find((t) => /^https?:\/\/[^{]+\{q\}/.test(t ?? '')) ?? null;
+    let tpl = [site.searchTemplate, site.entry?.searchTemplate].find((t) => /^https?:\/\/[^{]+\{q-?\}/.test(t ?? '')) ?? null;
     // First visit: read the site's own search URL from its home page HTML (a few hundred ms) instead of
     // loading the whole home page and typing. Only a template on the site's own domain is trusted.
     const domain = (h) => String(h ?? '').split('.').slice(-2).join('.');
@@ -178,7 +179,7 @@ export class Executor {
       if (found && domain(hostOf(found.replace('{q}', 'x'))) === domain(site.host)) tpl = found;
     }
     if (tpl) {
-      await this.tabs.navigate(tpl.replace('{q}', encodeURIComponent(query)));
+      await this.tabs.navigate(tpl.replace('{q-}', encodeURIComponent(query).replace(/%20/g, '-')).replace('{q}', encodeURIComponent(query)));
       if (await this.searchLanded(query)) {
         if (![site.searchTemplate, site.entry?.searchTemplate].includes(tpl)) {
           this.registry?.setSearchTemplate(site.host, tpl);
@@ -240,7 +241,7 @@ export class Executor {
   async searchLanded(query, before = null, ms = 8000) {
     const t = this.tabs.activeTab;
     const deadline = Date.now() + ms;
-    const enc = (s) => [encodeURIComponent(s), encodeURIComponent(s).replace(/%20/g, '+'), s.toLowerCase()].map((x) => x.toLowerCase());
+    const enc = (s) => [encodeURIComponent(s), encodeURIComponent(s).replace(/%20/g, '+'), encodeURIComponent(s).replace(/%20/g, '-'), s.toLowerCase()].map((x) => x.toLowerCase());
     while (Date.now() < deadline) {
       this.check();
       let url = '';
@@ -257,8 +258,10 @@ export class Executor {
   learnTemplate(site, query) {
     const url = this.tabs.getCurrentURL();
     if (!tokens(query).length || !/^https?:/.test(url)) return;  // an empty query would "learn" {q} in front of the URL
-    for (const e of [encodeURIComponent(query), encodeURIComponent(query).replace(/%20/g, '+')]) {
-      if (url.includes(e)) { this.registry?.setSearchTemplate(hostOf(url), url.replace(e, '{q}')); return; }
+    const e = encodeURIComponent(query);
+    // Words joined by %20, + or - ("/search/air-pods"); {q-} = joined with dashes.
+    for (const [form, slot] of [[e, '{q}'], [e.replace(/%20/g, '+'), '{q}'], [e.replace(/%20/g, '-'), '{q-}']]) {
+      if (url.includes(form)) { this.registry?.setSearchTemplate(hostOf(url), url.replace(form, slot)); return; }
     }
   }
 
@@ -268,7 +271,7 @@ export class Executor {
     if (!step.said && this.catalog) {
       const fam = this.catalog.match(step.item);
       if (fam?.ask) return fail(fam.ask);
-      if (fam) s = { url: this.catalog.storeURL, host: hostOf(this.catalog.storeURL), name: 'Apple Store', here: hostOf(this.tabs.getCurrentURL()) === hostOf(this.catalog.storeURL) };
+      if (fam) s = { url: this.catalog.storeURL, host: hostOf(this.catalog.storeURL), name: 'Apple Store', here: hostOf(this.tabs.getCurrentURL()) === hostOf(this.catalog.storeURL), searchTemplate: this.registry?.byHost?.(hostOf(this.catalog.storeURL))?.searchTemplate };
     }
     if (!s) {
       if (!step.said && !(await this.isStore())) return fail(`Which store should I get ${step.item} from?`, { needsStore: true });
@@ -293,7 +296,7 @@ export class Executor {
     if (!found.ok) return found;
     const pick = await this.pickResult(step.item);
     if (!pick) return fail(`I searched ${s.name} for “${step.item}” but didn't see it in the results`);
-    await this.clickAndWait(pick.ref);
+    await this.clickAndWait(pick.buy ?? pick.ref);
     return this.addToCart({ ...step, picked: pick.text }, said, s.name);
   }
 
@@ -338,6 +341,11 @@ export class Executor {
     if (await this.tabs.dx('storePicker')) return ok(`${where} wants you to pick a store or address first. Choose one and say "add it again"`, { needsStore: true });
     let add = await this.tabs.dx('findButton', ADD, { links: false });
     if (!add && String(await this.tabs.dx('reveal', ADD)).startsWith('opened')) add = await this.waitFor(() => this.tabs.dx('findButton', ADD, { links: false }), (x) => x, 1500);
+    // A product's overview page sells through a "Buy" link to its store page (never "Buy now"): follow it once.
+    if (!add && !step.viaBuy) {
+      const buy = await this.tabs.dx('findButton', TO_STORE);
+      if (buy) { await this.clickAndWait(buy.ref); return this.addToCart({ ...step, viaBuy: true }, said, where); }
+    }
     add ??= await this.visualPick('the button that adds this product to the cart, bag or basket (not "buy now")');
     if (!add && await this.tabs.dx('loginWall')) return ok(`${where} wants you to sign in before adding ${what0}`, { login: true });
     // Restaurants: you can't add anything until you start an order (pick a store / pickup / delivery).
@@ -367,7 +375,7 @@ export class Executor {
       } else break;
       after = await this.waitFor(() => this.cartSignal(), changed, 3000);
     }
-    const what = (step.item || step.picked || 'it').split(/[|,(]/)[0].trim().slice(0, 40);
+    const what = (step.picked || step.item || 'it').split(/\s[-–—|]\s|[|,(]/)[0].trim().slice(0, 40);
     if (await this.tabs.dx('storePicker')) return ok(`${where} wants you to pick a store or address before adding ${what}. Choose one and say "add it again"`, { needsStore: true });
     if (await this.tabs.dx('loginWall')) return ok(`${where} wants you to sign in before adding ${what}. Sign in and say "add it again"`, { login: true });
     const choice = picked.length ? ` (${picked.join(', ')})` : '';

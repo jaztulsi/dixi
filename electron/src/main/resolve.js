@@ -104,6 +104,7 @@ export class Resolver {
   remember(said, hit) {
     const e = this.byHost(hit.host) ?? { name: hit.name, url: hit.url, host: hit.host, said: [], ok: 0, fail: 0, searchTemplate: null, opensearch: hit.opensearch ?? null };
     Object.assign(e, { url: hit.url, finalHost: hit.finalHost ?? hit.host, ts: this.now(), fail: 0, source: hit.source });
+    if (e.name === e.host) e.name = hit.name;  // first learned from a search (by host): now it has a real name
     e.ok = (e.ok ?? 0) + 1;
     for (const k of [nameKey(said), nameKey(hit.name)]) if (k) { this.entries[k] = e; if (!e.said.includes(k)) e.said.push(k); }
     this.save();
@@ -122,8 +123,9 @@ export class Resolver {
   }
 
   setSearchTemplate(host, template) {
-    const e = this.byHost(host);
-    if (e && /^https?:\/\/[^{]+\{q\}/.test(template)) { e.searchTemplate = template; this.save(); }
+    const h = String(host).replace(/^www\./, '');
+    const e = this.byHost(host) ?? (this.entries[h] = { name: h, url: `https://${host}/`, host: h, said: [], ok: 0, fail: 0, searchTemplate: null });
+    if (e && /^https?:\/\/[^{]+\{q-?\}/.test(template)) { e.searchTemplate = template; this.save(); }
   }
 
   async probe(url, said, source) {
