@@ -25,11 +25,13 @@ export class Speaker {
     const span = { start: Date.now(), end: null };
     this.spans = [...this.spans.slice(-4), span];
     this.speaking = true;
-    const done = () => { this.speaking = false; span.end = Date.now(); this.deafUntil = Date.now() + ECHO_TAIL_MS; };
+    const done = () => { if (this.current !== u) return; this.speaking = false; span.end = Date.now(); this.deafUntil = Date.now() + ECHO_TAIL_MS; };
+    this.current = u;
     u.onend = done;
     u.onerror = done;
     this.synth.speak(u);
   }
 
-  stop() { this.synth?.cancel(); }
+  /** Cancelled speech has no echo tail: listen again at once (barge-in). */
+  stop() { this.current = null; this.synth?.cancel(); this.speaking = false; this.deafUntil = 0; const last = this.spans.at(-1); if (last && last.end == null) last.end = Date.now(); }
 }

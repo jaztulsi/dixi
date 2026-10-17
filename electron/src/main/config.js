@@ -1,9 +1,9 @@
-// Keys and model choices from the same .env the Swift app uses (repo root), or electron/.env.
-// Read only in the main process.
+// Keys and settings from .env (repo root or electron/), read only in the main process.
 
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ENDPOINTS } from './providers.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,12 +12,14 @@ export function loadConfig(env = process.env) {
   for (const file of [path.resolve(here, '../../../.env'), path.resolve(here, '../../.env')]) {
     dotenv.config({ path: file, processEnv: vars, quiet: true });
   }
-  const pick = (k) => (env[k] || vars[k] || '').trim();
+  const merged = { ...vars, ...Object.fromEntries(Object.entries(env).filter(([, v]) => v != null && v !== '')) };
+  const pick = (k) => (merged[k] || '').trim();
+  const keys = Object.fromEntries(Object.entries(ENDPOINTS).filter(([, e]) => e.key).map(([p, e]) => [p, pick(e.key)]));
   return {
-    groqAPIKey: pick('GROQ_API_KEY'),
-    deepgramAPIKey: pick('DEEPGRAM_API_KEY'),
-    // Groq retires preview models often, so these can be overridden in .env (same keys as the Swift app).
-    agentModel: pick('AGENT_MODEL') || 'qwen/qwen3.8-27b',
-    voiceModel: pick('VOICE_MODEL') || 'openai/gpt-oss-20b',
+    env: merged,
+    keys,
+    groqAPIKey: keys.groq,
+    deepgramAPIKey: keys.deepgram,
+    spendCapUSD: Number(pick('DIXI_SPEND_CAP') || 25),
   };
 }

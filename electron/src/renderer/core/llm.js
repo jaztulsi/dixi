@@ -1,63 +1,48 @@
-// Groq client logic (ported from LLMService.swift + GroqJSON.swift): tool schemas, history
-// compaction, per-model fallback and shared rate-limit cooldowns. The HTTP call itself happens
-// in the main process (keys stay there); `transport` is injected so this runs in unit tests.
+// LLM client for the renderer. The HTTP call happens in the main process (keys stay there); `transport`
+// is injected so this runs in unit tests. Models are "provider:model" ids from the tier lists in
+// src/main/providers.js. Per-model cooldowns after rate limits, abort, and hedged requests live here.
 
-// Kept terse on purpose: tool schemas are resent on every agent step and count against the free
-// tier's tokens/min. Property names are self-explanatory, so most have no description.
 const tool = (name, description, properties = {}) => ({
   type: 'function',
   function: {
     name, description, strict: true,
     parameters: {
       type: 'object', additionalProperties: false, properties,
-      // Groq rejects "required" when there are no properties (go_back), even if empty.
       ...(Object.keys(properties).length ? { required: Object.keys(properties).sort() } : {}),
     },
   },
 });
 const num = { type: 'number' }, str = { type: 'string' };
 
+// Few, typed, safe tools. Mechanics (URLs, search boxes, waits) are done in code by the executor;
+// the model only decides which element or what to type. No raw JavaScript, no arbitrary URLs.
 export const TOOLS = [
-  tool('click', 'Click element by index.', { elementIndex: num }),
-  tool('type_text', "Replace an input's text; pressEnter submits.", { elementIndex: num, text: str, pressEnter: { type: 'boolean' } }),
-  tool('scroll', 'Scroll the page.', { direction: { type: 'string', enum: ['up', 'down'] }, amount: { type: 'number', description: 'pixels' } }),
-  tool('navigate', 'Go to a URL.', { url: str }),
-  tool('wait', 'Wait for content to load (max 10s).', { seconds: num }),
-  tool('new_tab', 'Open a URL in a new tab.', { url: str }),
-  tool('switch_tab', 'Switch tab by 0-based index.', { tabIndex: num }),
+  tool('click', 'Click an element by its index in the list.', { elementIndex: num }),
+  tool('type_text', 'Type into an input by index; submit presses Enter.', { elementIndex: num, text: str, submit: { type: 'boolean' } }),
+  tool('scroll', 'Scroll the page.', { direction: { type: 'string', enum: ['up', 'down'] } }),
+  tool('search_site', 'Search this website for a query using its own search.', { query: str }),
   tool('go_back', 'Browser back.'),
-  tool('evaluate_js', 'Run JavaScript in the page; returns the result as text.', { code: str }),
-  tool('fork_tasks', 'Run independent tasks in parallel, each in its own tab (max 5).', {
-    tasks: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['task', 'url'],
-      properties: { url: { type: 'string', description: 'start URL' }, task: str } } },
-  }),
-  tool('done', 'Task complete; give a short summary.', { result: str }),
+  tool('wait', 'Wait for the page to finish loading.'),
+  tool('done', 'Stop. success=false if the task could not be done; result says what happened in one short sentence.', { success: { type: 'boolean' }, result: str }),
 ];
-/** Sub-agents can't fork or juggle tabs (no recursion, no conflicts). */
-export const SUB_AGENT_TOOLS = TOOLS.filter((t) => !['fork_tasks', 'new_tab', 'switch_tab'].includes(t.function.name));
 
-export const FALLBACK_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
-export const readsImages = (model) => model.startsWith('qwen/');
+export const readsImages = (model) => /qwen/.test(model);
 
-/** Keeps reasoning models from spending latency and max_tokens on thinking. */
+/** Keeps reasoning models from spending latency on thinking. */
 export function reasoningEffort(model) {
-  if (model.startsWith('qwen/')) return 'none';           // hybrid model: "none" = instruct mode
-  if (model.startsWith('openai/gpt-oss')) return 'low';   // always reasons; "low" is the minimum
+  if (!model.startsWith('groq:')) return null;
+  if (/qwen/.test(model)) return 'none';
+  if (/gpt-oss/.test(model)) return 'low';
   return null;
 }
 
-/**
- * Only the newest page snapshot is sent in full. Older user (page-state) messages shrink to their
- * URL + title lines and lose screenshots: keeps each step under the free tier's tokens/min and
- * Groq's 3-images-per-request cap. The task lives in the system prompt, so nothing essential is lost.
- */
+/** Only the newest page snapshot is sent in full; older ones shrink to their first lines, images dropped. */
 export function compactingOldPages(messages) {
   const latest = messages.findLastIndex((m) => m.role === 'user');
   if (latest < 0) return messages;
   return messages.map((m, i) => {
     if (i === latest || m.role !== 'user') return m;
-    const text = typeof m.content === 'string' ? m.content
-      : (m.content ?? []).map((p) => p.text).filter(Boolean).join('\n');
+    const text = typeof m.content === 'string' ? m.content : (m.content ?? []).map((p) => p.text).filter(Boolean).join('\n');
     return { ...m, content: text.split('\n').filter(Boolean).slice(0, 2).join('\n') + '\n(older page snapshot trimmed)' };
   });
 }
@@ -71,7 +56,6 @@ export class Cooldowns {
   constructor(now = () => Date.now()) { this.until = new Map(); this.now = now; }
   note(model, retryAfter) { this.until.set(model, this.now() + Math.min(Number(retryAfter) || 10, 60) * 1000); }
   cooling(model) { return (this.until.get(model) ?? 0) > this.now(); }
-  /** Seconds until the first of `models` is usable again (1...30). */
   secondsUntilAnyFree(models) {
     const soonest = Math.min(...models.map((m) => this.until.get(m) ?? 0));
     return Math.min(30, Math.max(1, (soonest - this.now()) / 1000));
@@ -79,40 +63,47 @@ export class Cooldowns {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let nextId = 1;
 
 export class LLM {
   /**
-   * @param transport (body) => Promise<{status, retryAfter, json}>, the main-process Groq call
-   * @param config {agentModel, voiceModel}
+   * @param transport ({model, body, id}) => Promise<{status, retryAfter, json, ms}>
+   * @param tiers {fast, strong, agent, answer}: lists of "provider:model"
+   * @param abort (id) => void, cancels an in-flight request in the main process
    */
-  constructor(transport, config, cooldowns = new Cooldowns()) {
+  constructor(transport, tiers, { cooldowns = new Cooldowns(), abort = () => {} } = {}) {
     this.transport = transport;
-    this.config = config;
+    this.tiers = tiers;
     this.cooldowns = cooldowns;
+    this.abort = abort;
     this.onRateLimit = null;
+    this.calls = [];  // last calls {model, ms, status, tokens}, for traces
   }
 
-  get agentModels() { return [this.config.agentModel, ...FALLBACK_MODELS.filter((m) => m !== this.config.agentModel)]; }
+  async call(model, body, signal) {
+    const id = `r${nextId++}`;
+    const onAbort = () => this.abort(id);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    const effort = reasoningEffort(model);
+    try {
+      const res = await this.transport({ model, id, body: effort ? { ...body, reasoning_effort: effort } : body });
+      this.calls.push({ model, ms: res.ms, status: res.status, tokens: res.json?.usage?.total_tokens ?? 0, cached: Boolean(res.cached) });
+      if (this.calls.length > 50) this.calls.shift();
+      if (res.status === 429) this.cooldowns.note(model, res.retryAfter);
+      return res;
+    } finally { signal?.removeEventListener('abort', onAbort); }
+  }
 
   /** Tool-calling completion for the browser agent. Returns the assistant message. */
-  async chat(messages, tools = TOOLS) {
+  async chat(messages, tools = TOOLS, signal) {
     const compacted = compactingOldPages(messages);
-    const models = this.agentModels;
+    const models = this.tiers.agent;
     let last = null;
-    for (let round = 0; round < 3; round++) {
+    for (let round = 0; round < 3 && !signal?.aborted; round++) {
       for (const model of models) {
         if (this.cooldowns.cooling(model)) continue;
-        const body = {
-          model,
-          // Text-only fallbacks get the page snapshot without the screenshot instead of a 400.
-          messages: readsImages(model) ? compacted : strippingImages(compacted),
-          tools, tool_choice: 'required', max_tokens: 1024,
-        };
-        const effort = reasoningEffort(model);
-        if (effort) body.reasoning_effort = effort;
-        last = await this.transport(body);
+        last = await this.call(model, { messages: readsImages(model) ? compacted : strippingImages(compacted), tools, tool_choice: 'required', max_tokens: 1024, temperature: 0 }, signal);
         if (last.status !== 429) break;
-        this.cooldowns.note(model, last.retryAfter);
       }
       if (last && last.status !== 429) break;
       if (round === 2) break;
@@ -120,27 +111,64 @@ export class LLM {
       this.onRateLimit?.(Math.ceil(wait));
       await sleep(wait * 1000);
     }
-    if (!last) throw new Error('All Groq models are rate limited; try again in a few seconds.');
+    if (!last) throw new Error('All models are rate limited; try again in a few seconds.');
     if (last.status !== 200) throw new Error(`API error (${last.status}): ${last.json?.error?.message ?? 'unknown'}`);
     const message = last.json?.choices?.[0]?.message;
     if (!message) throw new Error('Invalid response from API');
     return message;
   }
 
-  /** One JSON-mode completion (voice intent, page Q&A). Returns content string or null. */
-  async json(system, user, models, maxTokens = 500) {
-    for (const model of models) {
-      if (this.cooldowns.cooling(model)) continue;
-      const body = {
-        model, max_tokens: maxTokens, temperature: 0, response_format: { type: 'json_object' },
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-      };
-      const effort = reasoningEffort(model);
-      if (effort) body.reasoning_effort = effort;
-      const res = await this.transport(body);
-      if (res.status === 429) { this.cooldowns.note(model, res.retryAfter); continue; }
-      if (res.status !== 200) { console.error('[groq]', model, res.status, res.json?.error?.message); return null; }
+  /** One JSON answer about a screenshot (vision models only). Returns the content string or null. */
+  async vision(system, text, jpegBase64, models, { schema = null, signal = null, maxTokens = 200 } = {}) {
+    const body = {
+      max_tokens: maxTokens, temperature: 0,
+      response_format: schema ? { type: 'json_schema', json_schema: { name: 'out', strict: true, schema } } : { type: 'json_object' },
+      messages: [{ role: 'system', content: system }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpegBase64}` } }] }],
+    };
+    for (const model of models.filter((m) => readsImages(m) && !this.cooldowns.cooling(m))) {
+      if (signal?.aborted) return null;
+      const res = await this.call(model, body, signal);
+      if (res.status === 200) return res.json?.choices?.[0]?.message?.content ?? null;
+    }
+    return null;
+  }
+
+  /**
+   * One JSON completion. Returns the content string or null.
+   * opts.schema: strict JSON schema; opts.signal: AbortSignal; opts.hedgeMs: start the next model if the
+   * first hasn't answered by then (first good answer wins, the other is aborted).
+   */
+  async json(system, user, models, maxTokens = 500, { schema = null, signal = null, hedgeMs = 0 } = {}) {
+    const body = {
+      max_tokens: maxTokens, temperature: 0,
+      response_format: schema ? { type: 'json_schema', json_schema: { name: 'out', strict: true, schema } } : { type: 'json_object' },
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    };
+    const usable = models.filter((m) => !this.cooldowns.cooling(m));
+    if (!usable.length) return null;
+    const attempt = async (model, sig) => {
+      const res = await this.call(model, body, sig);
+      if (res.status !== 200) { if (res.status !== 499) console.error('[llm]', model, res.status, res.json?.error?.message); return null; }
       return res.json?.choices?.[0]?.message?.content ?? null;
+    };
+    if (hedgeMs > 0 && usable.length > 1) {
+      const a = new AbortController(), b = new AbortController();
+      signal?.addEventListener('abort', () => { a.abort(); b.abort(); }, { once: true });
+      const first = attempt(usable[0], a.signal);
+      const second = new Promise((resolve) => {
+        const t = setTimeout(() => resolve(attempt(usable[1], b.signal)), hedgeMs);
+        first.then((r) => { if (r != null) { clearTimeout(t); resolve(null); } });
+      });
+      const winner = await Promise.race([first.then((r) => r ?? second), second.then((r) => r ?? first)]);
+      a.abort(); b.abort();
+      if (winner != null) return winner;
+      for (const m of usable.slice(2)) { const r = await attempt(m, signal); if (r != null) return r; }
+      return null;
+    }
+    for (const model of usable) {
+      if (signal?.aborted) return null;
+      const r = await attempt(model, signal);
+      if (r != null) return r;
     }
     return null;
   }

@@ -7,3 +7,6 @@ backend/target/
 electron/node_modules/
 electron/test-results/
 electron/playwright-report/
+
+electron/eval/out/
+electron/eval/audio-cache/

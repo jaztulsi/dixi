@@ -23,10 +23,12 @@ export class DeepgramBridge {
     this.ws = null;
   }
 
-  open() {
+  open({ keyterms = [] } = {}) {
     if (!this.apiKey) return Promise.resolve({ ok: false, error: 'DEEPGRAM_API_KEY is not set in .env' });
     this.close();
-    const url = 'wss://api.deepgram.com/v2/listen?' + new URLSearchParams(DEEPGRAM_PARAMS);
+    const q = new URLSearchParams(DEEPGRAM_PARAMS);
+    for (const k of keyterms.slice(0, 50)) if (k !== 'Dixi') q.append('keyterm', k);
+    const url = 'wss://api.deepgram.com/v2/listen?' + q;
     const ws = new WebSocket(url, { headers: { Authorization: `Token ${this.apiKey}` } });
     this.ws = ws;
     return new Promise((resolve) => {

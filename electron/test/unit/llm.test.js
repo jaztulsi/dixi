@@ -1,63 +1,57 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LLM, TOOLS, SUB_AGENT_TOOLS, Cooldowns, compactingOldPages, strippingImages, reasoningEffort } from '../../src/renderer/core/llm.js';
+import { LLM, Cooldowns, reasoningEffort } from '../../src/renderer/core/llm.js';
+import { chat, Spend } from '../../src/main/providers.js';
 
-const config = { agentModel: 'qwen/qwen3.8-27b', voiceModel: 'openai/gpt-oss-20b' };
-const ok = (msg) => ({ status: 200, json: { choices: [{ message: msg }] } });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const okReply = (content, ms = 0) => sleep(ms).then(() => ({ status: 200, json: { choices: [{ message: { content } }] } }));
 
-test('tool schemas: no empty "required" (Groq rejects it), sub-agents cannot fork', () => {
-  const goBack = TOOLS.find((t) => t.function.name === 'go_back');
-  assert.equal('required' in goBack.function.parameters, false);
-  for (const t of TOOLS) {
-    const p = t.function.parameters;
-    if (p.required) assert.deepEqual([...p.required].sort(), Object.keys(p.properties).sort(), t.function.name);
-  }
-  assert.equal(SUB_AGENT_TOOLS.some((t) => ['fork_tasks', 'new_tab', 'switch_tab'].includes(t.function.name)), false);
+test('hedged request: a slow first model is overtaken by the second; the loser is aborted', async () => {
+  const aborted = [];
+  const llm = new LLM(({ model }) => (model === 'slow' ? okReply('slow', 300) : okReply('fast', 20)), {}, { abort: (id) => aborted.push(id) });
+  const t0 = Date.now();
+  assert.equal(await llm.json('s', 'u', ['slow', 'fast'], 50, { hedgeMs: 50 }), 'fast');
+  assert.ok(Date.now() - t0 < 200);
 });
 
-test('only the newest page snapshot is sent in full; old screenshots dropped', () => {
-  const page = (img) => ({ role: 'user', content: [{ type: 'text', text: 'Current URL: u\nPage title: t\n\nInteractive elements:\n[0] a' }, ...(img ? [{ type: 'image_url', image_url: { url: 'x' } }] : [])] });
-  const msgs = [{ role: 'system', content: 's' }, page(true), { role: 'assistant', content: null }, page(true)];
-  const out = compactingOldPages(msgs);
-  assert.equal(out[1].content, 'Current URL: u\nPage title: t\n(older page snapshot trimmed)');
-  assert.equal(out[3], msgs[3]);
-  assert.equal(strippingImages(out)[3].content.length, 1);
+test('rate-limited models cool down and are skipped', async () => {
+  const seen = [];
+  const llm = new LLM(({ model }) => { seen.push(model); return model === 'a' ? { status: 429, retryAfter: '5', json: {} } : okReply('b'); }, {});
+  assert.equal(await llm.json('s', 'u', ['a', 'b']), 'b');
+  assert.equal(await llm.json('s', 'u', ['a', 'b']), 'b');
+  assert.deepEqual(seen, ['a', 'b', 'b']);
 });
 
-test('reasoning effort per model', () => {
-  assert.equal(reasoningEffort('qwen/qwen3.8-27b'), 'none');
-  assert.equal(reasoningEffort('openai/gpt-oss-120b'), 'low');
-  assert.equal(reasoningEffort('other'), null);
+test('reasoning effort per provider/model family', () => {
+  assert.equal(reasoningEffort('groq:qwen/qwen3.8-27b'), 'none');
+  assert.equal(reasoningEffort('groq:openai/gpt-oss-20b'), 'low');
+  assert.equal(reasoningEffort('cerebras:gpt-oss-120b'), null);
 });
 
-test('429 falls back to the next model; images stripped for text-only models', async () => {
-  const sent = [];
-  const llm = new LLM(async (body) => { sent.push(body); return body.model.startsWith('qwen') ? { status: 429, retryAfter: '5' } : ok({ tool_calls: [] }); }, config);
-  const msgs = [{ role: 'user', content: [{ type: 'text', text: 'p' }, { type: 'image_url', image_url: { url: 'x' } }] }];
-  await llm.chat(msgs);
-  assert.deepEqual(sent.map((b) => b.model), ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b']);
-  assert.equal(sent[0].messages[0].content.length, 2, 'qwen gets the screenshot');
-  assert.equal(sent[1].messages[0].content.length, 1, 'gpt-oss gets text only');
-  assert.equal(sent[0].reasoning_effort, 'none');
-  // A model in cooldown is skipped, not hammered.
-  sent.length = 0;
-  await llm.chat(msgs);
-  assert.deepEqual(sent.map((b) => b.model), ['openai/gpt-oss-120b']);
+test('providers: spend cap stops calls; keys never needed in the renderer', async () => {
+  const spend = new Spend('/dev/null/none', 0.000001);
+  spend.add('groq:openai/gpt-oss-20b', { prompt_tokens: 100000, completion_tokens: 0 });
+  const r = await chat({ keys: { groq: 'k' }, env: {} }, spend, { model: 'groq:openai/gpt-oss-20b', body: {} }, async () => { throw new Error('should not call'); });
+  assert.equal(r.status, 402);
+  const none = await chat({ keys: {}, env: {} }, null, { model: 'groq:x', body: {} });
+  assert.equal(none.status, 401);
+});
+
+test('providers: Anthropic replies come back in the same shape as the others', async () => {
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body);
+    assert.equal(body.tool_choice.name, 'emit');
+    return new Response(JSON.stringify({ content: [{ type: 'tool_use', input: { steps: [] } }], usage: { input_tokens: 10, output_tokens: 2 } }), { status: 200 });
+  };
+  const r = await chat({ keys: { anthropic: 'k' }, env: {} }, null, { model: 'anthropic:claude-haiku-5-5', body: { messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'u' }], response_format: { type: 'json_schema', json_schema: { schema: { type: 'object' } } } } }, fetchImpl);
+  assert.equal(r.json.choices[0].message.content, '{"steps":[]}');
 });
 
 test('cooldowns', () => {
   let now = 0;
   const c = new Cooldowns(() => now);
-  c.note('m', '5');
+  c.note('m', '2');
   assert.equal(c.cooling('m'), true);
-  assert.equal(c.secondsUntilAnyFree(['m']), 5);
-  now = 6000;
+  now = 2500;
   assert.equal(c.cooling('m'), false);
-});
-
-test('json(): first healthy model wins, errors give null', async () => {
-  const llm = new LLM(async (b) => (b.model === 'a' ? { status: 429 } : { status: 200, json: { choices: [{ message: { content: '{"x":1}' } }] } }), config);
-  assert.equal(await llm.json('s', 'u', ['a', 'b']), '{"x":1}');
-  const bad = new LLM(async () => ({ status: 500, json: { error: { message: 'boom' } } }), config);
-  assert.equal(await bad.json('s', 'u', ['b']), null);
 });

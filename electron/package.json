@@ -9,7 +9,12 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/unit/*.test.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "live": "node eval/live.js",
+    "demo": "node eval/demo.js",
+    "eval": "node eval/run.js",
+    "stt": "node eval/audio.js",
+    "refresh-apple-catalog": "node scripts/refresh-apple-catalog.js"
   },
   "dependencies": {
     "dotenv": "18.0.8",

@@ -8,10 +8,11 @@ import { mountMascot } from './ui/mascot.js';
 import { LLM } from './core/llm.js';
 import { BrowserAgent } from './core/agent.js';
 import { VoiceAgent } from './core/voice.js';
-import { SiteCache } from './core/siteCache.js';
-import { IntentModel, ReplyCache } from './core/learn.js';
-import { matchSiteAction, runSiteAction } from './core/siteActions.js';
-import { isQuestion, directNavigationURL, looksLikeURL, parseSearch, searchURL } from './core/text.js';
+import { Executor } from './core/execute.js';
+import { ParseCache } from './core/learn.js';
+import { normName } from './core/interpret.js';
+import { makeCatalog } from './core/catalog.js';
+import { normalizeURL } from './ui/tabs.js';
 
 const $ = (id) => document.getElementById(id);
 const fillIcons = (root = document) => root.querySelectorAll('[data-icon]').forEach((el) => { if (!el.firstChild || el.tagName === 'BUTTON') el.innerHTML = icons[el.dataset.icon] ?? ''; });
@@ -36,10 +37,31 @@ const settings = {
 };
 
 const config = await window.dixi.config();
-const llm = new LLM((body) => window.dixi.groqChat(body), config);
+const llm = new LLM((req) => window.dixi.llm(req), config.tiers, { abort: (id) => window.dixi.llmAbort(id) });
 const tabs = new TabManager($('tabs'), () => render());
 const speaker = new Speaker();
-const agent = new BrowserAgent({ tabs, llm, siteCache: new SiteCache(localStorage), onChange: () => render() });
+
+// Stage-by-stage trace of every command (kept in memory for tests; saved to disk with DIXI_DEBUG=1).
+const traces = [];
+const trace = (stage, data = {}) => {
+  const e = { t: Date.now(), p: Math.round(performance.now()), stage, ...data };
+  traces.push(e);
+  if (traces.length > 2000) traces.splice(0, 500);
+  if (config.debug) window.dixi.trace(JSON.stringify(e));
+};
+
+// Learned sites (main process owns the registry; this keeps a copy for instant lookups while you talk).
+const registry = {
+  entries: [],
+  async refresh() { this.entries = (await window.dixi.registry.all()) ?? []; },
+  names() { return [...new Set(this.entries.flatMap((e) => [e.name, ...(e.said ?? [])]))]; },
+  lookup(name) { const k = normName(name); return this.entries.find((e) => normName(e.name) === k || (e.said ?? []).includes(k)) ?? null; },
+  outcome: (host, ok) => window.dixi.registry.outcome(host, ok),
+  confirm: (said, hit) => window.dixi.registry.confirm(said, hit).then(() => registry.refresh()),
+  setSearchTemplate: (host, tpl) => window.dixi.registry.template(host, tpl),
+};
+registry.refresh();
+const catalog = makeCatalog(await window.dixi.catalog());
 // Dixi's own controls, for voice ("new tab", "zoom in", "cancel"...).
 const zoom = (delta) => { const w = tabs.activeTab?.webview; if (w) w.setZoomLevel(delta == null ? 0 : w.getZoomLevel() + delta); };
 const appActions = {
@@ -53,9 +75,17 @@ const appActions = {
   settings: () => { renderSettings(); $('settings-sheet').showModal(); },
   stopAgent: () => voice.cancelAll(),
 };
-// Learned phrasings and remembered AI answers persist across launches, so repeats cost no API calls.
-const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic(), tabs, agent, speaker, llm, config, settings,
-  app: appActions, model: new IntentModel(localStorage), cache: new ReplyCache(localStorage), onChange: () => render() });
+const executor = new Executor({
+  tabs, llm, tiers: config.tiers, speaker, catalog, webSearch: config.webSearch, trace, app: appActions, registry,
+  resolve: async (q) => { const r = await window.dixi.resolve(q); registry.refresh(); return r; },
+  ask: (q, options) => voice.ask(q, options), confirm: (q) => voice.confirmAction(q), onAnswer: (a) => voice.set({ answer: a }),
+});
+const agent = new BrowserAgent({ tabs, llm, executor, onChange: () => render() });
+executor.agent = agent;
+// Remembered understandings persist across launches, so repeats cost no AI call.
+const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic(), tabs, speaker, llm, tiers: config.tiers, executor, settings,
+  registry, cache: new ParseCache(localStorage), agent, trace, onChange: () => render() });
+window.dixi.onPopup((url) => tabs.createTab(url));
 
 // ---- start page ----
 function renderExamples() {
@@ -135,8 +165,10 @@ function renderCaption() {
   }
   // Every command shows here the moment it's understood: queued → running → done / failed.
   const plan = $('caption-plan');
-  plan.hidden = !voice.plan.length;
-  plan.replaceChildren(...voice.plan.map((p) => {
+  // Only what's happening or done; failed or cancelled steps just disappear (no red ✕ in front of people).
+  const shown = voice.plan.filter((p) => (p.state === 'queued' || p.state === 'running' || p.state === 'done') && p.label);
+  plan.hidden = !shown.length;
+  plan.replaceChildren(...shown.map((p) => {
     const li = document.createElement('li');
     li.className = p.state;
     li.innerHTML = `<span class="k">${p.state === 'running' ? '<span class="spinner"></span>' : PLAN_ICONS[p.state]}</span><span></span>`;
@@ -171,30 +203,20 @@ function renderAgentSheet() {
   $('agent-result-text').textContent = agent.finalResult ?? '';
 }
 
-// ---- typed commands (same order as the Swift handleSubmit) ----
+// ---- typed commands: the same understanding and checks as voice; a bare address just opens ----
 async function submit(raw) {
   const text = raw.trim();
-  if (!text || agent.isRunning) return;
+  if (!text) return;
   $('bar-input').value = '';
   $('bar-input').blur();
-
-  const site = matchSiteAction(text, tabs.getCurrentURL());
-  if (site && tabs.activeTab) { voice.set({ statusLine: site.label }); voice.set({ statusLine: await runSiteAction(site, tabs) }); return; }
-  if (isQuestion(text) || text.endsWith('?')) { await voice.answerQuestion(text); return; }
-
-  if (!tabs.activeTab) tabs.createTab('https://google.com');
-  const search = parseSearch(text, tabs.getCurrentURL());
-  if (search) return tabs.navigate(searchURL(search.platform, search.query));
-  const direct = directNavigationURL(text);
-  if (direct) return tabs.navigate(direct);
-  if (looksLikeURL(text)) return tabs.navigate(text);
-  return agent.start(text);
+  if (!/\s/.test(text) && normalizeURL(text)?.startsWith('http')) { if (!tabs.activeTab) tabs.createTab('about:blank'); return tabs.navigate(text).catch((e) => voice.set({ statusLine: e.message })); }
+  return voice.handleText(text);
 }
 
 $('pill').addEventListener('submit', (e) => { e.preventDefault(); submit($('bar-input').value); });
 $('send').addEventListener('click', () => submit($('bar-input').value));
-$('stop').addEventListener('click', () => agent.stop());
-$('agent-stop').addEventListener('click', () => agent.stop());
+$('stop').addEventListener('click', () => voice.cancelAll());
+$('agent-stop').addEventListener('click', () => voice.cancelAll());
 $('back').addEventListener('click', () => tabs.goBack());
 $('mic').addEventListener('click', () => voice.toggle());
 $('agent-status').addEventListener('click', () => $('agent-sheet').showModal());
@@ -222,12 +244,19 @@ document.querySelectorAll('dialog [data-close]').forEach((b) => b.addEventListen
 function renderSettings() {
   $('wake-toggle').checked = settings.requireWakeWord;
   const key = (el, ok) => { el.className = ok ? 'key-ok' : 'key-missing'; el.textContent = ok ? '✓ Set' : '✕ Missing'; };
-  key($('key-groq'), config.hasGroqKey);
-  key($('key-deepgram'), config.hasDeepgramKey);
-  $('agent-model').textContent = config.agentModel;
-  $('voice-model').textContent = config.voiceModel;
+  key($('key-groq'), config.keys.groq);
+  key($('key-deepgram'), config.keys.deepgram);
+  $('agent-model').textContent = config.tiers.agent[0] ?? 'none';
+  $('voice-model').textContent = config.tiers.fast[0] ?? 'none';
 }
 $('wake-toggle').addEventListener('change', (e) => { settings.requireWakeWord = e.target.checked; renderExamples(); render(); });
+
+// Escape: reset Dixi (stop everything, clear the caption, reconnect the mic). Works anywhere in the app.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+  voice.reset();
+  speaker.stop();
+});
 
 // ---- dixi:// deep links: focus or prefill only, never run a task ----
 window.dixi.onOpenURL((url) => {
@@ -240,7 +269,18 @@ window.dixi.onOpenURL((url) => {
 
 // Hands-free: start listening as soon as the app opens.
 render();
-if (config.hasDeepgramKey && config.hasGroqKey) voice.start().catch((err) => console.error('[voice]', err.message));
+if ((config.stt === 'elevenlabs' ? config.keys.elevenlabs : config.keys.deepgram) && config.tiers.fast.length) voice.start().catch((err) => console.error('[voice]', err.message));
 
 // For end-to-end tests and debugging.
-window.__dixi = { tabs, agent, voice, llm, submit, settings };
+// For end-to-end tests and debugging.
+window.__dixi = {
+  tabs, agent, voice, llm, submit, settings, executor, traces, registry,
+  busy: () => voice.busy() || tabs.isLoading(),
+  /** Oracle run: structured steps straight to the executor (no understanding step); `urls` skips resolution too. */
+  async execute(intent, { urls = {}, said = '' } = {}) {
+    const real = executor.resolve;
+    if (Object.keys(urls).length) executor.resolve = async (q) => (urls[q.said] ? { status: 'ok', url: urls[q.said], host: new URL(urls[q.said]).hostname, name: q.said, source: 'oracle' } : real(q));
+    try { voice.plan = []; for (const s of intent.steps) { const r = await executor.run({ guess: '', urls: [], query: '', item: '', qty: 0, n: 0, value: '', ...s }, said); voice.plan.push({ said, label: r.message, state: r.ok ? 'done' : 'failed' }); if (!r.ok) break; } } finally { executor.resolve = real; }
+  },
+  resetForEval() { voice.cancelAll(); voice.set({ plan: [], recent: [], answer: null, statusLine: '', liveTranscript: '' }); voice.turnsDone.clear(); agent.finalResult = null; traces.length = 0; },
+};

@@ -1,147 +1,239 @@
-// Dixi main process: window, keys, and every network call that needs a key.
-// The renderer (UI + agents) never sees an API key: Groq and Deepgram calls go through IPC here.
+// Dixi main process: window, keys, and every call that needs a key or main-process powers.
+// The renderer (UI + agents) never sees an API key; every IPC handler checks it is our own UI calling.
 
 import { app, BrowserWindow, ipcMain, session, shell, systemPreferences, webContents } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
-import { groqChat } from './groq.js';
+import { chat, abort, tiers, keyStatus, Spend } from './providers.js';
 import { DeepgramBridge } from './deepgram.js';
+import { ElevenLabsBridge } from './stt.js';
+import { Resolver } from './resolve.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, '../..');
 const config = loadConfig();
+const EVAL = Boolean(process.env.DIXI_EVAL);
 
-// Voice-opened videos must play without a real user click (same fix as the Swift app's WebKit setting).
+// Voice-opened videos must play without a real user click.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // Hands-free: Dixi works while other apps are in front, so a covered window must not be paused.
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-app.commandLine.appendSwitch('disable-background-timer-throttling');
 
 // End-to-end tests: play a WAV file as the microphone (DIXI_FAKE_AUDIO=/path/to.wav).
 if (process.env.DIXI_FAKE_AUDIO) {
   app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
   app.commandLine.appendSwitch('use-fake-device-for-media-stream');
   app.commandLine.appendSwitch('use-file-for-fake-audio-capture', `${process.env.DIXI_FAKE_AUDIO}%noloop`);
-  // The sandboxed audio service can't read the file; run it in-process for tests only.
   app.commandLine.appendSwitch('disable-features', 'AudioServiceOutOfProcess,AudioServiceSandbox');
 }
 
-// One window, one app: a dixi:// link from the website focuses it instead of opening another copy.
-// The app was called Runic. On the first launch as Dixi, carry its data folder over (settings, learned
-// phrases, tab logins) so nothing is lost. The old names below are the only ones left on purpose.
+// The app was called Runic: carry its data folder over once (settings, learned names, tab logins).
 {
   const legacy = path.join(app.getPath('appData'), 'Runic');
   const data = app.getPath('userData');
   if (!fs.existsSync(data) && fs.existsSync(legacy)) {
-    fs.cpSync(legacy, data, { recursive: true, filter: (src) => !path.basename(src).startsWith('Singleton') });
+    fs.cpSync(legacy, data, { recursive: true, filter: (src) => !/Singleton|Cache|Code Cache|GPUCache/.test(path.basename(src)) });
     const tabs = path.join(data, 'Partitions');
     if (fs.existsSync(path.join(tabs, 'runic-tabs'))) fs.renameSync(path.join(tabs, 'runic-tabs'), path.join(tabs, 'dixi-tabs'));
   }
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 
-// ponytail: a short list of the heaviest ad/tracking hosts, not a full blocklist; add hosts as they show up.
-const AD_URLS = [
-  'doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'google-analytics.com', 'googletagmanager.com',
-  'googletagservices.com', 'adservice.google.com', 'imasdk.googleapis.com', 'amazon-adsystem.com', 'adnxs.com',
-  'criteo.com', 'taboola.com', 'outbrain.com', 'scorecardresearch.com', 'moatads.com', 'vdo.ai', 'lijit.com', 'gumgum.com',
-].flatMap((h) => [`*://${h}/*`, `*://*.${h}/*`])
-  .concat(['*://www.youtube.com/pagead/*', '*://www.youtube.com/api/stats/ads*', '*://www.youtube.com/ptracking*']);
-
 let win = null;
 let pendingURL = null;
-const deepgram = new DeepgramBridge(config.deepgramAPIKey, (channel, data) => win?.webContents.send(channel, data));
+// Speech-to-text: ElevenLabs Scribe when its key is set (or DIXI_STT=elevenlabs), else Deepgram Flux.
+const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');
+const emitToUI = (channel, data) => win?.webContents.send(channel, data);
+const deepgram = sttName === 'elevenlabs' ? new ElevenLabsBridge(config.keys.elevenlabs, emitToUI) : new DeepgramBridge(config.deepgramAPIKey, emitToUI);
+const spend = new Spend(EVAL ? path.join(root, 'eval/.cache/spend.json') : path.join(app.getPath('userData'), 'spend.json'), config.spendCapUSD);
+if (!config.env.DIXI_LLM_CACHE_DIR) config.env.DIXI_LLM_CACHE_DIR = path.join(root, 'eval/.cache/llm');
+const tabsSession = () => session.fromPartition('persist:dixi-tabs');
+
+/** A page fetched with the tabs' own network stack (same cookies, same host rules in evals). Sites that
+ *  refuse background fetches (401/403/429, or no real page) are loaded for real in a hidden window. */
+async function fetchPage(url, { probe = false } = {}) {
+  if (!/^https?:\/\//i.test(url)) return null;
+  let r = null;
+  try {
+    const res = await tabsSession().fetch(url, { headers: probe ? { 'x-dixi-probe': '1' } : {}, redirect: 'follow', signal: AbortSignal.timeout(4000) });
+    r = { ok: res.ok, status: res.status, url: res.url || url, html: (await res.text()).slice(0, 400_000) };
+  } catch {}
+  if (probe && (!r || [401, 403, 429, 503].includes(r.status) || (r.ok && !/<title/i.test(r.html.slice(0, 50_000))))) return (await loadPage(url)) ?? r;
+  return r;
+}
+
+// Hidden windows for real page loads (same session as the tabs): at most two at a time.
+let loaders = 0;
+const waiting = [];
+async function loadPage(url) {
+  if (loaders >= 2) await new Promise((r) => waiting.push(r));
+  loaders++;
+  const w = new BrowserWindow({ show: false, webPreferences: { partition: 'persist:dixi-tabs', sandbox: true, contextIsolation: true, images: false, backgroundThrottling: false } });
+  w.webContents.setAudioMuted(true);
+  w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  try {
+    const done = new Promise((res) => { w.webContents.once('dom-ready', res); w.webContents.once('did-fail-load', res); setTimeout(res, 6000); });
+    w.loadURL(url, { extraHeaders: 'x-dixi-probe: 1\n' }).catch(() => {});
+    await done;
+    await new Promise((res) => setTimeout(res, 400));   // titles set by script
+    const html = await Promise.race([w.webContents.executeJavaScriptInIsolatedWorld(1002, [{ code: `'<title>' + document.title.replace(/</g, '') + '</title>' + document.documentElement.outerHTML.slice(0, 400000)` }]), new Promise((res) => setTimeout(() => res(''), 2000))]);
+    return html ? { ok: true, status: 200, url: w.webContents.getURL() || url, html } : null;
+  } catch { return null; } finally { loaders--; w.destroy(); waiting.shift()?.(); }
+}
+let resolver = null;
 
 function createWindow() {
   win = new BrowserWindow({
-    title: 'Dixi',
-    width: 1400,
-    height: 900,
-    minWidth: 720,
-    minHeight: 500,
-    backgroundColor: '#ffffff',
-    webPreferences: {
-      preload: path.join(here, '../preload/preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webviewTag: true,
-    },
+    title: 'Dixi', width: 1400, height: 900, minWidth: 720, minHeight: 500, backgroundColor: '#ffffff',
+    webPreferences: { preload: path.join(here, '../preload/preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true },
   });
   win.loadFile(path.join(here, '../renderer/index.html'));
   win.on('closed', () => { win = null; deepgram.close(); });
-  win.webContents.on('did-finish-load', () => {
-    if (pendingURL) { win.webContents.send('app:open-url', pendingURL); pendingURL = null; }
+  win.webContents.on('did-finish-load', () => { if (pendingURL) { win.webContents.send('app:open-url', pendingURL); pendingURL = null; } });
+  // The UI page never navigates away (a dropped link would otherwise get the window.dixi bridge).
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // Tabs: fixed partition, no preload, no Node, whatever the page asks for.
+  win.webContents.on('will-attach-webview', (_e, prefs, params) => {
+    delete prefs.preload;
+    Object.assign(prefs, { nodeIntegration: false, contextIsolation: true, sandbox: true });
+    params.partition = 'persist:dixi-tabs';
   });
 }
+
+// Popups from pages open as Dixi tabs (http/https only), not stray windows.
+app.on('web-contents-created', (_e, wc) => {
+  if (wc.getType() !== 'webview') return;
+  wc.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) win?.webContents.send('tab:popup', url); return { action: 'deny' }; });
+  wc.on('render-process-gone', () => win?.webContents.send('tab:crashed', wc.id));
+});
 
 // dixi:// deep links (website "Launch Dixi" button). They only focus/prefill, never run a task.
 function handleDeepLink(url) {
   if (!url?.startsWith('dixi://')) return;
-  if (win) {
-    if (win.isMinimized()) win.restore();
-    win.focus();
-    win.webContents.send('app:open-url', url);
-  } else {
-    pendingURL = url;
-  }
+  if (win) { if (win.isMinimized()) win.restore(); win.focus(); win.webContents.send('app:open-url', url); } else pendingURL = url;
 }
-app.on('open-url', (event, url) => { event.preventDefault(); handleDeepLink(url); });           // macOS
-app.on('second-instance', (_e, argv) => handleDeepLink(argv.find(a => a.startsWith('dixi://')))); // Windows/Linux
+app.on('open-url', (event, url) => { event.preventDefault(); handleDeepLink(url); });
+app.on('second-instance', (_e, argv) => handleDeepLink(argv.find((a) => a.startsWith('dixi://'))));
 
 app.whenReady().then(() => {
-  if (process.defaultApp) {
-    app.setAsDefaultProtocolClient('dixi', process.execPath, [path.resolve(process.argv[1] ?? '.')]);
-  } else {
-    app.setAsDefaultProtocolClient('dixi');
-  }
+  if (process.defaultApp) app.setAsDefaultProtocolClient('dixi', process.execPath, [path.resolve(process.argv[1] ?? '.')]);
+  else app.setAsDefaultProtocolClient('dixi');
 
   // Microphone: only the Dixi UI may use it, never the websites inside the tabs.
-  // Ask, but don't wait: blocking here would delay the window (and hang automated tests).
   if (process.platform === 'darwin') systemPreferences.askForMediaAccess('microphone').catch(() => false);
-  session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
-    callback(permission === 'media' && wc.getURL().startsWith('file://'));
+  session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) => {
+    callback(permission === 'media' && wc.getURL().startsWith('file://') && (details.mediaTypes ?? ['audio']).every((t) => t === 'audio'));
   });
-  session.fromPartition('persist:dixi-tabs').setPermissionRequestHandler((_wc, permission, callback) => {
-    callback(permission === 'fullscreen' || permission === 'clipboard-sanitized-write');
-  });
-  // Ads and trackers never load in the tabs: lighter pages render sooner (and nothing to "skip").
-  session.fromPartition('persist:dixi-tabs').webRequest.onBeforeRequest({ urls: AD_URLS }, (_details, callback) => callback({ cancel: true }));
-
+  const tabs = tabsSession();
+  tabs.setPermissionRequestHandler((_wc, permission, callback) => callback(permission === 'fullscreen' || permission === 'clipboard-sanitized-write'));
+  // Sites see a normal Chrome (same engine and version), without the "Electron/x" and app tokens that
+  // some bot walls key on. Reported as a trade-off in docs/DECISIONS.md.
+  tabs.setUserAgent(tabs.getUserAgent().replace(/\s(Electron|dixi|Dixi)\/\S+/g, ''));
+  // Ads and trackers: a generated public blocklist (npm run refresh-blocklist), never a hand-written one.
+  try {
+    const hosts = fs.readFileSync(path.join(root, 'data/blocklist.generated.txt'), 'utf8').split('\n').map((s) => s.trim()).filter((s) => s && !s.startsWith('#'));
+    const blocked = new Set(hosts);
+    if (hosts.length) {
+      tabs.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (d, cb) => {
+        let h = '';
+        try { h = new URL(d.url).hostname; } catch {}
+        const parts = h.split('.');
+        cb({ cancel: d.resourceType !== 'mainFrame' && parts.some((_, i) => blocked.has(parts.slice(i).join('.'))) });
+      });
+    }
+  } catch {}
+  resolver = new Resolver({ fetchPage, file: path.join(app.getPath('userData'), 'registry.json'), env: config.env, keys: config.keys });
   createWindow();
-  handleDeepLink(process.argv.find(a => a.startsWith('dixi://')));
+  handleDeepLink(process.argv.find((a) => a.startsWith('dixi://')));
 });
 
 app.on('window-all-closed', () => app.quit());
 app.on('activate', () => { if (!win) createWindow(); });
+process.on('unhandledRejection', (err) => console.error('[main] unhandled', err));
 
-// ---- IPC: everything that needs a key or main-process powers ----
+// ---- IPC: only our own UI page may call these ----
+const ours = (e) => Boolean(win) && e.sender === win.webContents && e.senderFrame?.url?.startsWith('file://');
+const handle = (channel, fn) => ipcMain.handle(channel, (e, ...args) => { if (!ours(e)) throw new Error('forbidden'); return fn(...args); });
+const on = (channel, fn) => ipcMain.on(channel, (e, ...args) => { if (ours(e)) fn(...args); });
 
-ipcMain.handle('config:get', () => ({
-  hasGroqKey: Boolean(config.groqAPIKey),
-  hasDeepgramKey: Boolean(config.deepgramAPIKey),
-  agentModel: config.agentModel,
-  voiceModel: config.voiceModel,
-}));
+handle('config:get', () => ({ keys: keyStatus(config), stt: sttName, tiers: tiers(config), webSearch: config.env.DIXI_SEARCH_URL || '', eval: EVAL, debug: Boolean(config.env.DIXI_DEBUG) }));
 
-ipcMain.handle('groq:chat', (_e, body) => groqChat(config, body));
+const BODY_FIELDS = ['messages', 'tools', 'tool_choice', 'max_tokens', 'temperature', 'response_format', 'reasoning_effort'];
+handle('llm:chat', (req) => {
+  const all = Object.values(tiers(config)).flat();
+  if (!req || !all.includes(req.model)) return { status: 400, json: { error: { message: `Model not allowed: ${req?.model}` } } };
+  const body = Object.fromEntries(BODY_FIELDS.filter((k) => req.body?.[k] !== undefined).map((k) => [k, req.body[k]]));
+  body.max_tokens = Math.min(Number(body.max_tokens) || 512, 2048);
+  if (JSON.stringify(body).length > 1_500_000) return { status: 413, json: { error: { message: 'Request too large' } } };
+  return chat(config, spend, { model: req.model, body, id: req.id });
+});
+on('llm:abort', (id) => abort(id));
+handle('spend:get', () => ({ totalUSD: spend.total, capUSD: spend.cap }));
 
-ipcMain.handle('deepgram:open', (_e, params) => deepgram.open(params));
-ipcMain.on('deepgram:audio', (_e, chunk) => deepgram.sendAudio(chunk));
-ipcMain.on('deepgram:control', (_e, message) => deepgram.sendControl(message));
-ipcMain.handle('deepgram:close', () => deepgram.close());
+handle('resolve:site', (q) => resolver.resolve({ said: String(q?.said ?? '').slice(0, 120), guess: String(q?.guess ?? '').slice(0, 120), urls: (q?.urls ?? []).slice(0, 3).map(String).filter((u) => /^https?:\/\//i.test(u)), fast: Boolean(q?.fast) }));
+handle('registry:confirm', (said, hit) => resolver.confirm(String(said), { url: String(hit.url), host: String(hit.host), finalHost: String(hit.finalHost ?? hit.host), name: String(hit.name) }));
+handle('registry:names', () => resolver.names());
+handle('registry:all', () => [...new Set(Object.values(resolver.entries))].filter((e) => e.fail < 2).map(({ name, said, url, host }) => ({ name, said, url, host })));
+handle('registry:lookup', (name) => resolver.lookup(String(name)));
+handle('registry:outcome', (host, ok) => resolver.outcome(String(host), Boolean(ok)));
+handle('registry:template', (host, tpl) => resolver.setSearchTemplate(String(host), String(tpl)));
+handle('registry:clear', () => { resolver.entries = {}; resolver.save(); return true; });
 
-// Screenshots for the agent when it's stuck: small JPEG, same as the Swift app (~640pt wide).
-ipcMain.handle('tab:screenshot', async (_e, webContentsId) => {
-  const wc = webContents.fromId(webContentsId);
-  if (!wc) return null;
+// Page scripts run in the tab's isolated world (world 1001): the page can't see or tamper with them.
+const blockedWorlds = new Set();   // tabs whose current page refused the isolated world (reset on navigation)
+app.on('web-contents-created', (_e, wc) => { if (wc.getType() === 'webview') wc.on('did-start-navigation', (d) => { if (d.isMainFrame && !d.isSameDocument) blockedWorlds.delete(wc.id); }); });
+handle('tab:exec', async (id, code, timeoutMs = 8000) => {
+  const wc = webContents.fromId(Number(id));
+  if (!wc || wc.hostWebContents !== win.webContents) throw new Error('not a Dixi tab');
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('page did not answer in time')), Math.min(Number(timeoutMs) || 8000, 15000)));
+  // Pages with a strict content-security policy refuse the isolated world: run in the page's own world then.
+  const run = async () => {
+    if (!blockedWorlds.has(wc.id)) {
+      try { return await wc.executeJavaScriptInIsolatedWorld(1001, [{ code: String(code) }], true); } catch (err) {
+        if (!/failed to execute/i.test(err.message)) throw err;
+        blockedWorlds.add(wc.id);
+      }
+    }
+    return wc.executeJavaScript(String(code), true);
+  };
+  return Promise.race([run(), timeout]);
+});
+// OpenSearch description → a URL template with {q}: the template attribute, plus any <Param> children.
+export function openSearchTemplate(xml) {
+  const urlEl = [...String(xml).matchAll(/<Url\b([^>]*?)(\/>|>([\s\S]*?)<\/Url>)/gi)].find((m) => /type=["']text\/html["']/i.test(m[1]));
+  if (!urlEl) return null;
+  let tpl = urlEl[1].match(/template=["']([^"']+)/i)?.[1]?.replace(/&amp;/g, '&');
+  if (!tpl || !/^https?:/.test(tpl)) return null;
+  for (const p of (urlEl[3] ?? '').matchAll(/<Param\b[^>]*name=["']([^"']+)["'][^>]*value=["']([^"']*)["']/gi)) tpl += `${tpl.includes('?') ? '&' : '?'}${p[1]}=${p[2]}`;
+  tpl = tpl.replace(/\{searchTerms\}/, '{q}').replace(/[&?][a-z_]+=\{[^}]+\?\}/gi, '');
+  return tpl.includes('{q}') ? tpl : null;
+}
+handle('tab:opensearch', async (url) => openSearchTemplate((await fetchPage(String(url)).catch(() => null))?.html ?? ''));
+on('net:preconnect', (url) => { if (/^https?:\/\//i.test(url)) tabsSession().preconnect({ url, numSockets: 2 }); });
+
+handle('deepgram:open', (params) => deepgram.open({ keyterms: (params?.keyterms ?? []).slice(0, 50).map(String) }));
+on('deepgram:audio', (chunk) => deepgram.sendAudio(chunk));
+on('deepgram:control', (message) => deepgram.sendControl(message));
+handle('deepgram:close', () => deepgram.close());
+
+handle('tab:screenshot', async (webContentsId) => {
+  const wc = webContents.fromId(Number(webContentsId));
+  if (!wc || wc.hostWebContents !== win.webContents) return null;
   const image = await wc.capturePage();
-  const small = image.resize({ width: Math.min(1280, image.getSize().width) });
-  return small.toJPEG(50).toString('base64');
+  return image.resize({ width: Math.min(1280, image.getSize().width) }).toJPEG(50).toString('base64');
 });
 
-ipcMain.handle('shell:open-external', (_e, url) => {
-  if (/^https?:\/\//.test(url)) return shell.openExternal(url);
+handle('catalog:get', () => { try { return JSON.parse(fs.readFileSync(path.join(root, 'data/apple-catalog.json'), 'utf8')); } catch { return null; } });
+
+// Traces (DIXI_DEBUG=1): one JSON line per stage event, local only, no secrets, no page content.
+const traceDir = path.join(app.getPath('userData'), 'traces');
+on('trace:write', (line) => {
+  if (!config.env.DIXI_DEBUG) return;
+  try { fs.mkdirSync(traceDir, { recursive: true }); fs.appendFileSync(path.join(traceDir, `${new Date().toISOString().slice(0, 10)}.jsonl`), `${String(line).slice(0, 4000)}\n`); } catch {}
 });
+
+handle('shell:open-external', (url) => { if (/^https?:\/\//.test(url)) return shell.openExternal(url); });
