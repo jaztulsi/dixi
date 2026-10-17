@@ -95,7 +95,7 @@ export async function chat(config, spend, req, fetchImpl = fetch) {
   if (req.id) inflight.set(req.id, ctrl);
   const t0 = performance.now();
   try {
-    const init = ep.style === 'anthropic' ? anthropicRequest(key, model, req.body) : {
+    const init = ep.style === 'anthropic' ? anthropicRequest(key, model, req.body, config.env.ANTHROPIC_WORKSPACE_ID) : {
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...forProvider(provider, req.body), model }),
     };
@@ -126,7 +126,8 @@ function forProvider(provider, body) {
 }
 
 // Anthropic Messages API ⇄ OpenAI chat shape (system prompt, JSON-schema output via a forced tool).
-function anthropicRequest(key, model, body) {
+// workspace: ANTHROPIC_WORKSPACE_ID, needed only for a key that isn't scoped to a workspace.
+function anthropicRequest(key, model, body, workspace) {
   const system = body.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
   const part = (p) => (p.type === 'image_url'
     ? { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: String(p.image_url.url).replace(/^data:image\/\w+;base64,/, '') } }
@@ -135,7 +136,7 @@ function anthropicRequest(key, model, body) {
   const schema = body.response_format?.json_schema?.schema;
   const payload = { model, max_tokens: body.max_tokens ?? 1024, system, messages, temperature: body.temperature ?? 0 };
   if (schema) Object.assign(payload, { tools: [{ name: 'emit', description: 'Return the result.', input_schema: schema }], tool_choice: { type: 'tool', name: 'emit' } });
-  return { headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify(payload) };
+  return { headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', ...(workspace ? { 'anthropic-workspace-id': workspace } : {}) }, body: JSON.stringify(payload) };
 }
 function fromAnthropic(j) {
   const tool = j.content?.find((c) => c.type === 'tool_use');
