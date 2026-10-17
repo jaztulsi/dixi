@@ -15,6 +15,8 @@ const title = (s) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 // Generic meanings of buttons, by accessible name (language, not sites).
 const ADD = /^(add( to( your| my)?)? (cart|bag|basket|order|trolley|meal)\b|add( item| to order)?(\s*[+$€£]?\s*[\d.,]+)?$|pre-?order( now)?$|añadir( al carrito)?|ajouter( au panier)?|in den warenkorb)/i;
 const CHECKOUT = /^(check ?out|proceed to (check ?out|checkout|payment)|go to (cart|bag|checkout)|view (cart|bag)|continue to checkout|review (order|bag)|pagar|commander)\b/i;
+// Words in a product request that never pick an option ("in black" → black).
+const OPTION_STOP = new Set(['a', 'an', 'the', 'in', 'on', 'of', 'with', 'and', 'for', 'me', 'my', 'buy', 'order', 'get', 'please', 'one', 'some', 'color', 'colour', 'size', 'model', 'version']);
 const TO_STORE = /^(buy(?!\s+(now|it now|with))|configure|(see|choose|view) (all )?(options|models))\b/i;
 const DECLINE = /^(no,? thanks?( you)?|no thank you|skip|not now|maybe later|decline|continue without|no protection|no coverage)\b/i;
 const CART = /^(cart|bag|basket|your (cart|bag)|shopping (cart|bag)|carrito)\b|\b(cart|bag|basket)\s*\(?\d+\)?$/i;
@@ -335,7 +337,7 @@ export class Executor {
         await this.tabs.navigate(fam.url);
         this.mark('store page');
         const r = await this.addToCart({ ...step, picked: fam.family, viaBuy: true }, said, 'Apple Store');
-        if (r.ok || r.needsStore || r.login) return r;
+        return r;  // the product's own page is the right place; a search there only finds look-alikes
       }
       if (fam) s = { url: this.catalog.storeURL, host: hostOf(this.catalog.storeURL), name: 'Apple Store', here: hostOf(this.tabs.getCurrentURL()) === hostOf(this.catalog.storeURL), searchTemplate: this.registry?.byHost?.(hostOf(this.catalog.storeURL))?.searchTemplate };
     }
@@ -395,34 +397,102 @@ export class Executor {
     const ready = await this.waitFor(async () => {
       const b = await this.tabs.dx('findButton', ADD, { links: false });
       if (b) return b;
-      if (Date.now() - t0 > 300 && !this.tabs.isLoading()) {
-        const o = await this.tabs.dx('options');
-        if (Array.isArray(o) && o.some((g) => !g.chosen)) return { needsChoices: true };
-      }
-      if (!opened && Date.now() - t0 > 600) opened = String(await this.tabs.dx('reveal', ADD)).startsWith('opened');
+      const o = Date.now() - t0 > 300 ? await this.tabs.dx('options') : null;
+      if (Array.isArray(o) && o.some((g) => !g.chosen)) return this.tabs.isLoading() ? null : { needsChoices: true };
+      // Uncover a hidden add button (a collapsed section) only when nothing is left to answer: on a page
+      // with questions that click would answer one ("Add a trade-in") behind the answer loop's back.
+      if (!opened && Date.now() - t0 > 600 && Array.isArray(o)) opened = String(await this.tabs.dx('reveal', ADD)).startsWith('opened');
       return null;
     }, (b) => b, 3000);
     this.mark(ready ? 'add button' : 'no add button yet');
-    // Most pages let you add straight away (defaults chosen); only a page that blocks it needs choices.
-    const blocked = !ready || (await this.tabs.exec(null, `(() => { const b = window.__dx.get(${ready?.ref ?? 0}); return !b || b.disabled || b.getAttribute('aria-disabled') === 'true'; })()`)) === true;
-    const opts = blocked || /\b(size|color|colour|storage|capacity|model)\b/i.test(said) ? ((await this.tabs.dx('options')) ?? []) : [];
-    // Choices the page needs before it can add: what you said, else no paid extras ("No engraving",
-    // "No coverage"), else the page's first choice. Said back in the result, never asked mid-flow.
+    // Choices the page needs before it can add, one question at a time (answering one often reveals the
+    // next): what you said, else no paid extras ("No trade-in", "No AppleCare", "carrier later"), else
+    // the page's first choice. When nothing is left to answer and there's no add button yet, the page's
+    // own "Continue" (never towards checkout or payment). Said back in the result, never asked mid-flow.
     const picked = [];
-    for (const g of Array.isArray(opts) ? opts.filter((o) => !o.chosen) : []) {
-      const spoken = g.values.find((v) => normName(v) && tokens(said).join(' ').includes(normName(v)));
-      const value = spoken ?? g.values.find((v) => /^(no|none|without|skip|not now)\b|^no[A-Z]/i.test(v)) ?? g.values[0] ?? '';
-      await this.tabs.dx('choose', g.name, value);
-      // Said back short: "Silver", not "Apple HomeView Footnote 4 $299".
-      const shortV = value.replace(/[\u200b-\u200d\ufeff]/g, '').replace(/\bfootnote\s*\S*/gi, '').replace(/[$€£]\s?[\d,.]+(\/mo\.?)?/g, '').replace(/\s+/g, ' ').trim();
-      const product = normName(step.picked || step.item || '');
-      if (shortV && !/^(no|none|without)\b|^no[A-Z]/i.test(shortV) && !(product && normName(shortV).includes(product))) picked.push(shortV);
-      await sleep(150);
+    // What you asked for beyond the product itself ("iPhone 18 Pro Max in black" on the iPhone 18 Pro
+    // page → max, black): option labels repeat the product's name ("AppleCare+ for iPhone 18 Pro"),
+    // so those words never pick an option.
+    const productWords = new Set(tokens(step.picked || ''));
+    const want = tokens(step.item || said).filter((w) => !OPTION_STOP.has(w) && !productWords.has(w));
+    const heard = (v) => tokens(v).filter((x) => want.some((w) => w === x || (/^\d/.test(w) && x.startsWith(w)))).length;
+    const saidValue = (g) => { const best = Math.max(0, ...g.values.map(heard)); const top = best > 0 ? g.values.filter((v) => heard(v) === best) : []; return top.length === 1 ? top[0] : null; };
+    const same = (a, b) => tokens(a).slice(0, 3).join(' ') === tokens(b ?? '').slice(0, 3).join(' ');
+    const product = normName(step.picked || step.item || '');
+    const tries = new Map();  // question → answered (each once: re-answering fights pages that update late)
+    let continues = 0;
+    let last = null;          // the latest answer, re-given once if the page didn't react to it
+    let model = null;         // the model you picked, when it's more specific than the product's name
+    // Answers given while the page's scripts are still starting are shown but not taken (first visits,
+    // nothing cached): when there are questions, let the page finish loading and go quiet first.
+    if (ready?.needsChoices) {
+      if (this.tabs.isLoading()) await this.tabs.next(this.tabs.activeTab, ['stop'], 4000);
+      await this.tabs.waitForDom(null, 1500);
+      this.mark('page settled');
+    }
+    for (let round = 0; round < 16; round++) {
+      this.check();
+      const opts = (await this.tabs.dx('options')) ?? [];
+      const list = (Array.isArray(opts) ? opts : []).filter((o) => !tries.has(o.id ?? o.name));
+      // First what you asked for ("Pro Max", "black", "512"), even where the page already shows another
+      // answer (stores remember the last configuration); then, if it can add, it's ready.
+      let g = list.find((o) => !tries.has(o.id ?? o.name) && saidValue(o) && !same(saidValue(o), o.current));
+      if (!g && (await this.tabs.dx('findButton', ADD, { links: false }))) break;
+      g ??= list.find((o) => !o.chosen);
+      if (g) {
+        const value = saidValue(g) ?? g.values.find((v) => /^(no|none|without|skip|not now)\b|^no[A-Z]|\b(later|unlocked)\b/i.test(v)) ?? g.values[0] ?? '';
+        tries.set(g.id ?? g.name, (tries.get(g.id ?? g.name) ?? 0) + 1);
+        this.mark(`chose ${g.name.slice(0, 20)} = ${value.slice(0, 24)}`);
+        // A real mouse click on the answer (stores' page code ignores script clicks on some questions);
+        // a script click when it can't be clicked where it is.
+        // Chosen in the page; a real mouse click on it only if the page didn't take that.
+        const taken = async () => ((await this.tabs.dx('options')) ?? []).some?.((o) => (o.id ?? o.name) === (g.id ?? g.name) && o.chosen && same(o.current, value));
+        last = { g, value, nudged: false };
+        const r = await this.tabs.dx('choose', g.id ?? g.name, value);
+        if (r !== 'ok' || !(await this.waitFor(taken, (x) => x, 400))) {
+          const target = await this.tabs.dx('optionTarget', g.id ?? g.name, value);
+          const p = typeof target === 'number' ? await this.tabs.dx('pointOf', target, false) : null;
+          if (p?.x == null) continue;
+          await this.tabs.clickAt(p);
+        }
+        // Said back short: "Sky Blue", "512GB", not badges, prices or footnotes.
+        const shortV = value.replace(/[\u200b-\u200d\ufeff]/g, '').replace(/\bfootnote\s*\S*/gi, '').replace(/^new( colors?| finishes)?\s+/i, '').replace(/\s*(buy (for|from)|from)?\s*[$€£]\s?[\d,.]+(\/mo\.?)?.*$/i, '').replace(/\s+(buy|from)( for)?$/i, '').replace(/\s+/g, ' ').trim();
+        // The model you picked names the product ("iPhone 18 Pro Max 6.9-inch display" → iPhone 18 Pro Max).
+        if (product && normName(shortV).startsWith(product) && normName(shortV) !== product) model = shortV.replace(/\s+\d+(\.\d+)?[-\s]?(inch|mm|in)\b.*$/i, '').trim();
+        if (shortV.length > 1 && /[a-z]/i.test(shortV) && !/^(no|none|without|buy|finance|lease|pay)\b|^no[A-Z]|\b(later)\b/i.test(shortV) && !(product && normName(shortV).includes(product)) && shortV.length <= 30) picked.push(shortV);
+        // The page reacts to each answer (prices, the next question, what's in stock): wait until it
+        // has stopped changing before the next one, or quick answers get lost.
+        await this.tabs.waitForDom(null, 1500);
+        continue;
+      }
+      // Everything open is answered: the add button, or the next question, may take a moment to switch on.
+      const nextUp = await this.waitFor(async () => (await this.tabs.dx('findButton', ADD, { links: false })) ? 'add'
+        : ((await this.tabs.dx('options')) ?? []).some?.((o) => !tries.has(o.id ?? o.name) && !o.chosen) ? 'question' : null, (x) => x, 2000);
+      if (nextUp === 'add') break;
+      if (nextUp === 'question') continue;
+      // Nothing opened after the last answer: a page still starting its scripts showed it but didn't
+      // take it. Give it again once, as a real change (another choice, then this one).
+      if (last && !last.nudged) {
+        last.nudged = true;
+        const other = last.g.values.find((v) => !same(v, last.value));
+        this.mark('re-answer');
+        if (other) { await this.tabs.dx('choose', last.g.id ?? last.g.name, other); await this.tabs.waitForDom(null, 800); }
+        await this.tabs.dx('choose', last.g.id ?? last.g.name, last.value);
+        await this.tabs.waitForDom(null, 1500);
+        continue;
+      }
+      if (continues >= 2) break;
+      const next = await this.tabs.dx('findButton', /^(continue|next|proceed)\b(?!.*\b(check ?out|payment|pay|shipping|delivery|sign in)\b)/i, { links: false });
+      if (!next) break;
+      continues++;
+      this.mark('continue');
+      await this.tabs.dx('clickRef', next.ref, false);
+      await this.waitFor(() => this.tabs.dx('findButton', ADD, { links: false }), (x) => x, 1200);
     }
     const what0 = step.item || step.picked || 'it';
     if (await this.tabs.dx('storePicker')) return ok(`${where} wants you to pick a store or address first. Choose one and say "add it again"`, { needsStore: true });
     // After choices the button takes a moment to switch on.
-    let add = await this.waitFor(() => this.tabs.dx('findButton', ADD, { links: false }), (x) => x, opts.length ? 2000 : 0);
+    let add = await this.waitFor(() => this.tabs.dx('findButton', ADD, { links: false }), (x) => x, 1500);
     if (!add && String(await this.tabs.dx('reveal', ADD)).startsWith('opened')) add = await this.waitFor(() => this.tabs.dx('findButton', ADD, { links: false }), (x) => x, 1500);
     // A product's overview page sells through a "Buy" link to its store page (never "Buy now"): follow it once.
     if (!add && !step.viaBuy) {
@@ -440,7 +510,7 @@ export class Executor {
       }
     }
     if (!add) return fail(`I couldn't find an add-to-cart button on ${where}`);
-    return this.pressAdd(add, step, where, picked);
+    return this.pressAdd(add, model ? { ...step, picked: model } : step, where, picked);
   }
 
   /** Press an add button and make sure the cart changed (upsell sheets declined, a real click if needed). */
@@ -576,8 +646,8 @@ export class Executor {
    * result has all your words it's the one; otherwise the best partial match once ~2.5 s have passed.
    */
   async pickResult(words) {
-    const want = tokens(words).map((w) => w.replace(/s$/, ''));
-    const score = (r) => { const have = tokens(r.text).map((w) => w.replace(/s$/, '')); const hits = want.filter((w) => have.includes(w)).length; return hits === want.length ? 100 - have.length : hits; };
+    const want = tokens(words).filter((w) => !OPTION_STOP.has(w)).map((w) => w.replace(/s$/, ''));
+    const score = (r) => { const have = tokens(r.text).map((w) => w.replace(/s$/, '')); const hits = want.filter((w) => have.includes(w) || (/^\d/.test(w) && have.some((h) => h.startsWith(w)))).length; return hits === want.length ? 100 - have.length : hits; };
     const t0 = Date.now();
     let best = null;
     for (;;) {
@@ -588,7 +658,8 @@ export class Executor {
         if (score(top) >= 20) return top;
         best = top;
       }
-      if (Date.now() - t0 > (best ? 2500 : 6000)) return best;
+      // Not the thing you asked for: most of your words must be in it, or nothing is added.
+      if (Date.now() - t0 > (best ? 2500 : 6000)) return best && score(best) >= Math.ceil(want.length * 0.6) ? best : null;
       await sleep(200);
     }
   }

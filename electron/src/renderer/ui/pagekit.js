@@ -227,7 +227,7 @@ const shown = (el) => {
 };
 function findButton(re, { links = true } = {}) {
   // Keyboard-shortcut hints for screen readers ("Add to cart, shift, option, K") aren't the button itself.
-  const pool = all(links ? CLICKABLE : 'button, input[type=submit], input[type=button], [role=button]').filter((x) => !x.disabled && re.test(name(x)) && !/,\s*(shift|option|alt|ctrl|control|cmd|command)\b/i.test(name(x)));
+  const pool = all(links ? CLICKABLE : 'button, input[type=submit], input[type=button], [role=button]').filter((x) => !x.disabled && x.getAttribute('aria-disabled') !== 'true' && re.test(name(x)) && !/,\s*(shift|option|alt|ctrl|control|cmd|command)\b/i.test(name(x)));
   const c = pool.filter(visible).length ? pool.filter(visible) : pool.filter(shown);
   c.sort((a, b) => (inChrome(a) - inChrome(b)) || name(a).length - name(b).length);
   return c[0] ? { ref: ref(c[0]), name: name(c[0]), disabled: false } : null;
@@ -277,25 +277,79 @@ function findByWords(words) {
 }
 
 // ---- product options that must be chosen before "Add" works ----
+/** A choice you can see: the radio, the label around it, or the label pointing at it (swatches hide the radio). */
+const seenChoice = (r) => visible(r) || visible(r.closest('label')) || Boolean(r.id && visible(r.ownerDocument.querySelector('label[for="' + CSS.escape(r.id) + '"]')));
 function options() {
   const groups = [];
   for (const fs of all('fieldset, [role=radiogroup]')) {
     if (!visible(fs)) continue;
-    const radios = [...fs.querySelectorAll('input[type=radio], [role=radio]')].filter((r) => visible(r) || visible(r.closest('label')));
+    const radios = [...fs.querySelectorAll('input[type=radio], [role=radio]')].filter(seenChoice);
     if (!radios.length) continue;
-    const chosen = radios.some((r) => r.checked || r.getAttribute('aria-checked') === 'true');
+    // A question the page hasn't opened yet (all its choices disabled until an earlier answer is taken).
+    if (fs.disabled || fs.getAttribute('aria-disabled') === 'true' || radios.every((r) => r.disabled || r.getAttribute('aria-disabled') === 'true')) continue;
+    const on = (r) => r.checked || r.getAttribute('aria-checked') === 'true';
+    const chosen = radios.some(on);
     const label = clean(fs.querySelector('legend')?.innerText || fs.getAttribute('aria-label') || '');
     const values = radios.map((r) => clean(r.closest('label')?.innerText || (r.id && r.ownerDocument.querySelector('label[for="' + CSS.escape(r.id) + '"]')?.innerText) || name(r) || r.value)).map((v) => v.split('\n')[0].slice(0, 60));
     if (/image|thumbnail|gallery|carousel|slide|photo|video/i.test(label) || values.filter(Boolean).length < 2) continue;
-    groups.push({ name: label, chosen, values });
+    groups.push({ id: ref(fs), name: label, chosen, values, current: chosen ? values[radios.findIndex(on)] : null });
+  }
+  // Loose radios sharing a name, outside any group ("Trade in?  ○ Yes  ○ No trade-in"): one question each.
+  const loose = new Map();
+  for (const r of all('input[type=radio]')) {
+    if (!r.name || r.closest('fieldset, [role=radiogroup]') || !(seenChoice(r) || shown(r))) continue;
+    if (!loose.has(r.name)) loose.set(r.name, []);
+    loose.get(r.name).push(r);
+  }
+  for (const [n, radios] of loose) {
+    if (radios.length < 2 || radios.every((r) => r.disabled)) continue;
+    const values = radios.map((r) => clean(r.closest('label')?.innerText || (r.id && r.ownerDocument.querySelector('label[for="' + CSS.escape(r.id) + '"]')?.innerText) || name(r) || r.value).split('\n')[0].slice(0, 60) || r.value);
+    groups.push({ id: 'radio:' + n, name: 'radio:' + n, chosen: radios.some((r) => r.checked), values, current: radios.some((r) => r.checked) ? values[radios.findIndex((r) => r.checked)] : null });
   }
   for (const s of all('select')) {
     if (!visible(s) || s.value) continue;
-    groups.push({ name: name(s), chosen: false, values: [...s.options].filter((o) => o.value).map((o) => clean(o.text)) });
+    groups.push({ id: ref(s), name: name(s), chosen: false, values: [...s.options].filter((o) => o.value).map((o) => clean(o.text)) });
   }
   return groups;
 }
+/** What to press to give this answer (its label, else the radio itself), for a real mouse click. */
+function optionTarget(group, value) {
+  const labelOf = (x) => (clean(x.closest('label')?.innerText || (x.id && x.ownerDocument.querySelector('label[for="' + CSS.escape(x.id) + '"]')?.innerText) || name(x) || x.value).split('\n')[0].slice(0, 60) || x.value).toLowerCase();
+  let radios = [];
+  if (typeof group === 'number') { const el = get(group); if (!el || el.tagName === 'SELECT') return null; radios = [...el.querySelectorAll('input[type=radio], [role=radio]')]; }
+  else if (group.startsWith('radio:')) radios = all('input[type=radio]').filter((x) => x.name === group.slice(6));
+  else return null;
+  const r = radios.find((x) => !value || labelOf(x) === value.toLowerCase());
+  if (!r) return null;
+  const target = r.closest('label') || (r.id && r.ownerDocument.querySelector('label[for="' + CSS.escape(r.id) + '"]')) || r;
+  return ref(target);
+}
+/** Answer one question: by its handle from options() (a number, or 'radio:<name>'), or by its title. */
 function choose(group, value) {
+  if (typeof group === 'number') {
+    const el = get(group);
+    if (!el) return 'gone';
+    if (el.tagName === 'SELECT') {
+      const o = [...el.options].find((x) => x.value && (!value || clean(x.text).toLowerCase() === value.toLowerCase()));
+      if (!o) return 'none';
+      el.value = o.value; el.dispatchEvent(new Event('change', { bubbles: true })); return 'ok';
+    }
+    const labelOf = (x) => clean(x.closest('label')?.innerText || (x.id && x.ownerDocument.querySelector('label[for="' + CSS.escape(x.id) + '"]')?.innerText) || name(x) || x.value).split('\n')[0].slice(0, 60).toLowerCase();
+    const r = [...el.querySelectorAll('input[type=radio], [role=radio]')].find((x) => !value || labelOf(x) === value.toLowerCase());
+    if (!r) return 'none';
+    if (r.disabled || r.getAttribute('aria-disabled') === 'true') return 'disabled';
+    (r.closest('label') || r).click();
+    if (r.type === 'radio' && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+    return 'ok';
+  }
+  if (group.startsWith('radio:')) {
+    const labelOf = (x) => (clean(x.closest('label')?.innerText || (x.id && x.ownerDocument.querySelector('label[for="' + CSS.escape(x.id) + '"]')?.innerText) || name(x) || x.value).split('\n')[0].slice(0, 60) || x.value).toLowerCase();
+    const r = all('input[type=radio]').find((x) => x.name === group.slice(6) && (!value || labelOf(x) === value.toLowerCase()));
+    if (!r) return 'none';
+    (r.closest('label') || (r.id && r.ownerDocument.querySelector('label[for="' + CSS.escape(r.id) + '"]')) || r).click();
+    if (!r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+    return 'ok';
+  }
   for (const fs of all('fieldset, [role=radiogroup]')) {
     const label = clean(fs.querySelector('legend')?.innerText || fs.getAttribute('aria-label') || '');
     if (label !== group) continue;
@@ -433,7 +487,7 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
+window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
   media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)) };
 })();`;
 
