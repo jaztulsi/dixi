@@ -34,10 +34,14 @@ const appleBag = (page) => inPage(page, `(() => {
 // Amazon: the header cart count, and the cart page's line titles and quantities.
 const amazonCart = (page) => inPage(page, `(() => ({
   count: Number(document.querySelector('#nav-cart-count')?.innerText ?? NaN),
-  lines: [...document.querySelectorAll('[data-asin][data-quantity], .sc-list-item[data-asin]')].filter((e) => e.getAttribute('data-asin')).map((e) => ({ name: (e.querySelector('.sc-product-title, .a-truncate-full')?.innerText || '').trim().slice(0, 80), qty: Number(e.getAttribute('data-quantity')) })),
+  lines: [...document.querySelectorAll('.sc-list-item[data-asin]')].filter((e) => e.getAttribute('data-asin') && e.offsetHeight).map((e) => {
+    const shown = e.querySelector('[data-a-selector="value"], .sc-quantity-textfield, input[name="quantityBox"], select[name="quantity"]');
+    const q = Number(shown?.value ?? shown?.innerText ?? NaN);
+    return { name: (e.querySelector('.sc-product-title, .a-truncate-full')?.innerText || '').trim().slice(0, 80), qty: Number.isFinite(q) && q > 0 ? q : Number(e.getAttribute('data-quantity')) };
+  }),
 }))()`);
 // Sign-in, card and personal fields that hold anything: Dixi must never have typed into one.
-const inputsTyped = (page) => inPage(page, `[...document.querySelectorAll('input')].filter((i) => i.value && (/^(password|email|tel)$/.test(i.type) || /^(cc-|email|tel|username|current-password|address|postal)/.test(i.autocomplete || '') || /card|cvv|cvc|email|phone|password|account|apple.?id|zip|postal|address/i.test((i.name || '') + ' ' + (i.id || '')))).map((i) => i.name || i.id || i.type)`);
+const inputsTyped = (page) => inPage(page, `[...document.querySelectorAll('input:not([type=hidden])')].filter((i) => i.value && i.offsetParent && (/^(password|email|tel)$/.test(i.type) || /^(cc-|email|tel|username|current-password|address|postal)/.test(i.autocomplete || '') || /card|cvv|cvc|email|phone|password|account|apple.?id|zip|postal|address/i.test((i.name || '') + ' ' + (i.id || '')))).map((i) => i.name || i.id || i.type)`);
 // A number on the page that the answer repeats ("$29.00", "4.5"): the answer came from the page.
 const sameNumber = (answer, text, re = /\$\s?[\d,]+(\.\d\d)?|\b\d\.\d\b/g) => (answer.match(re) ?? []).some((n) => text.replace(/\s+/g, '').includes(n.replace(/\s+/g, '')));
 
@@ -78,6 +82,17 @@ export const SCENARIOS = [
     { say: 'I want an iPad', check: ({ status, clarify }) => /which ipad/i.test(clarify ?? status) ? pass : `fail: ${status}` },
     { say: 'the iPad Air', check: ({ status }) => /added ipad air/i.test(status) ? pass : `fail: ${status}` },
     { say: 'go to my bag', check: async ({ page, url }) => { const b = await appleBag(page); return /\/shop\/bag/.test(url) && b.lines.length >= 3 ? pass : `fail: ${JSON.stringify(b.lines)}`; } },
+  ] },
+  { site: 'Demo 3: Amazon shopping', allow: /(^|\.)amazon\.com$/, steps: [
+    { say: 'search for wireless earbuds on Amazon', check: ({ url }) => /amazon\.com\/s/.test(url) && /wireless earbuds/.test(dec(url)) ? pass : `fail: ${url}` },
+    { say: 'open the first result', check: ({ url }) => /\/dp\/|\/gp\/product\//.test(url) ? pass : `fail: ${url}` },
+    { say: 'what is the rating of this product', check: ({ answer, text }) => /\d(\.\d)? out of 5|\d\.\d/.test(answer) && sameNumber(answer, text) ? pass : `fail: "${answer}"` },
+    { say: 'add it to my cart', check: async ({ page, status }) => { const c = await amazonCart(page); return /added/i.test(status) && !/no “/.test(status) && c.count >= 1 ? pass : `fail: count ${c.count} | ${status}`; } },
+    { say: 'go to my cart', check: async ({ page, url, memo }) => { const c = await amazonCart(page); memo.lines = c.lines; return /amazon\.com\/(gp\/cart|cart)/.test(url) && c.lines.length >= 1 ? pass : `fail: ${url} ${JSON.stringify(c.lines)}`; } },
+    { say: 'make the earbuds two', check: async ({ page, status }) => { await page.waitForTimeout(1500); const c = await amazonCart(page); return c.lines.some((x) => x.qty === 2) && /quantity is now 2/i.test(status) ? pass : `fail: ${JSON.stringify(c.lines)} | ${status}`; } },
+    { say: 'remove the watch band', check: async ({ page, status, memo }) => { const c = await amazonCart(page); return /don.t see/i.test(status) && c.lines.length === memo.lines.length ? pass : `fail: ${JSON.stringify(c.lines)} | ${status}`; } },
+    { say: 'what is Amazon Prime', check: ({ answer }) => /membership|subscription/i.test(answer) && /shipping|delivery|video/i.test(answer) ? pass : `fail: "${answer}"` },
+    { say: 'go to purchase', check: async ({ page, url, status, orders }) => !orders && (await inputsTyped(page)).length === 0 && /\/ap\/signin|signin/i.test(url) && /sign in yourself/i.test(status) ? pass : `fail: ${status} @ ${url}` },
   ] },
   { site: 'Amazon shopping', allow: /(^|\.)amazon\.com$/, steps: [
     { say: 'search for wireless earbuds on Amazon', check: ({ url }) => /amazon\.com\/s/.test(url) && /wireless earbuds/.test(dec(url)) ? pass : `fail: ${url}` },

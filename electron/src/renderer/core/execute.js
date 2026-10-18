@@ -17,6 +17,8 @@ const title = (s) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 const ADD = /^(add( to( your| my)?)? (cart|bag|basket|order|trolley|meal)\b|add( item| to order)?(\s*[+$€£]?\s*[\d.,]+)?$|pre-?order( now)?$|añadir( al carrito)?|ajouter( au panier)?|in den warenkorb)/i;
 // Toward checkout itself; "go to cart" / "view cart" are the cart (CART), so checkout goes there first.
 const CHECKOUT = /^(check ?out|proceed to (check ?out|checkout|payment)|go to checkout|continue to checkout|review (order|bag)|pagar|commander)\b/i;
+// Addresses of "prove you're human" pages (words of the web, not one site's).
+const BOT_PATH = /\/(checkpoint|captcha|validatecaptcha|challenge|human-?check|sorry)(\/|$)/i;
 // One pick among numbered candidates, with how sure the model is.
 const PICK_SCHEMA = { type: 'object', additionalProperties: false, required: ['index', 'confidence'], properties: { index: { type: 'integer' }, confidence: { type: 'number' } } };
 // A sign-in step (the store's own or a sign-in service's page): checkout stops here for you.
@@ -68,7 +70,9 @@ export class Executor {
     // A human check in the way explains whatever happened (or didn't): hand it over, never solve it.
     // Only when it can matter (a step that failed, or a site just opened): on a busy page this check
     // waits for the page's scripts (~2 s on a heavy results page), so a success never pays for it.
-    if ((!r.ok || step.act === 'open') && /^https?:/.test(this.tabs.getCurrentURL()) && await this.tabs.dx('botWall') === true) {
+    // A check page's own address (Amazon's /checkpoint, /captcha, /challenge) is caught after every step
+    // (no page read needed), so "results showed up" is never claimed on one.
+    if (/^https?:/.test(this.tabs.getCurrentURL()) && (BOT_PATH.test(pathOf(this.tabs.getCurrentURL())) || ((!r.ok || step.act === 'open') && await this.tabs.dx('botWall') === true))) {
       return ok('The site wants you to prove you’re human first. Do the check on screen, then say it again', { botWall: true });
     }
     return r;
@@ -675,7 +679,11 @@ export class Executor {
 
   /** "go to my cart": the site's own cart/bag link. */
   async do_cart() {
-    if (CART_PATH.test(pathOf(this.tabs.getCurrentURL()))) return ok('Here is your cart');
+    // A cart address isn't always the cart: Amazon's "Added to cart" page lives at /cart/smart-wagon.
+    // On a cart path, it's the cart only if it shows lines (or says it's empty).
+    const isCart = async () => CART_PATH.test(pathOf(this.tabs.getCurrentURL())) && (((await this.tabs.dx('cartLines')) ?? []).length > 0
+      || (await this.tabs.exec(null, `/\\b(your|the) (shopping )?(cart|bag|basket) is empty\\b/i.test(document.body?.innerText.slice(0, 20000) || '')`)) === true);
+    if (await isCart()) return ok('Here is your cart');
     await this.tabs.dx('dismissOverlays');
     const b = await this.waitFor(async () => (await this.tabs.dx('cartLink')) ?? this.tabs.dx('findButton', CART), (x) => x, 3000)
       ?? await this.visualPick('the shopping cart, bag or basket icon/link (usually top right)');
@@ -688,7 +696,8 @@ export class Executor {
       const view = await this.waitFor(() => this.tabs.dx('findButton', /^(review|view|go to|see|open)( my| your)? (bag|cart|basket)\b|^(bag|cart|basket)$/i), (x) => x, 1500);
       if (view) await this.clickAndWait(view.ref);
     }
-    return CART_PATH.test(pathOf(this.tabs.getCurrentURL())) || /cart|bag|basket/i.test(this.tabs.activeTab?.title ?? '') ? ok('Here is your cart') : ok(`Opened “${b.name}”`);
+    if (await this.waitFor(isCart, (x) => x, 3000)) return ok('Here is your cart');
+    return fail(`I opened “${b.name.slice(0, 40)}”, but I don't see your cart's items there`);
   }
 
   /**

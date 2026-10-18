@@ -233,7 +233,9 @@ function findButton(re, { links = true } = {}) {
   return c[0] ? { ref: ref(c[0]), name: name(c[0]), disabled: false } : null;
 }
 function cartLink() {
-  const a = all('a[href]').filter((x) => visible(x) && /cart|bag|basket|trolley/i.test(new URL(x.href, location.href).pathname) && !/add|remove/i.test(name(x)));
+  // Never a link back to this same page (skip links, "#top"): on a cart-like page that isn't the cart
+  // (Amazon's "Added to cart" page), the header's cart link is the way there.
+  const a = all('a[href]').filter((x) => { const u = new URL(x.href, location.href); return visible(x) && /cart|bag|basket|trolley/i.test(u.pathname) && u.pathname !== location.pathname && !/add|remove/i.test(name(x)); });
   a.sort((x, y) => inChrome(y) - inChrome(x));
   return a[0] ? { ref: ref(a[0]), name: name(a[0]), href: a[0].href } : null;
 }
