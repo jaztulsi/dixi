@@ -56,6 +56,7 @@ Rules:
 - "urls": up to 3 likely official home page URLs for "said" from your knowledge, [] if unsure. For order / find_item with no store named: "said" stays "" and "urls" is the online store where that exact item is usually bought (the maker's own store for a branded product, else a big retailer that sells it).
 - "query" / "item": only the words for the thing itself, copied from the command. Never verbs, particles, filler, quantities, "on <site>" or the site's name. An item keeps the options asked for with it (color, size, storage, model): "a black iPhone 17 with 256 GB" → item "black iPhone 17 with 256 GB".
 - Signing in ("sign in", "log in on this page"): click with value "sign in". You never type passwords or personal details; the user does.
+- Choosing among results on screen by a description ("add the black one", "get the cheapest one in blue"): order, "said" "", item = the description plus the thing searched for (from Recent): "black Apple Watch band".
 - Corrections ("no wait", "actually", "I mean") and negations ("don't open X, open Y"): only the final intent.
 - Several requests: one step each, in the order spoken. Add nothing they did not ask for.
 - Unfamiliar names are normal (new or small sites): copy them into "said" and let the app look them up. Never ask about a name just because you don't know it.
@@ -82,11 +83,13 @@ export function incomplete(text) {
   if (fastPath(text) && !QUESTION.test(String(text).trim())) return false;
   // A question may end on its preposition ("what is this video about", "who is it for").
   if (QUESTION.test(String(text).trim()) && t.length >= 4 && STRANDED.has(t.at(-1))) return false;
-  if (t.length < 2 || FUNCTION.has(t.at(-1)) || DANGLING.has(t.at(-1))) return true;
+  // Sentence-final words ("…the best right now", "…please") end a sentence; other grammar words don't.
+  if (t.length < 2 || (FUNCTION.has(t.at(-1)) && !ENDS.has(t.at(-1))) || DANGLING.has(t.at(-1))) return true;
   // A verb still waiting for its object ("can you buy", "I want to order"), not a name ending in one
   // ("Best Buy", "Google Play").
   return VERB_END.has(t.at(-1)) && (t.length < 3 || FUNCTION.has(t.at(-2)) || ['i', 'we', 'to', 'you', 'me', 'please'].includes(t.at(-2)));
 }
+const ENDS = new Set(['now', 'please', 'thanks', 'today', 'quick']);
 const VERB_END = new Set(['tell', 'give', 'buy', 'order', 'add', 'play', 'want', 'need', 'show', 'get', 'find']);
 const STRANDED = new Set(['about', 'for', 'from', 'at', 'in', 'on', 'to', 'with', 'into', 'up', 'out', 'by']);
 const DANGLING = new Set(['or', 'but', 'is', 'are', 'was', 'were', 'be', 'your', 'what', 'which', 'who', 'how', 'why', 'when', 'where', 'about', 'between', 'than', 'as', 'if', 'this', 'that', 'these', 'those', 'er', 'hmm', 'mm', 'i', 'we']);

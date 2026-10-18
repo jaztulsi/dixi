@@ -58,6 +58,27 @@ export const SCENARIOS = [
     { say: 'check out', check: async ({ page, url, status, orders }) => !orders && (await inputsTyped(page)).length === 0 && (/secure\d*\.store\.apple\.com|signin|sign-in|checkout/i.test(url) || /sign in|stopped before/i.test(status)) ? pass : `fail: ${status} @ ${url}` },
     { say: 'sign in on this page', check: async ({ page, status, url }) => (await inputsTyped(page)).length === 0 && /sign in|sign-in|signin|wait/i.test(`${status} ${url}`) ? pass : `fail: typed ${(await inputsTyped(page)).join(',')} | ${status}` },
   ] },
+  // ---- demo scripts: the exact phrases in DEMO.md, run on fresh profiles; only what passes every run is listed ----
+  { site: 'Demo 1: Apple shopping', allow: /(^|\.)apple\.com$/, steps: [
+    { say: 'show me AirPods on the Apple Store', check: ({ url, text }) => /apple\.com/.test(url) && /airpods/i.test(`${dec(url)} ${text.slice(0, 3000)}`) ? pass : `fail: ${url}` },
+    { say: 'which AirPods are the best right now', check: ({ answer, text }) => answer.length > 20 && /airpods (pro|max)/i.test(answer) && (answer.match(/airpods [a-z]+( \d)?/gi) ?? []).some((n) => text.toLowerCase().includes(n.toLowerCase())) ? pass : `fail: "${answer}"` },
+    { say: 'buy me AirPods Pro', check: async ({ page, status, memo }) => { const b = await appleBag(page); memo.count = b.count; return /added airpods pro/i.test(status) && b.count >= 1 ? pass : `fail: bag ${b.count} | ${status}`; } },
+    { say: 'add an AirTag', check: async ({ page, status, memo }) => { const b = await appleBag(page); const r = /added airtag/i.test(status) && b.count > memo.count ? pass : `fail: bag ${memo.count} → ${b.count} | ${status}`; memo.count = b.count; return r; } },
+    { say: 'go to my bag', check: async ({ page, url, memo }) => { const b = await appleBag(page); memo.lines = b.lines; return /\/shop\/bag/.test(url) && b.lines.length >= 2 ? pass : `fail: ${url} ${JSON.stringify(b.lines)}`; } },
+    { say: 'make the AirTag two', check: async ({ page, status }) => { const b = await appleBag(page); const l = b.lines.find((x) => /airtag/i.test(x.name)); return l?.qty === 2 ? pass : `fail: ${JSON.stringify(b.lines)} | ${status}`; } },
+    { say: "what's the total in my bag", check: ({ answer, text }) => /\$/.test(answer) && sameNumber(answer, text) ? pass : `fail: "${answer}"` },
+    { say: 'remove the AirTag', check: async ({ page, status, memo }) => { const b = await appleBag(page); return b.lines.length === memo.lines.length - 1 && !b.lines.some((x) => /airtag/i.test(x.name)) ? pass : `fail: ${JSON.stringify(b.lines)} | ${status}`; } },
+    { say: 'check out', check: async ({ page, url, status, orders }) => !orders && (await inputsTyped(page)).length === 0 && /secure\d*\.store\.apple\.com\/shop\/signIn/i.test(url) && /sign in yourself/i.test(status) ? pass : `fail: ${status} @ ${url}` },
+    { say: 'sign in on this page', check: async ({ page, status }) => (await inputsTyped(page)).length === 0 && /sign in yourself/i.test(status) ? pass : `fail: ${status}` },
+  ] },
+  { site: 'Demo 2: Apple options', allow: /(^|\.)apple\.com$/, steps: [
+    { say: 'buy an iPhone 17 in black', check: async ({ page, status }) => { const b = await appleBag(page); return /added iphone 17\b.*black/i.test(status) && b.count >= 1 ? pass : `fail: bag ${b.count} | ${status}`; } },
+    { say: 'add a MacBook Air in midnight', check: async ({ page, status }) => /added macbook air.*midnight/i.test(status) ? pass : `fail: ${status}` },
+    { say: 'get me AirPods with 200 GB', check: ({ status }) => /added airpods/i.test(status) && /no .?200 gb.? option/i.test(status) ? pass : `fail: ${status}` },
+    { say: 'I want an iPad', check: ({ status, clarify }) => /which ipad/i.test(clarify ?? status) ? pass : `fail: ${status}` },
+    { say: 'the iPad Air', check: ({ status }) => /added ipad air/i.test(status) ? pass : `fail: ${status}` },
+    { say: 'go to my bag', check: async ({ page, url }) => { const b = await appleBag(page); return /\/shop\/bag/.test(url) && b.lines.length >= 3 ? pass : `fail: ${JSON.stringify(b.lines)}`; } },
+  ] },
   { site: 'Amazon shopping', allow: /(^|\.)amazon\.com$/, steps: [
     { say: 'search for wireless earbuds on Amazon', check: ({ url }) => /amazon\.com\/s/.test(url) && /wireless earbuds/.test(dec(url)) ? pass : `fail: ${url}` },
     { say: 'open the first result', check: ({ url }) => /\/dp\/|\/gp\/product\//.test(url) ? pass : `fail: ${url}` },
@@ -136,9 +157,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       await page.evaluate(() => window.__reset());
       console.log(`\n== ${sc.site}`);
       const memo = {};
-      for (const st of sc.steps) {
+      for (const st of sc.steps.slice(0, Number(arg('steps', 99)))) {
         const before = await media(page).catch(() => null);
-        await page.evaluate(() => { const d = window.__dixi; if (d.resetForEval) { d.resetForEval(); } else { d.voice.plan = []; d.voice.answer = null; d.agent.finalResult = null; } });
+        // A question Dixi is waiting on ("Which iPhone?") stays open: the next step answers it.
+        await page.evaluate(() => { const d = window.__dixi; if (d.voice.clarify) { d.voice.plan = []; d.voice.answer = null; } else if (d.resetForEval) { d.resetForEval(); } else { d.voice.plan = []; d.voice.answer = null; d.agent.finalResult = null; } });
         const r = await say(app, page, st.say, { wordMS: WORD_MS });
         const text = String(await pageText(page).catch(() => ''));
         const m = await media(page).catch(() => null);
