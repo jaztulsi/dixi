@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
-import { chat, abort, tiers, keyStatus, Spend, ENDPOINTS } from './providers.js';
+import { chat, abort, tiers, keyStatus, Spend, ENDPOINTS, discoverModels, problems, escalation, modeOf } from './providers.js';
 import { DeepgramBridge } from './deepgram.js';
 import { ElevenLabsBridge } from './stt.js';
 import { Resolver } from './resolve.js';
@@ -53,6 +53,10 @@ const spendCaps = Object.fromEntries(Object.keys(ENDPOINTS).map((p) => [p, Numbe
 const spend = new Spend(path.join(app.getPath('appData'), 'Dixi', 'spend.json'), config.spendCapUSD, spendCaps);
 if (!config.env.DIXI_LLM_CACHE_DIR) config.env.DIXI_LLM_CACHE_DIR = path.join(root, 'eval/.cache/llm');
 const tabsSession = () => session.fromPartition('persist:dixi-tabs');
+// Which models the keys can use, asked of Cerebras and Anthropic at startup (ranked by npm run bench:models).
+const modelsFile = path.join(app.getPath('appData'), 'Dixi', 'models.json');
+let found = {};
+const discovered0 = discoverModels(config, { file: modelsFile }).then((f) => { found = f; for (const p of problems(config, f)) console.error('[keys]', p); });
 
 /** A page fetched with the tabs' own network stack (same cookies, same host rules in evals). Sites that
  *  refuse background fetches (401/403/429, or no real page) are loaded for real in a hidden window. */
@@ -162,11 +166,15 @@ const ours = (e) => Boolean(win) && e.sender === win.webContents && e.senderFram
 const handle = (channel, fn) => ipcMain.handle(channel, (e, ...args) => { if (!ours(e)) throw new Error('forbidden'); return fn(...args); });
 const on = (channel, fn) => ipcMain.on(channel, (e, ...args) => { if (ours(e)) fn(...args); });
 
-handle('config:get', () => ({ keys: keyStatus(config), stt: sttName, tiers: tiers(config), webSearch: config.env.DIXI_SEARCH_URL || '', eval: EVAL, debug: Boolean(config.env.DIXI_DEBUG) }));
+handle('config:get', async () => {
+  await Promise.race([discovered0, new Promise((r) => setTimeout(r, 4000))]);
+  return { keys: keyStatus(config), stt: sttName, mode: modeOf(config), tiers: tiers(config, found), escalation: escalation(config), problems: problems(config, found),
+    webSearch: config.env.DIXI_SEARCH_URL || '', eval: EVAL, debug: Boolean(config.env.DIXI_DEBUG) || EVAL };
+});
 
 const BODY_FIELDS = ['messages', 'tools', 'tool_choice', 'max_tokens', 'temperature', 'response_format', 'reasoning_effort'];
 handle('llm:chat', (req) => {
-  const all = Object.values(tiers(config)).flat();
+  const all = Object.values(tiers(config, found)).flat();
   if (!req || !all.includes(req.model)) return { status: 400, json: { error: { message: `Model not allowed: ${req?.model}` } } };
   const body = Object.fromEntries(BODY_FIELDS.filter((k) => req.body?.[k] !== undefined).map((k) => [k, req.body[k]]));
   body.max_tokens = Math.min(Number(body.max_tokens) || 512, 2048);
@@ -326,8 +334,17 @@ handle('catalog:get', () => { try { return JSON.parse(fs.readFileSync(path.join(
 // Traces (DIXI_DEBUG=1): one JSON line per stage event, local only, no secrets, no page content.
 const traceDir = path.join(app.getPath('userData'), 'traces');
 on('trace:write', (line) => {
-  if (!config.env.DIXI_DEBUG) return;
+  if (!config.env.DIXI_DEBUG && !EVAL) return;
   try { fs.mkdirSync(traceDir, { recursive: true }); fs.appendFileSync(path.join(traceDir, `${new Date().toISOString().slice(0, 10)}.jsonl`), `${String(line).slice(0, 4000)}\n`); } catch {}
 });
 
+// A failed step's screen, next to its trace line (same switch as traces). Returns the file path.
+handle('trace:shot', async (webContentsId, name) => {
+  if (!config.env.DIXI_DEBUG && !EVAL) return null;
+  const wc = webContents.fromId(Number(webContentsId));
+  if (!wc || wc.hostWebContents !== win.webContents) return null;
+  const dir = path.join(traceDir, new Date().toISOString().slice(0, 10));
+  const file = path.join(dir, `${String(name).replace(/[^\w.-]+/g, '-').slice(0, 80)}.jpg`);
+  try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, (await wc.capturePage()).toJPEG(60)); return file; } catch (err) { console.warn('[trace] screenshot not saved:', err.message); return null; }
+});
 handle('shell:open-external', (url) => { if (/^https?:\/\//.test(url)) return shell.openExternal(url); });

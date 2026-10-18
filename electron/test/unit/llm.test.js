@@ -49,8 +49,12 @@ test('providers: spend cap stops calls; keys never needed in the renderer', asyn
 test('providers: Anthropic replies come back in the same shape as the others', async () => {
   const fetchImpl = async (url, init) => {
     const body = JSON.parse(init.body);
-    assert.equal(body.tool_choice.name, 'emit');
-    return new Response(JSON.stringify({ content: [{ type: 'tool_use', input: { steps: [] } }], usage: { input_tokens: 10, output_tokens: 2 } }), { status: 200 });
+    // Structured outputs, not a forced tool (a 400 on Sonnet 5.5 / Opus 5.5); thinking off; system cached.
+    assert.deepEqual(body.output_config.format, { type: 'json_schema', schema: { type: 'object' } });
+    assert.equal(body.tool_choice, undefined);
+    assert.deepEqual(body.thinking, { type: 'disabled' });
+    assert.deepEqual(body.system, [{ type: 'text', text: 's', cache_control: { type: 'ephemeral' } }]);
+    return new Response(JSON.stringify({ content: [{ type: 'text', text: '{"steps":[]}' }], usage: { input_tokens: 10, output_tokens: 2 } }), { status: 200 });
   };
   const r = await chat({ keys: { anthropic: 'k' }, env: {} }, null, { model: 'anthropic:claude-haiku-5-5', body: { messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'u' }], response_format: { type: 'json_schema', json_schema: { schema: { type: 'object' } } } } }, fetchImpl);
   assert.equal(r.json.choices[0].message.content, '{"steps":[]}');

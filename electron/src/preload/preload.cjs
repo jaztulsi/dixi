@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('dixi', {
   preconnect: (url) => ipcRenderer.send('net:preconnect', url),
   catalog: () => ipcRenderer.invoke('catalog:get'),
   trace: (line) => ipcRenderer.send('trace:write', line),
+  traceShot: (webContentsId, name) => ipcRenderer.invoke('trace:shot', webContentsId, name),
   deepgram: {
     open: (params) => ipcRenderer.invoke('deepgram:open', params),
     sendAudio: (chunk) => ipcRenderer.send('deepgram:audio', chunk),

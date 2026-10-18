@@ -37,14 +37,25 @@ const settings = {
 };
 
 const config = await window.dixi.config();
-const llm = new LLM((req) => window.dixi.llm(req), config.tiers, { abort: (id) => window.dixi.llmAbort(id) });
+const llm = new LLM((req) => window.dixi.llm(req), config.tiers, { abort: (id) => window.dixi.llmAbort(id), policy: config.escalation });
 const tabs = new TabManager($('tabs'), () => render());
+// A key that's missing or refused says so on screen (never a silent switch to another provider).
+const showProblem = (msg) => { console.error('[keys]', msg); $('toast-text').textContent = msg; $('toast').hidden = false; };
+llm.onProblem = showProblem;
 const speaker = new Speaker();
 
 // Stage-by-stage trace of every command (kept in memory for tests; saved to disk with DIXI_DEBUG=1).
 const traces = [];
+// Each step's trace line also says where it ran and which models it used; a failed step saves a screenshot.
+let stepCalls = 0;
 const trace = (stage, data = {}) => {
   const e = { t: Date.now(), p: Math.round(performance.now()), stage, ...data };
+  if (stage === 'step_start') stepCalls = llm.calls.length;
+  if (stage === 'step_end') {
+    e.url = tabs.getCurrentURL();
+    e.models = llm.calls.slice(Math.min(stepCalls, llm.calls.length)).map((c) => `${c.model} ${c.ms}ms${c.status !== 200 ? ` ${c.status}` : ''}${c.why ? ` (${c.why})` : ''}`);
+    if (!data.ok && tabs.activeTab?.wcId) window.dixi.traceShot(tabs.activeTab.wcId, `${e.t}-${data.act}`).then((f) => { if (f) e.shot = f; }).catch(() => {});
+  }
   traces.push(e);
   if (traces.length > 2000) traces.splice(0, 500);
   if (config.debug) window.dixi.trace(JSON.stringify(e));
@@ -280,9 +291,10 @@ window.dixi.onOpenURL((url) => {
 
 // Hands-free: start listening as soon as the app opens.
 render();
-if ((config.stt === 'elevenlabs' ? config.keys.elevenlabs : config.keys.deepgram) && config.tiers.fast.length) voice.start().catch((err) => console.error('[voice]', err.message));
+if (config.problems?.length) showProblem(config.problems.join(' · '));
+window.addEventListener('unhandledrejection', (e) => { console.error('[unhandled]', e.reason); trace('error', { message: String(e.reason?.message ?? e.reason).slice(0, 200) }); });
+if ((config.stt === 'elevenlabs' ? config.keys.elevenlabs : config.keys.deepgram) && (config.tiers.fast.length || config.tiers.plan?.length)) voice.start().catch((err) => console.error('[voice]', err.message));
 
-// For end-to-end tests and debugging.
 // For end-to-end tests and debugging.
 window.__dixi = {
   tabs, agent, voice, llm, submit, settings, executor, traces, registry,
