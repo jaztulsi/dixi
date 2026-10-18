@@ -66,6 +66,7 @@ export const SCENARIOS = [
   { site: 'Demo 1: Apple shopping', allow: /(^|\.)apple\.com$/, steps: [
     { say: 'show me AirPods on the Apple Store', check: ({ url, text }) => /apple\.com/.test(url) && /airpods/i.test(`${dec(url)} ${text.slice(0, 3000)}`) ? pass : `fail: ${url}` },
     { say: 'which AirPods are the best right now', check: ({ answer, text }) => answer.length > 20 && /airpods (pro|max)/i.test(answer) && (answer.match(/airpods [a-z]+( \d)?/gi) ?? []).some((n) => text.toLowerCase().includes(n.toLowerCase())) ? pass : `fail: "${answer}"` },
+    { say: 'how long does the battery last on the AirPods Pro', check: ({ answer }) => /\d+\s*(hours|hrs)/i.test(answer) && !/not sure|doesn.t show|not (shown|listed)/i.test(answer) ? pass : `fail: "${answer}"` },
     { say: 'buy me AirPods Pro', check: async ({ page, status, memo }) => { const b = await appleBag(page); memo.count = b.count; return /added airpods pro/i.test(status) && b.count >= 1 ? pass : `fail: bag ${b.count} | ${status}`; } },
     { say: 'add an AirTag', check: async ({ page, status, memo }) => { const b = await appleBag(page); const r = /added airtag/i.test(status) && b.count > memo.count ? pass : `fail: bag ${memo.count} → ${b.count} | ${status}`; memo.count = b.count; return r; } },
     { say: 'go to my bag', check: async ({ page, url, memo }) => { const b = await appleBag(page); memo.lines = b.lines; return /\/shop\/bag/.test(url) && b.lines.length >= 2 ? pass : `fail: ${url} ${JSON.stringify(b.lines)}`; } },

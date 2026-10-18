@@ -147,6 +147,12 @@ export class Executor {
       const name = known?.name || (id && (id.appName || id.siteName || (id.logo || '').replace(/\s*logo$/i, ''))) || hostOf(url);
       return { url, host: hostOf(url), name, here: true };
     }
+    // The sanctioned Apple shortcut: "the Apple Store" / "Apple" is Apple's own store (a name lookup once
+    // landed on applestore.com, another site).
+    if (this.catalog?.storeURL && /^(the )?apple( online)?( store| com)?$/.test(normName(step.said))) {
+      const url = this.catalog.storeURL;
+      return { url, host: hostOf(url), name: 'Apple Store', said: step.said, here: hostOf(this.tabs.getCurrentURL()) === hostOf(url), searchTemplate: this.registry?.byHost?.(hostOf(url))?.searchTemplate };
+    }
     const r = await this.resolve({ said: step.said, guess: step.guess, urls: step.urls ?? [], fast: !step.noFast });
     this.trace?.('resolve', { said: step.said, guess: step.guess, status: r.status, host: r.host, source: r.source, ms: r.ms, options: r.options?.map((o) => o.host) });
     if (r.status === 'ok') return { ...r, said: step.said, here: this.alreadyOn(r) };
@@ -572,6 +578,8 @@ export class Executor {
     const before = await this.cartSignal();
     const saidBefore = await this.tabs.exec(null, ADDED_JS);
     const url0 = this.tabs.getCurrentURL();
+    // Where the cart is, read here: the page the store moves to may still be loading when it's needed.
+    const cartHref = (await this.tabs.dx('cartLink'))?.href ?? null;
     const r = await this.tabs.dx('clickRef', add.ref, false);
     if (typeof r === 'string' && r.startsWith('confirm')) return this.confirmThen(add.ref, r.slice(9));
     // Proof it went in: the cart's count went up, the page newly says "added to cart/bag", the store took
@@ -582,7 +590,9 @@ export class Executor {
     const probe = async () => {
       const url = this.tabs.getCurrentURL();
       const cart = url !== url0 && CART_PATH.test(pathOf(url)) && !this.tabs.isLoading() && (await this.tabs.dx('cartLines'))?.length > 0;
-      return { s: await this.cartSignal(), url, cart, said: (await this.tabs.exec(null, ADDED_JS)) === true, moved: url !== url0 && !this.tabs.isLoading() };
+      // Moved on = a new address, loaded or not: a heavy next page (Apple's accessories page after an
+      // iPhone) can still be loading when the first look is over, and then only the cart itself can tell.
+      return { s: await this.cartSignal(), url, cart, said: (await this.tabs.exec(null, ADDED_JS)) === true, moved: url !== url0 };
     };
     const why = (p) => {
       if (!p) return null;
@@ -595,12 +605,16 @@ export class Executor {
     };
     const changed = (p) => why(p) != null;
     let after = await this.waitFor(probe, (p) => changed(p) || p.moved, 2500);
+    // Still working on it (the button went away or turned off: a slow store, Apple's iPhones take ~3-4 s):
+    // wait for it, never a second press, which could add it twice.
+    const pressable = async () => (await this.tabs.exec(null, `(() => { const b = window.__dx?.get(${Number(add.ref)}); return Boolean(b && b.isConnected && !b.disabled && b.getAttribute('aria-disabled') !== 'true' && b.offsetWidth); })()`)) === true;
+    if (!changed(after) && !after.moved && !(await pressable())) after = await this.waitFor(probe, (p) => changed(p) || p.moved, 6000);
     if (!changed(after) && after.moved) {
       // The store moved on (an accessories page, say) without proof on it: its header count can lag
       // there, so look in the cart itself while still watching this page, rather than press again (the
       // button is gone, and a second press could add it twice). First proof wins.
-      const look = this.inCart(step.picked || step.item).then((yes) => (yes ? { ...after, cart: true } : null));
-      const watch = this.waitFor(probe, changed, 1500).then((p) => (changed(p) ? p : null));
+      const look = this.inCart(step.picked || step.item, cartHref).then((yes) => (yes ? { ...after, cart: true } : null));
+      const watch = this.waitFor(probe, changed, 4000).then((p) => (changed(p) ? p : null));
       after = (await Promise.race([look, watch])) ?? (await look) ?? (await watch) ?? after;
     }
     this.mark(changed(after) ? `cart changed (${why(after)})` : 'cart not changed yet');
@@ -614,8 +628,10 @@ export class Executor {
         if (typeof p === 'string' && p.startsWith('confirm')) return this.confirmThen(add.ref, p.slice(9));
         if (p?.x != null) await this.tabs.clickAt(p);
       } else break;
-      after = await this.waitFor(probe, changed, 3000);
+      after = await this.waitFor(probe, (p) => changed(p) || p.moved, 3000);
     }
+    // Moved on after a second try: only the cart itself can tell.
+    if (!changed(after) && after.moved && await this.inCart(step.picked || step.item, cartHref)) after = { ...after, cart: true };
     // The product's name without a trailing " - Apple" / "| Best Buy" (the store), cut at a word.
     const what = (step.picked || step.item || 'it').replace(/\s+[-–—|]\s+[^-–—|]{1,25}$/, (m) => (tokens(m).some((w) => tokens(where).includes(w) || w === 'apple') ? '' : m)).replace(/\s+/g, ' ').trim().replace(/^(.{60}).+$/, (m, head) => head.replace(/\s+\S*$/, ''));
     if (await this.tabs.dx('storePicker')) return ok(`${where} wants you to pick a store or address before adding ${what}. Choose one and say "add it again"`, { needsStore: true });
@@ -631,10 +647,10 @@ export class Executor {
   }
 
   /** The store's own cart, read in a hidden tab, has a line naming most of this item's words. */
-  async inCart(item) {
-    const link = await this.tabs.dx('cartLink');
-    if (!link?.href) return false;
-    const id = this.tabs.createBackgroundTab(link.href);
+  async inCart(item, href = null) {
+    href ??= (await this.waitFor(() => this.tabs.dx('cartLink'), (l) => l?.href, 3000))?.href;
+    if (!href) return false;
+    const id = this.tabs.createBackgroundTab(href);
     try {
       const words = tokens(item).filter((w) => !OPTION_STOP.has(w));
       const lines = await this.waitFor(() => this.tabs.exec(id, dxCall('cartLines'), 3000), (l) => Array.isArray(l) && l.length, 6000);
