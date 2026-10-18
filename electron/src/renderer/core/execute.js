@@ -6,6 +6,7 @@
 import { askPage } from './pageQA.js';
 import { dxCall } from '../ui/pagekit.js';
 import { normName, tokens } from './interpret.js';
+import { productPage } from './demo.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
@@ -72,7 +73,7 @@ export class Executor {
     // waits for the page's scripts (~2 s on a heavy results page), so a success never pays for it.
     // A check page's own address (Amazon's /checkpoint, /captcha, /challenge) is caught after every step
     // (no page read needed), so "results showed up" is never claimed on one.
-    if (/^https?:/.test(this.tabs.getCurrentURL()) && (BOT_PATH.test(pathOf(this.tabs.getCurrentURL())) || ((!r.ok || step.act === 'open') && await this.tabs.dx('botWall') === true))) {
+    if (/^https?:/.test(this.tabs.getCurrentURL()) && (BOT_PATH.test(pathOf(this.tabs.getCurrentURL())) || ((!r.ok || (step.act === 'open' && !step.url)) && await this.tabs.dx('botWall') === true))) {
       return ok('The site wants you to prove you’re human first. Do the check on screen, then say it again', { botWall: true });
     }
     return r;
@@ -85,9 +86,10 @@ export class Executor {
    */
   prefetch(intent) {
     for (const st of intent?.steps ?? []) {
+      if (st.url) { window.dixi?.preconnect?.(st.url); continue; }
       if (st.act === 'order' && !st.said && this.catalog) {
         const fam = this.catalog.match(st.item);
-        if (fam?.url) window.dixi?.preconnect?.(fam.url);
+        if (fam?.url) window.dixi?.preconnect?.(productPage(st.item) ?? fam.url);
         if (fam) continue;
       }
       if (!['open', 'search', 'find_item', 'order'].includes(st.act)) continue;
@@ -204,7 +206,14 @@ export class Executor {
 
   // ---- acts ----
 
+  /** A demo step's fixed address (demo.js): straight there, nothing to look up. */
+  async straight(step, done) {
+    await this.tabs.navigate(step.url);
+    return ok(done);
+  }
+
   async do_open(step) {
+    if (step.url) return this.straight(step, `Opened ${step.said}`);
     const s = await this.site(step, { mustName: true });
     if (s.error) return s.error;
     return this.landChecked(s, step);
@@ -224,12 +233,14 @@ export class Executor {
   }
 
   async do_search(step) {
+    if (step.url) return this.straight(step, `${step.said}: “${step.query}”`);
     const s = await this.site(step);
     if (s.error) return s.error;
     return this.searchOn(s, step.query);
   }
 
   async do_find_item(step) {
+    if (step.url) return this.straight(step, `${step.said}: “${step.item}”`);
     const s = await this.storeFor(step);
     if (s.error) return s.error;
     return this.searchOn(s, step.item);
@@ -380,9 +391,9 @@ export class Executor {
         const rest = tokens(step.item).filter((w) => !famWords.has(w) && !['a', 'an', 'the', 'me', 'my', 'new'].includes(w)).join(' ');
         return this.do_order({ ...step, item: `${m}${rest ? ` ${rest}` : ''}` }, said);
       }
-      // Its own store page: one page load, then add (search is the fallback).
+      // Its own store page (a demo product: its exact configuration's page): one page load, then add.
       if (fam?.url) {
-        await this.tabs.navigate(fam.url);
+        await this.tabs.navigate(productPage(step.item) ?? fam.url);
         this.mark('store page');
         const r = await this.addToCart({ ...step, picked: fam.family, viaBuy: true }, said, 'Apple Store');
         return r;  // the product's own page is the right place; a search there only finds look-alikes
@@ -422,7 +433,14 @@ export class Executor {
   }
 
   async do_add_to_cart(step, said) {
-    if (step.n) { const r = await this.do_nth(step); if (!r.ok) return r; }
+    if (step.n) {
+      // A result with its own add button (store result lists often have one): pressed right there.
+      const list = await this.stableResults(Math.max(1, step.n));
+      const hit = Array.isArray(list) ? (step.n < 0 ? list.at(-1) : list[step.n - 1]) : null;
+      if (hit?.add) return this.addToCart({ ...step, picked: hit.text, addRef: hit.add }, said, await this.siteName());
+      const r = await this.do_nth(step, list);
+      if (!r.ok) return r;
+    }
     return this.addToCart(step, said, await this.siteName());
   }
 
@@ -799,7 +817,8 @@ export class Executor {
     const onCart = CART_PATH.test(pathOf(this.tabs.getCurrentURL()));
     if (step.item || onCart) {
       const lines = step.item ? await this.cartLinesHere() : ((await this.tabs.dx('cartLines')) ?? []);
-      if (Array.isArray(lines) && lines.length > (step.item ? 0 : 1)) return this.lineQuantity(step, lines);
+      // On the cart even one line is changed with its own control (a cart has no page-wide quantity box).
+      if (Array.isArray(lines) && lines.length > 0) return this.lineQuantity(step, lines);
     }
     const before = await this.tabs.dx('getQty');
     if (step.value === 'set' && step.qty > 0) {
@@ -848,26 +867,48 @@ export class Executor {
     const start = line.count;
     const want = step.value === 'set' && step.qty >= 0 ? step.qty : Math.max(0, (start ?? 1) + (step.value === 'down' ? -1 : 1));
     if (want === 0) return this.do_remove({ ...step, item: name });
-    let r = step.value === 'set' || !line.qty ? 'none' : await this.tabs.dx('stepLine', line.line, step.value === 'down' ? -1 : 1);
-    if (r !== 'ok' && line.qty) r = await this.tabs.dx('setLineQty', line.qty, want);
-    if (r !== 'ok') r = await this.tabs.dx('stepLine', line.line, step.value === 'down' ? -1 : 1);
+    if (start === want) return ok(`${name}: quantity is already ${want}`);
+    const up = want > (start ?? 0);
+    const same = (l) => tokens(l.text).slice(0, 4).join(' ') === tokens(line.text).slice(0, 4).join(' ');
+    const fresh = async () => ((await this.tabs.dx('cartLines')) ?? []).find?.(same) ?? null;
+    // Proof the store took it: the cart's own counts (header badge, subtotal) moved the right way. Never
+    // a field Dixi changed itself: Amazon keeps a quantity box behind its +/- that takes any number and
+    // ignores it. null = the page shows no counts to go by.
+    const counts = async () => { const b = await this.tabs.dx('cartBadge'); return typeof b === 'number' ? b : cartCount(await this.cartSignal()); };
+    // (A count that dips while the store redraws the cart is not the answer: wait for the right way.)
+    const moved = async (from) => {
+      if (from == null) return null;
+      const v = await this.waitFor(counts, (x) => x != null && (up ? x > from : x < from), 6000);
+      return v != null && (up ? v > from : v < from);
+    };
+    // The line's own + / −, one press at a time, each checked; the line is re-read after each press
+    // (stores redraw it).
+    const presses = start != null ? Math.abs(want - start) : step.value === 'set' ? 0 : 1;
+    let pressed = 0, target = line;
+    for (; pressed < presses && pressed < 9 && target; pressed++) {
+      const from = await counts();
+      if ((await this.tabs.dx('stepLine', target.line, up ? 1 : -1)) !== 'ok') break;
+      if ((await moved(from)) === false) return fail(`I pressed ${up ? 'plus' : 'minus'} on ${name}, but the cart didn't change`);
+      await this.tabs.waitForDom(null, 1500);
+      target = await fresh();
+    }
+    if (presses && pressed === presses) return ok(`${name}: quantity is now ${want}`);
+    // No + / − (a quantity menu, as on Apple's bag): set the number, then the same proof.
+    const box = (await fresh())?.qty ?? line.qty;
+    const from = await counts();
+    let r = box ? await this.tabs.dx('setLineQty', box, want) : 'none';
     if (r !== 'ok') {
-      const v = await this.visualPick(`the ${step.value === 'down' ? 'minus / decrease' : 'plus / increase'} quantity button for "${name}" in the shopping cart`);
+      const v = await this.visualPick(`the ${up ? 'plus / increase' : 'minus / decrease'} quantity button for "${name}" in the shopping cart`);
       if (v) r = await this.tabs.dx('clickRef', v.ref, false);
     }
     if (r !== 'ok' && !String(r).startsWith('ok')) return fail(`I couldn't change the quantity of ${name}`);
-    const now = async () => ((await this.tabs.dx('cartLines')) ?? []).find?.((l) => tokens(l.text).slice(0, 4).join(' ') === tokens(line.text).slice(0, 4).join(' '))?.count;
-    // What the cart shows once it has settled: a number set by script can show before the store takes it
-    // (or never, behind a styled stepper), so the count is read again after the page goes quiet.
-    const settled = async () => { await this.waitFor(now, (v) => v != null && v !== start, 4000); await this.tabs.waitForDom(null, 2500); return now(); };
-    let after = await settled();
-    // A set that didn't take ("make it 3" on a +/- stepper): one press at a time, each checked.
-    for (let i = 0; step.value === 'set' && after !== want && after != null && i < 9; i++) {
-      if ((await this.tabs.dx('stepLine', line.line, want > after ? 1 : -1)) !== 'ok') break;
-      after = await settled();
-    }
-    if (step.value === 'set') return after === want ? ok(`${name}: quantity is now ${after}`) : fail(`I tried, but ${name} shows ${after ?? start ?? 'the same'}, not ${want}`);
-    return after != null && after !== start ? ok(`${name}: quantity is now ${after}`) : fail(`I changed it, but ${name} still shows ${start ?? 'the same'}`);
+    const took = await moved(from);
+    if (took === false) return fail(`I set ${name} to ${want}, but the cart didn't change`);
+    if (took) { await this.tabs.waitForDom(null, 1500); return ok(`${name}: quantity is now ${want}`); }
+    // No counts on the page: the line's number once the page has gone quiet.
+    await this.tabs.waitForDom(null, 2500);
+    const after = (await fresh())?.count;
+    return after === want ? ok(`${name}: quantity is now ${after}`) : fail(`I tried, but ${name} shows ${after ?? start ?? 'the same'}, not ${want}`);
   }
 
   /** Where checkout stopped, said plainly. Dixi never signs in, types personal details or pays. */
@@ -962,18 +1003,19 @@ export class Executor {
     }
   }
 
-  async do_nth(step) {
-    let list = await this.stableResults(Math.max(1, step.n));
+  /** @param settled the result list, if it was just read once it stopped changing */
+  async do_nth(step, settled = null) {
+    let list = Array.isArray(settled) && settled.length ? settled : await this.stableResults(Math.max(1, step.n));
     if (step.n < 0) { await this.tabs.dx('scrollResultsToEnd'); await sleep(300); list = await this.tabs.dx('results'); }
     if (!Array.isArray(list) || !list.length) return fail(`I don't see a list of results on this page`);
     const r = step.n < 0 ? list.at(-1) : list[step.n - 1];
     if (!r) return fail(`There are only ${list.length} results here`);
     const res = await this.clickAndWait(r.ref);
     if (typeof res === 'string' && res.startsWith('confirm')) return this.confirmThen(r.ref, res.slice(9));
-    // "play the first one": if what opened isn't playing by itself, press its Play.
+    // "play the first one": if what opened isn't playing by itself, press its Play. Sites start their
+    // player a moment after the page (YouTube ~1-2 s): pressing Play while it starts would pause it.
     if (step.value === 'play') {
-      await sleep(600);
-      const m = await this.tabs.exec(null, `(() => { const v = [...document.querySelectorAll('video, audio')].find((x) => !x.paused); return Boolean(v); })()`);
+      const m = await this.waitFor(() => this.tabs.exec(null, `[...document.querySelectorAll('video, audio')].some((x) => !x.paused)`), (x) => x === true, 3000);
       if (m !== true) {
         const p = await this.waitFor(() => this.tabs.dx('findButton', /^(play|shuffle|preview|listen now|watch now)\b/i, { links: false }), (x) => x, 3000);
         if (p) { await this.tabs.dx('clickRef', p.ref, false); return ok(`Playing “${r.text.slice(0, 50)}”`); }
@@ -1034,7 +1076,8 @@ export class Executor {
   }
 
   async do_ask_page(step, said) {
-    const a = await askPage(said, { tabs: this.tabs, llm: this.llm, models: this.tiers.answer });
+    // A demo question with its answer written in (demo.js): said at once.
+    const a = step.answer ? { text: step.answer, general: true } : await askPage(said, { tabs: this.tabs, llm: this.llm, models: this.tiers.answer });
     this.onAnswer?.(a);
     this.speaker?.say(a.text);
     return { ok: !a.failed, message: a.text.slice(0, 120), answer: a };

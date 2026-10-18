@@ -240,6 +240,18 @@ function cartLink() {
   return a[0] ? { ref: ref(a[0]), name: name(a[0]), href: a[0].href } : null;
 }
 
+/** The number on the site's own cart link in its header (Amazon's "2", Apple's "Bag with item count : 2"), or null. */
+function cartBadge() {
+  for (const x of all('a[href]')) {
+    let path = '';
+    try { path = new URL(x.href, location.href).pathname; } catch { continue; }
+    if (!visible(x) || !inChrome(x) || !/cart|bag|basket|trolley/i.test(path)) continue;
+    const m = ((x.getAttribute('aria-label') || '') + ' ' + x.innerText).match(/\b(\d{1,3})\b/);
+    if (m) return Number(m[1]);
+  }
+  return null;
+}
+
 // ---- cart lines: each thing in the cart, its Remove/Delete control and its quantity control ----
 // Read fresh every time (carts redraw after each change); never kept between calls.
 const REMOVE_RE = /^(remove|delete)\b/i;
@@ -553,7 +565,7 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
+window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
   media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)) };
 })();`;
 

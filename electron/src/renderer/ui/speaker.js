@@ -43,7 +43,7 @@ export class Speaker {
     }
     if (!this.synth) { done(); return; }
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.05;
+    u.rate = 0.95;
     u.onend = done; u.onerror = done;
     this.synth.speak(u);
   }

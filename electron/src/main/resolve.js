@@ -15,6 +15,12 @@ export const nameKey = (s) => words(s).join(' ');
 const GENERIC = new Set(['the', 'a', 'an', 'website', 'site', 'app', 'online', 'official', 'home', 'page', 'my', 'www', 'com']);
 const content = (s) => words(s).filter((w) => !GENERIC.has(w));
 const plain = (w) => w.replace(/s$/, '');
+// The name's words run together at word boundaries ("Brindle Mart" ↔ "Brindlemart"), never inside a
+// longer word ("back" is not "Backcountry").
+const runsInto = (ws, joined) => ws.some((_, i) => { let s = ''; for (let j = i; j < ws.length && s.length < joined.length; j++) s += ws[j]; return s === joined; });
+// A host label is the name, or the name plus a generic affix ("shopbrindle", "getzentora", "zentora-app").
+const AFFIX = /^(shop|get|try|use|go|join|my|the|app|apps|hq|online|store|official|web|inc|co|us|usa)?$/;
+const labelIs = (label, joined) => { const l = label.replace(/-/g, ''), i = l.indexOf(joined); return i >= 0 && AFFIX.test(l.slice(0, i)) && AFFIX.test(l.slice(i + joined.length)); };
 const decode = (s) => s.replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n));
 
 /** What a page says it is: title, site/app name, logo text, manifest link, host labels; parked-domain signs. */
@@ -50,9 +56,9 @@ export function matchEvidence(name, ev) {
   const hostLabels = ev.host.split('.').slice(0, -1);
   const have = new Set([...fields.flatMap((f) => content(f).map(plain)), ...hostLabels.flatMap((h) => h.split('-')).map(plain)]);
   const joined = want.join('');
-  const inHost = hostLabels.some((h) => h.replace(/-/g, '').includes(joined));
+  const inHost = hostLabels.some((h) => labelIs(h, joined));
   const allWords = want.every((w) => have.has(w) || [...have].some((h) => h.length > 3 && h === w));
-  if (!allWords && !inHost && !fields.some((f) => content(f).join('').includes(joined))) return null;
+  if (!allWords && !inHost && !fields.some((f) => runsInto(content(f).map(plain), joined))) return null;
   // Closest field: the one that names it with the fewest extra words.
   let best = 99, exact = false;
   for (const f of fields) {
@@ -60,7 +66,7 @@ export function matchEvidence(name, ev) {
     for (const cand of [fw, content(f).map(plain)]) {
       if (!cand.length) continue;
       if (cand.join('') === joined) exact = true;
-      if (want.every((w) => cand.includes(w) || cand.join('').includes(joined))) best = Math.min(best, cand.length - want.length);
+      if (want.every((w) => cand.includes(w)) || runsInto(cand, joined)) best = Math.min(best, cand.length - want.length);
     }
   }
   // A host label alone ("zentora" in classroom.zentora.io) is exact only when no field names something longer.
@@ -102,11 +108,15 @@ export class Resolver {
   byHost(host) { const h = host.replace(/^www\./, ''); return Object.values(this.entries).find((e) => e.host === h || e.finalHost === h) ?? null; }
 
   remember(said, hit) {
-    const e = this.byHost(hit.host) ?? { name: hit.name, url: hit.url, host: hit.host, said: [], ok: 0, fail: 0, searchTemplate: null, opensearch: hit.opensearch ?? null };
+    // A page under a path (a product's page on its maker's site) is learned only for the name said: the
+    // site's own name keeps its home ("Apple" stays apple.com, never apple.com/<product>/).
+    const home = !/^https?:\/\/[^/?#]+\/[^?#]/i.test(hit.url);
+    const known = this.byHost(hit.host);
+    const e = (known && (home || known.url === hit.url) ? known : null) ?? { name: home ? hit.name : said, url: hit.url, host: hit.host, said: [], ok: 0, fail: 0, searchTemplate: null, opensearch: hit.opensearch ?? null };
     Object.assign(e, { url: hit.url, finalHost: hit.finalHost ?? hit.host, ts: this.now(), fail: 0, source: hit.source });
     if (e.name === e.host) e.name = hit.name;  // first learned from a search (by host): now it has a real name
     e.ok = (e.ok ?? 0) + 1;
-    for (const k of [nameKey(said), nameKey(hit.name)]) if (k) { this.entries[k] = e; if (!e.said.includes(k)) e.said.push(k); }
+    for (const k of [nameKey(said), home ? nameKey(hit.name) : '']) if (k) { this.entries[k] = e; if (!e.said.includes(k)) e.said.push(k); }
     this.save();
     return e;
   }

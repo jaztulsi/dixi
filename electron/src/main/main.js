@@ -10,6 +10,7 @@ import { chat, abort, tiers, keyStatus, Spend, ENDPOINTS, discoverModels, proble
 import { DeepgramBridge } from './deepgram.js';
 import { ElevenLabsBridge } from './stt.js';
 import { Resolver } from './resolve.js';
+import { speakable } from './speakable.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
@@ -252,12 +253,15 @@ handle('tab:opensearch', async (url) => openSearchTemplate((await fetchPage(Stri
 // Returns mp3 bytes, or null (the renderer then falls back to the system voice).
 handle('tts:speak', async (text) => {
   if (!config.keys.elevenlabs || spend.over) return null;
-  const voice = config.env.DIXI_VOICE || 'EXAVITQu4vr4xnSDxMaL';
+  // Matilda (knowledgeable, upbeat; the user's pick). Others that sound good: Jessica cgSgspJ2msm6clMCkdW9, Bella hpp4J3VqNfWAUOO0d1Us.
+  const voice = config.env.DIXI_VOICE || 'XrExE9yKIg1WjnnlVkGX';
   try {
     const res = await fetch(`${ENDPOINTS.elevenlabs.url}/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`, {
       method: 'POST', signal: AbortSignal.timeout(8000),
       headers: { 'xi-api-key': config.keys.elevenlabs, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-      body: JSON.stringify({ text: String(text).slice(0, 400), model_id: config.env.DIXI_TTS_MODEL || 'eleven_flash_v2_5', voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.2, use_speaker_boost: true } }),
+      // Turbo v2.5: as quick as Flash (~0.5 s) and clearly better sounding (Flash mumbles). A natural,
+      // unhurried pace; numbers written out first (speakable), which every model then says right.
+      body: JSON.stringify({ text: speakable(String(text).slice(0, 400)), model_id: config.env.DIXI_TTS_MODEL || 'eleven_turbo_v2_5', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 0.95 } }),
     });
     if (!res.ok) { console.warn('[tts]', res.status, (await res.text()).slice(0, 160)); return null; }
     return new Uint8Array(await res.arrayBuffer());

@@ -3,6 +3,9 @@
 //   interpret() one strict-JSON-schema AI call, checked by validate(), retried on the strong tier
 // No site, brand or product knowledge lives here: names are copied from the words and resolved later
 // by evidence (resolve.js). Words like "up" in "open up" are grammar, never part of a name or query.
+// The one exception is the demo (demo.js): its lines are hard-coded, checked before anything else.
+
+import { demoSteps, demoPartial } from './demo.js';
 
 export const ACTS = ['open', 'search', 'find_item', 'order', 'add_to_cart', 'remove', 'cart', 'quantity', 'checkout', 'nth', 'media', 'scroll', 'nav', 'tab', 'zoom', 'click', 'ask_page', 'ask_web', 'stop', 'none'];
 export const VALUES = {
@@ -69,6 +72,16 @@ Rules:
 export const tokens = (s) => String(s ?? '').toLowerCase().replace(/[’']s\b/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').filter(Boolean);
 export const normName = (s) => tokens(s).join(' ');
 
+// ---- the wake word ("Dixi"), matched by sound: speech recognition writes it many ways ----
+// Consonant skeleton: "dixi", "dixie", "dicksy", even "headaches" (hey-dixie) all become "dks".
+const skeleton = (w) => w.toLowerCase().replace(/x/g, 'ks').replace(/ch|ck|c|q/g, 'k').replace(/[^a-z]/g, '').replace(/[aeiouyhw]/g, '').replace(/(.)\1+/g, '$1');
+export const isDixi = (w) => Boolean(w) && w.length <= 9 && (skeleton(w) === 'dks' || (/^he/.test(w) && skeleton(w.slice(2)) === 'dks'));
+
+// ---- clauses: a new one starts at "and/then/also" (or punctuation) followed by a command verb ----
+const CLAUSE_VERB = '(?:open|go|search|find|look|play|pause|watch|add|buy|order|get|grab|show|scroll|click|tap|select|put|check|turn|mute|unmute|skip|close|zoom|take|pull|bring|launch|visit|navigate|type|increase|decrease|remove|purchase|proceed|stop|cancel|make|set|change|listen|read|tell|start|restart|rewind|sign|log|choose|pick|filter|sort|switch|reload|refresh|now)';
+const SPLIT = new RegExp(`\\s*[,.;!?]?\\s+(?:and then|and also|and|then|also|after that|plus)\\s+(?=${CLAUSE_VERB}\\b)|\\s*[,.;!?]\\s+(?=${CLAUSE_VERB}\\b)`, 'gi');
+export const splitClauses = (text) => String(text).split(SPLIT).map((s) => s.trim().replace(/^[,.;!?\s]+|[,.;!?\s]+$/g, '')).filter((s) => s.length > 1);
+
 // Closed-class English words: grammar, not content. Never the start or end of a query or name.
 const FUNCTION = new Set(['a', 'an', 'the', 'some', 'any', 'my', 'me', 'up', 'on', 'to', 'for', 'of', 'in', 'at', 'from', 'with', 'and', 'then', 'so', 'please',
   'can', 'could', 'would', 'will', 'you', 'go', 'open', 'pull', 'bring', 'search', 'find', 'look', 'show', 'get', 'take', 'launch', 'visit', 'navigate', 'load',
@@ -83,6 +96,10 @@ export function incomplete(text) {
   if (fastPath(text) && !QUESTION.test(String(text).trim())) return false;
   // A question may end on its preposition ("what is this video about", "who is it for").
   if (QUESTION.test(String(text).trim()) && t.length >= 4 && STRANDED.has(t.at(-1))) return false;
+  // The start of a demo line ("buy me an iPhone 17 in black…"): the rest is coming.
+  if (demoPartial(text)) return true;
+  // A verb still waiting for its particle ("turn it…" up / down / off).
+  if (PARTICLE_VERB.has(t.at(-2)) && ['it', 'this', 'that', 'them'].includes(t.at(-1))) return true;
   // Sentence-final words ("…the best right now", "…please") end a sentence; other grammar words don't.
   if (t.length < 2 || (FUNCTION.has(t.at(-1)) && !ENDS.has(t.at(-1))) || DANGLING.has(t.at(-1))) return true;
   // A verb still waiting for its object ("can you buy", "I want to order"), not a name ending in one
@@ -91,6 +108,7 @@ export function incomplete(text) {
 }
 const ENDS = new Set(['now', 'please', 'thanks', 'today', 'quick']);
 const VERB_END = new Set(['tell', 'give', 'buy', 'order', 'add', 'play', 'want', 'need', 'show', 'get', 'find']);
+const PARTICLE_VERB = new Set(['turn', 'switch', 'speed', 'slow', 'shut', 'start', 'make']);
 const STRANDED = new Set(['about', 'for', 'from', 'at', 'in', 'on', 'to', 'with', 'into', 'up', 'out', 'by']);
 const DANGLING = new Set(['or', 'but', 'is', 'are', 'was', 'were', 'be', 'your', 'what', 'which', 'who', 'how', 'why', 'when', 'where', 'about', 'between', 'than', 'as', 'if', 'this', 'that', 'these', 'those', 'er', 'hmm', 'mm', 'i', 'we']);
 // Verbs and particles of the command itself; a query or item never starts with one.
@@ -153,6 +171,7 @@ export const closeSpelling = (a, b) => { const x = squashed(a), y = squashed(b);
 const OPEN_VERBS = ['open up', 'open', 'go to', 'pull up', 'bring up', 'take me to', 'launch', 'visit', 'navigate to', 'load up', 'fire up', 'head to', 'switch to'];
 const LEAD = /^(?:(?:um+|uh+|so|okay|ok|hey|please|can you|could you|would you|go ahead and|i want to|let'?s)[\s,]+)*/i;
 const TAIL = /(?:[\s,]+(?:please|for me|now|real quick|thanks|thank you))*[\s,.!?]*$/i;
+const COUNT = { two: 2, to: 2, too: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 const ORDINAL = { first: 1, '1st': 1, top: 1, second: 2, '2nd': 2, third: 3, '3rd': 3, fourth: 4, '4th': 4, fifth: 5, '5th': 5, last: -1 };
 const CONTROLS = [
   [/^pause( (the )?(video|it|music|song|playback|this))?$|^stop (the )?(video|music|song|playback)$/, 'media', 'pause'],
@@ -174,7 +193,7 @@ const CONTROLS = [
   [/^scroll( it| the page)? up( a bit)?$|^(page )?up$/, 'scroll', 'up'],
   [/^(scroll |go )?(back )?(up )?to the top( of the page)?$|^top$/, 'scroll', 'top'],
   [/^(scroll |go )?to the bottom( of the page)?$|^bottom$/, 'scroll', 'bottom'],
-  [/^go back$|^back$|^previous page$/, 'nav', 'back'],
+  [/^((go|take me|head) )?back( (to )?(the |a )?(previous|last|one) page| a page)?$|^(go to )?(the )?(previous|last) page$/, 'nav', 'back'],
   [/^go forward$|^forward$/, 'nav', 'forward'],
   [/^(reload|refresh)( (the |this )?page)?$/, 'nav', 'reload'],
   [/^(open )?(a )?new tab$/, 'tab', 'new'],
@@ -192,6 +211,7 @@ const CONTROLS = [
 const NTH = /^(?:(play|open|click(?: on)?|watch|listen to|select|tap|go to|choose)\s+)?(?:the\s+)?(first|1st|top|second|2nd|third|3rd|fourth|4th|fifth|5th|last)\s*(?:one|video|result|link|item|song|product|option)?$/;
 
 const step = (act, extra = {}) => ({ act, said: '', guess: '', urls: [], query: '', item: '', qty: 0, n: 0, value: '', ...extra });
+const NAV_WORDS = { back: 'back', 'previous page': 'back', 'last page': 'back', forward: 'forward', 'next page': 'forward' };
 
 /**
  * @param text the command (wake word already removed)
@@ -202,11 +222,19 @@ export function fastPath(text, ctx = {}) {
   const t = String(text).toLowerCase().replace(LEAD, '').replace(TAIL, '').replace(/[“”"]/g, '').trim();
   if (!t) return null;
   for (const [re, act, value] of CONTROLS) if (re.test(t)) return { steps: [step(act, { value })], clarify: '' };
+  const demo = demoSteps(t);
+  if (demo) return { steps: demo, clarify: '' };
   // "Buy it", "pre-order this one": what's on the page goes in the cart, then to checkout (which stops
   // before anything is placed). "Add it" only adds.
   if (/^(can you |please )?(buy|purchase|pre-?order|order|get) (me )?(it|this|that|this one|that one)( for me| now| please)?$/.test(t)) return { steps: [step('add_to_cart'), step('checkout')], clarify: '' };
   if (/^(can you |please )?add (it|this|that|this one|that one)( to (my |the )?(cart|bag|basket))?( please)?$/.test(t)) return { steps: [step('add_to_cart')], clarify: '' };
   if (/^(can you |please )?(remove|delete|take out|take off) (it|this|that|this one|that one)( from (my |the )?(cart|bag|basket))?( please)?$/.test(t)) return { steps: [step('remove')], clarify: '' };
+  // "add the first one to my cart": that result, then into the cart.
+  const addNth = t.match(/^(?:add|put) (?:the )?(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last)(?: one| result| item| product| listing)?(?: (?:to|in|into) (?:my |the )?(?:cart|bag|basket))?$/);
+  if (addNth) return { steps: [step('add_to_cart', { n: ORDINAL[addNth[1]] })], clarify: '' };
+  // "make it two": how many of what's on screen (the cart's only line, or the product page).
+  const qty = t.match(/^(?:make it|make that|set it to|change it to|(?:set|change) the quantity to) (\d+|two|to|too|three|four|five|six|seven|eight|nine|ten)$/);
+  if (qty) return { steps: [step('quantity', { value: 'set', qty: Number(qty[1]) || COUNT[qty[1]] })], clarify: '' };
   // A plain question (no command in it) needs no parse: it goes straight to the answerer.
   if (QUESTION.test(t) && !DOING.test(t)) return { steps: [step('ask_page', { value: String(text).trim() })], clarify: '' };
   const nth = t.match(NTH);
@@ -217,6 +245,12 @@ export function fastPath(text, ctx = {}) {
     const rest = t.slice(verb.length + 1).replace(/^(the )/, '').replace(/ (website|site|app|homepage)$/, '');
     if (ctx.names?.has(normName(rest))) return { steps: [step('open', { said: rest })], clarify: '' };
     break;
+  }
+  // Several clauses typed at once ("pause it and turn it up"): if each one needs no AI, neither does the whole.
+  const parts = splitClauses(text);
+  if (parts.length > 1) {
+    const each = parts.map((p) => fastPath(p, ctx));
+    if (each.every(Boolean)) return { steps: each.flatMap((x) => x.steps), clarify: '' };
   }
   return null;
 }
@@ -254,6 +288,11 @@ export function validate(raw, text) {
     s.query = cleanSpan(s.query);
     s.item = cleanSpan(s.item);
     s.urls = (s.urls ?? []).filter((u) => /^https?:\/\/[^\s/]+\.[^\s/]+/i.test(u)).slice(0, 3);
+    // "go back to …" is a direction, never a site called "back"; "Dixi" is this app, never a site.
+    const way = NAV_WORDS[normName(s.said)];
+    if (way && s.act === 'open') { steps.push(step('nav', { value: way })); continue; }
+    if (s.said && tokens(s.said).every(isDixi)) { if (s.act === 'open') continue; s.said = ''; s.guess = ''; s.urls = []; }
+    if (way) { s.said = ''; s.guess = ''; s.urls = []; }
     // A guess may only respell what was said (same sounds), never swap in another, better-known name.
     if (s.guess && s.said && !closeSpelling(s.said, s.guess)) s.guess = '';
     let saidAt = s.said ? findSpan(words, s.said) : null;

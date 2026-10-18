@@ -3,7 +3,8 @@
 
 export class ParseCache {
   /** `store` is localStorage-like (null in tests); persists across launches. */
-  constructor(store = null, key = 'dixi.parseCache', max = 300) {
+  // v2: v1 could hold parses that sent "go back…" to a site called "back"; it's left unread.
+  constructor(store = null, key = 'dixi.parseCache.v2', max = 300) {
     this.store = store; this.key = key; this.max = max;
     try { this.map = new Map(JSON.parse(store?.getItem(key) ?? '[]')); } catch { this.map = new Map(); }
   }

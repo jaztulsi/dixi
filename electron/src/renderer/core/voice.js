@@ -5,12 +5,12 @@
 // A new command cancels whatever was still running (it never waits behind an old task).
 // UI-free: deepgram (speech bridge), mic, tabs, speaker, llm, executor are injected.
 
-import { interpret, normName, tokens, incomplete, QUESTION } from './interpret.js';
+import { interpret, fastPath, normName, tokens, incomplete, QUESTION, SHOPPING, isDixi, splitClauses } from './interpret.js';
+import { demoSteps, demoPartial } from './demo.js';
 
-// ---- the wake word ("Dixi"), matched by sound: speech recognition writes it many ways ----
-// Consonant skeleton: "dixi", "dixie", "dicksy", even "headaches" (hey-dixie) all become "dks".
-const skeleton = (w) => w.toLowerCase().replace(/x/g, 'ks').replace(/ch|ck|c|q/g, 'k').replace(/[^a-z]/g, '').replace(/[aeiouyhw]/g, '').replace(/(.)\1+/g, '$1');
-const isDixi = (w) => Boolean(w) && w.length <= 9 && (skeleton(w) === 'dks' || (/^he/.test(w) && skeleton(w.slice(2)) === 'dks'));
+export { splitClauses };
+
+// ---- the wake word ("Dixi"): isDixi (interpret.js) matches it by sound ----
 const GREET = new Set(['hey', 'hi', 'ok', 'okay', 'yo', 'hello', 'so', 'um', 'uh']);
 /** Character index just after the wake word, or -1. Only at the start, or right after a sentence break. */
 export function wakeEnd(text) {
@@ -38,13 +38,12 @@ export function isEcho(heard, said) {
 }
 export function afterWakeWord(text) {
   const at = wakeEnd(text);
-  return at < 0 ? null : String(text).slice(at).replace(/^[\s,.!?]+/, '');
+  if (at < 0) return null;
+  let rest = String(text).slice(at).replace(/^[\s,.!?]+/, '');
+  // "Dixi, Dixi, open…": the name said again is still the wake word, never part of the command.
+  for (let m; (m = rest.match(/^(\S+?)[\s,.!?]+/)) && isDixi(tokens(m[1])[0]);) rest = rest.slice(m[0].length);
+  return rest;
 }
-
-// ---- clauses: a new one starts at "and/then/also" (or punctuation) followed by a command verb ----
-const VERB = '(?:open|go|search|find|look|play|pause|watch|add|buy|order|get|grab|show|scroll|click|tap|select|put|check|turn|mute|unmute|skip|close|zoom|take|pull|bring|launch|visit|navigate|type|increase|decrease|remove|purchase|proceed|stop|cancel|make|set|change|listen|read|tell|start|restart|rewind|sign|log|choose|pick|filter|sort|switch|reload|refresh|now)';
-const SPLIT = new RegExp(`\\s*[,.;!?]?\\s+(?:and then|and also|and|then|also|after that|plus)\\s+(?=${VERB}\\b)|\\s*[,.;!?]\\s+(?=${VERB}\\b)`, 'gi');
-export const splitClauses = (text) => String(text).split(SPLIT).map((s) => s.trim().replace(/^[,.;!?\s]+|[,.;!?\s]+$/g, '')).filter((s) => s.length > 1);
 
 const STOP = /^(?:stop|cancel|never ?mind|stop (?:it|that|everything)|cancel (?:it|that))[.!]?$/i;
 const YES = /^(yes|yeah|yep|yup|sure|do it|go ahead|confirm|ok(ay)?|please do|place it|that'?s right|correct)\b/i;
@@ -197,6 +196,7 @@ export class VoiceAgent {
     if (json.event === 'StartOfTurn') { this.refreshAffordances(); return; }
     if (json.event === 'TurnResumed') return;
     if (!text || this.turnsDone.has(turn)) return;
+    this.lastTurn = turn;
     // Mostly another language (people talking nearby; Dixi listens for English): not for Dixi.
     if ((text.match(/[^\u0000-\u024f\s\d\p{P}\p{S}]/gu) ?? []).length > text.replace(/\s/g, '').length * 0.3) return;
     const cmd = this.addressed(text);
@@ -210,6 +210,9 @@ export class VoiceAgent {
     if (carried) clearTimeout(this.carryTimer);
     if (final) this.carry = null;
     if (this.clarify) {   // answering a question Dixi asked: wait for the whole answer
+      // ...said after the question: the end of the sentence that asked for it ("I want an iPad.", its
+      // final words arriving after a hard-coded line already asked "Which iPad?") is not the answer.
+      if (turn === this.clarify.turn) { if (final) this.turnsDone.add(turn); return; }
       if (final || json.event === 'EagerEndOfTurn') { this.turnsDone.add(turn); this.handleText(command); }
       return;
     }
@@ -230,7 +233,12 @@ export class VoiceAgent {
     if (!st) { st = { dispatched: [], timer: null }; this.turns.set(turn, st); }
     const clauses = splitClauses(command);
     if (!clauses.length) return;
-    for (const c of clauses.slice(0, -1)) this.dispatch(st, c);
+    // Buying waits for the final words: half-heard words ("iPhone 17e…" on the way to "iPhone 17 in
+    // black") are never bought. A clause that needs no AI (a demo line, "add it to my cart") is exact and
+    // goes at once. Nothing after a waiting clause goes ahead of it.
+    const waits = (c) => !ended && SHOPPING.test(c) && !fastPath(c);
+    let held = false;
+    for (const c of clauses.slice(0, -1)) { held ||= waits(c); if (!held) this.dispatch(st, c); }
     const last = clauses.at(-1);
     clearTimeout(st.timer);
     clearTimeout(st.specTimer);
@@ -241,16 +249,19 @@ export class VoiceAgent {
       this.carry = c;
       // Nothing followed: do what was said anyway (a lone "can" or "uh" is dropped).
       clearTimeout(this.carryTimer);
-      this.carryTimer = setTimeout(() => { if (this.carry === c) { this.carry = null; if (tokens(c.text).length >= 3) this.handleText(c.text); } }, 2500);
+      this.carryTimer = setTimeout(() => { if (this.carry === c) { this.carry = null; if (tokens(c.text).length >= 3 || demoPartial(c.text)) this.handleText(c.text); } }, 2500);
       return;
     }
     if (ended) this.dispatch(st, last);
     // Act at a pause only on a whole command: not half a sentence ("…the features of"), not a word
     // still being transcribed ("Amazon-", an open quote), and never a question (answered once, whole).
     else if (!incomplete(last) && !/[-–—]["”']?\s*$/.test(command) && ((command.match(/"/g) ?? []).length % 2 === 0)) {
-      if (!QUESTION.test(last) && !this.namesUnknownSite(last)) st.timer = setTimeout(() => { st.timer = null; this.dispatch(st, last); }, this.settleMS);
-      // Start understanding at a short pause (ready by the end of the sentence); acting waits.
-      if (this.specMS < this.settleMS) st.specTimer = setTimeout(() => this.speculate(last), this.specMS);
+      // A demo line (hard-coded, nothing to work out) goes at the first short pause.
+      const demo = Boolean(demoSteps(last));
+      if (!held && (demo || (!QUESTION.test(last) && !this.namesUnknownSite(last) && !waits(last)))) st.timer = setTimeout(() => { st.timer = null; this.dispatch(st, last); }, demo ? Math.min(this.specMS, this.settleMS) : this.settleMS);
+      // Start understanding at a short pause (ready by the end of the sentence); acting waits. Not for
+      // buying words that wait for the final transcript: half-heard, they'd be understood for nothing.
+      if (this.specMS < this.settleMS && !held && !waits(last)) st.specTimer = setTimeout(() => this.speculate(last), this.specMS);
     }
   }
 
@@ -276,6 +287,7 @@ export class VoiceAgent {
     // from the quick early understanding of a shopping command, or from the understanding itself.
     const warm = (i) => { if (!ctrl.signal.aborted && i) this.executor?.prefetch?.(i); };
     const parsing = interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal: ctrl.signal, onEarly: warm });
+    this.trace('speculate', { text });
     this.spec.set(key, { ctrl, url, at: Date.now(), parsing });
     parsing.then((p) => warm(p?.intent)).catch(() => {});
   }
@@ -295,10 +307,10 @@ export class VoiceAgent {
     // (Something that only just started — the page you asked for a moment ago — keeps going: it's queued after.)
     // An answer to Dixi's own question ("Which iPhone?" → "the iPhone 17") never cancels the task asking it.
     if (!this.clarify && !st.dispatched.length && (this.pending || this.agent?.isRunning) && !CONTINUE.test(clause) && Date.now() - (this.stepStartedAt ?? 0) > 2500) this.cancelAll({ quiet: true });
-    const entry = { key, fps: grownFrom ? [...grownFrom.fps] : [] };
+    const entry = { key, fps: [] };
     st.dispatched.push(entry);
     this.trace('clause', { clause, grown: Boolean(grownFrom) });
-    this.handleText(clause, { skip: grownFrom?.fps ?? [], entry });
+    this.handleText(clause, { entry, turn: st });
   }
 
   preconnect(text) {
@@ -342,7 +354,7 @@ export class VoiceAgent {
    * A finished command (or clause), spoken or typed. Understanding starts at once (in parallel with
    * anything still running); the doing waits its turn in the queue, so clauses happen in spoken order.
    */
-  handleText(text, { skip = [], entry = null } = {}) {
+  handleText(text, { entry = null, turn = null } = {}) {
     if (this.clarify) { this.answerClarify(text); return Promise.resolve(); }
     if (STOP.test(text)) { this.cancelAll(); return Promise.resolve(); }
     const gen = this.generation;
@@ -358,10 +370,13 @@ export class VoiceAgent {
       const intent = parsed.intent;
       if (!intent) return;
       if (intent.clarify && !intent.steps.length) { this.say(intent.clarify); this.set({ statusLine: intent.clarify }); return; }
-      let steps = intent.steps.filter((s) => s.act !== 'none');
-      // Steps an earlier, shorter version of this clause already started aren't done twice.
-      while (steps.length && skip.length && skip.includes(fp(steps[0]))) steps = steps.slice(1);
-      if (entry) entry.fps = [...entry.fps, ...steps.map(fp)];
+      // Steps an earlier hearing of this sentence already started aren't done twice: a shorter version
+      // ("go to Amazon" → "go to Amazon and search…"), or the same words written differently in the
+      // final transcript ("256 gigabytes" while talking, "256 GB" at the end). Clauses run in order, so
+      // every earlier clause of this turn has been understood by now.
+      const done = turn ? turn.dispatched.filter((d) => d !== entry).flatMap((d) => d.fps) : [];
+      const steps = intent.steps.filter((s) => s.act !== 'none' && !done.includes(fp(s)));
+      if (entry) entry.fps = steps.map(fp);
       if (!steps.length) return;
       if (steps.some((s) => s.act === 'stop')) { this.cancelAll(); return; }
       this.awakeUntil = Date.now() + this.followUpMS;
@@ -386,7 +401,8 @@ export class VoiceAgent {
         this.recent = this.recent.slice(-5);
         this.set({ statusLine: r.ok ? r.message : '' });
         if (r.answer) this.set({ answer: r.answer });
-        if (!r.ok) { items.slice(items.indexOf(item) + 1).forEach((x) => { x.state = 'cancelled'; }); break; }
+        // A human check in the way is handed to you: nothing after it runs.
+        if (!r.ok || r.botWall) { items.slice(items.indexOf(item) + 1).forEach((x) => { x.state = 'cancelled'; }); break; }
       }
       // Only fully successful understandings are remembered (a wrong one is never replayed).
       if (results.length === items.length && results.every((r) => r.ok) && parsed.source !== 'cache' && this.cache) this.cache.set(`${this.context(text).host}|${normName(text)}`, intent);
@@ -403,7 +419,7 @@ export class VoiceAgent {
     return new Promise((resolve) => {
       const timer = setTimeout(() => { if (this.clarify?.resolve === done) { this.clarify = null; this.onChange(); } resolve(null); }, 25000);
       const done = (v) => { clearTimeout(timer); resolve(v); };
-      this.clarify = { question, options, resolve: done };
+      this.clarify = { question, options, resolve: done, turn: this.lastTurn };
       this.awakeUntil = Date.now() + 25000;
       this.set({ statusLine: question });
       this.say(question);

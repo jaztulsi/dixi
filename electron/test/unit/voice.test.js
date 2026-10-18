@@ -76,6 +76,34 @@ test('a clarifying question captures the next answer (by ordinal or name)', asyn
   assert.equal(await no, false);
 });
 
+test('a question asked mid-sentence is answered by what is said next, not by the end of that sentence', async () => {
+  const r = rig();
+  r.turn(1, [['Update', 'I want an iPad']]);
+  const answer = r.v.ask('Which iPad: iPad 11, iPad Air, iPad Mini or iPad Pro?', ['iPad 11', 'iPad Air', 'iPad Mini', 'iPad Pro']);
+  r.turn(1, [['EndOfTurn', 'I want an iPad.']]);
+  r.turn(2, [['EndOfTurn', 'The iPad Air.']]);
+  assert.equal(await answer, 'iPad Air');
+});
+
+test('half-heard buying words are never bought; the final words are', async () => {
+  const r = rig();
+  r.turn(1, [['Update', 'buy me an iPhone 17e']]);
+  await sleep(800);
+  assert.equal(r.runs.length, 0, 'a pause mid-purchase does nothing');
+  r.turn(1, [['Update', 'buy me an iPhone 17 in black with 256 gigabytes'], ['EndOfTurn', 'Buy me an iPhone 17 in black with 256 gigabytes.']]);
+  await sleep(150);
+  assert.deepEqual(r.runs.map((s) => s.item), ['iPhone 17 in black with 256 gigabytes']);
+});
+
+test('the final words, written differently, never repeat what was already done', async () => {
+  const r = rig();
+  r.turn(1, [['Update', 'buy me an iPhone 18 with 256 gigabytes and AirPods']]);
+  await sleep(450);
+  r.turn(1, [['EndOfTurn', 'Buy me an iPhone eighteen, 256 GB, and AirPods.']]);
+  await sleep(150);
+  assert.deepEqual(r.runs.map((s) => s.item), ['iPhone 18 Pro in black with 256 gigabytes', 'AirPods Pro']);
+});
+
 test('a failed step stops the rest quietly (no spoken error); failed parses are not cached', async () => {
   const cache = new Map();
   const r = rig();

@@ -27,6 +27,17 @@ test('evidence: every word of the name must be on the page; a shorter page name 
   assert.equal(matchEvidence('Zentora', ev('Home | Zentora', 'zentora.io')).exact, true);
   assert.equal(matchEvidence('Brindle Mart', ev('Brindlemart', 'shopbrindle.com')).exact, true, 'spacing variants are the same name');
   assert.equal(matchEvidence('Quillmart', evidenceFrom(page('quillmart.com', { parked: true, links: 1 }), 'https://quillmart.com/')), null, 'parked pages never count');
+  // A word inside a longer name is not that name ("go back" once opened backcountry.com).
+  assert.equal(matchEvidence('Back', ev('Backcountry | Outdoor Gear', 'backcountry.com')), null);
+  assert.ok(matchEvidence('Zentora', ev('Welcome', 'getzentora.com')), 'name plus a generic affix in the host still counts');
+});
+
+test('registry: a product page on a known site never takes over the site\'s own name', () => {
+  const r = new Resolver({ fetchPage: web({}), env });
+  r.remember('Zentora', { url: 'https://zentora.io/', host: 'zentora.io', name: 'Zentora' });
+  r.remember('Zentora Homeview', { url: 'https://zentora.io/homeview/', host: 'zentora.io', name: 'Zentora' });
+  assert.equal(r.lookup('zentora').url, 'https://zentora.io/');
+  assert.equal(r.lookup('zentora homeview').url, 'https://zentora.io/homeview/');
 });
 
 test('resolve: the model\'s guess is checked, the real site is found by search when the guess is wrong', async () => {
