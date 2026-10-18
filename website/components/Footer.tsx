@@ -11,7 +11,6 @@ export function Footer() {
         </a>
         <nav aria-label="Footer" className="flex gap-6">
           <a href="/credits/">Credits</a>
-          <a href="https://github.com/unixers/runic">GitHub</a>
           <span>© 2026 Dixi</span>
         </nav>
       </div>

@@ -1,6 +1,6 @@
 # Dixi website: "Marble and glass" (v2)
 
-v1 (dark, Roman sculpture photography, brand "Runic") is commit `aeb42a7`. v2 follows the owner's direction:
+v1 (dark, Roman sculpture photography) is commit `aeb42a7`. v2 follows the owner's direction:
 brand **Dixi**, ~85% white marble / ~15% black, bold black type, black marble stripes, a demo up top, a shuffling
 use-case deck, the marble mascot throughout, and a shorter page.
 
@@ -8,7 +8,7 @@ use-case deck, the marble mascot throughout, and a shorter page.
 
 | | Path |
 |---|---|
-| Website | `runic-website/` (package `dixi-website`: Next.js 15 static export, TypeScript, Tailwind v4, shadcn Button, Motion) |
+| Website | `website/` (package `dixi-website`: Next.js 15 static export, TypeScript, Tailwind v4, shadcn Button, Motion) |
 | Electron UI restyle (requested later by the owner) | `electron/src/renderer/{index.html,styles.css,app.js,ui/mascot.js,assets/}` + one test title assertion. No voice/agent/main-process logic, no `package.json`, no protocol changes. |
 
 "Launch Dixi" links to `dixi://open` only (prefill, never runs a task). The Electron app registers `dixi://`.
