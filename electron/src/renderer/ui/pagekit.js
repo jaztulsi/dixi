@@ -491,7 +491,10 @@ function identity() {
   return { title: document.title, siteName: meta('meta[property="og:site_name"]'), appName: meta('meta[name="application-name"]'),
     logo: [...document.querySelectorAll('img[alt*=logo i]')].map((i) => i.alt).join(' '), host: location.hostname.replace(/^www\./, ''), url: location.href };
 }
-function loginWall() { return all('input[type=password]').some(visible); }
+// A sign-in form: a password field, or a visible sign-in frame from another origin (Apple's, Google's...).
+function loginWall() {
+  return all('input[type=password]').some(visible) || [...document.querySelectorAll('iframe')].some((f) => visible(f) && /sign.?in|log.?in|auth|account|idms/i.test([f.src, f.title, f.name, f.id].join(' ')));
+}
 /** A "prove you're human" check. Dixi never solves these; it hands them to you. The check often lives in a frame. */
 function botWall() {
   const HUMAN = /captcha|are you a (human|robot)|confirm you('re| are) (a )?human|verify (that )?you('re| are) (a )?human|not a (ro)?bot|press (&|and) hold|unusual traffic|robot check|quick verification/i;

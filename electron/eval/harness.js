@@ -86,7 +86,8 @@ export async function launchApp({ appRoot = root, extraArgs = [], env = {}, prof
     const transport = llm.transport;
     llm.transport = async (req) => { window.__llm.calls++; const r = await transport(req); window.__llm.tokens += r?.json?.usage?.total_tokens ?? 0; window.__llm.ms.push(r?.ms ?? 0); return r; };
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    window.__busy = () => (window.__dixi.busy ? window.__dixi.busy() : (voice.pending > 0 || agent.isRunning || tabs.isLoading()));
+    // Waiting for your answer to a question ("Which iPhone?") counts as idle: the next thing said answers it.
+    window.__busy = () => !voice.clarify && (window.__dixi.busy ? window.__dixi.busy() : (voice.pending > 0 || agent.isRunning || tabs.isLoading()));
     window.__reset = async ({ closeTabs = true } = {}) => {
       if (window.__dixi.resetForEval) window.__dixi.resetForEval(); else { voice.cancelAll?.(); agent.finalResult = null; voice.plan = []; voice.answer = null; }
       for (let i = 0; i < 50 && window.__busy() && !tabs.isLoading(); i++) await sleep(100);

@@ -54,7 +54,8 @@ Rules:
 - Keep multi-word names whole. Never shorten a name to a word inside it, never swap it for a more famous name.
 - "guess": only if "said" looks misheard by speech recognition: a respelling of the SAME sounds (different spacing or letters), never a different or more famous name. Usually "".
 - "urls": up to 3 likely official home page URLs for "said" from your knowledge, [] if unsure. For order / find_item with no store named: "said" stays "" and "urls" is the online store where that exact item is usually bought (the maker's own store for a branded product, else a big retailer that sells it).
-- "query" / "item": only the words for the thing itself, copied from the command. Never verbs, particles, filler, quantities, "on <site>" or the site's name.
+- "query" / "item": only the words for the thing itself, copied from the command. Never verbs, particles, filler, quantities, "on <site>" or the site's name. An item keeps the options asked for with it (color, size, storage, model): "a black iPhone 17 with 256 GB" → item "black iPhone 17 with 256 GB".
+- Signing in ("sign in", "log in on this page"): click with value "sign in". You never type passwords or personal details; the user does.
 - Corrections ("no wait", "actually", "I mean") and negations ("don't open X, open Y"): only the final intent.
 - Several requests: one step each, in the order spoken. Add nothing they did not ask for.
 - Unfamiliar names are normal (new or small sites): copy them into "said" and let the app look them up. Never ask about a name just because you don't know it.
@@ -180,6 +181,7 @@ const CONTROLS = [
   [/^zoom in$/, 'zoom', 'in'], [/^zoom out$/, 'zoom', 'out'], [/^(reset zoom|normal zoom)$/, 'zoom', 'reset'],
   [/^(stop|cancel|never ?mind|stop everything|cancel that|stop that)$/, 'stop', ''],
   [/^((go to|open|show( me)?|view|check) )?(my |the )?(shopping )?(cart|bag|basket)$/, 'cart', ''],
+  [/^(sign|log) ?(me )?in( (on|to|at) (this|the) (page|site|website|store|account))?$|^(sign|log) ?in (here|now)$/, 'click', 'sign in'],
   [/^((go|proceed|continue) (to|with) )?(the )?(purchase|checkout|check out)$|^(check out|checkout)$/, 'checkout', ''],
   [/^(increase|raise|bump up) the (quantity|amount|number)$|^(add )?one more( of (these|this|them|it))?$/, 'quantity', 'up'],
   [/^(decrease|lower|reduce) the (quantity|amount|number)$|^one (less|fewer)$/, 'quantity', 'down'],
@@ -290,7 +292,15 @@ export function validate(raw, text) {
  * @param deps {llm, tiers, signal, cache}
  * @returns {intent, source: fast|cache|llm|strong, errors, ms}
  */
-export async function interpret(text, ctx = {}, { llm, tiers, signal = null, cache = null } = {}) {
+// A shopping command (buying, the cart, quantities, checkout): planned by the `plan` tier (Claude in
+// hybrid mode). Words of the language, not of any site.
+export const SHOPPING = /\b(buy|order|purchase|pre-?order|add|cart|bag|basket|check ?out|checkout|remove|quantity|get me|i want|i'd like|i would like|can i (get|have)|grab me)\b/i;
+
+/**
+ * @param deps.onEarly (intent) => void: for a shopping command, a quick fast-tier understanding made in
+ *   parallel with the plan, only to start looking up the store while Claude plans. Never acted on.
+ */
+export async function interpret(text, ctx = {}, { llm, tiers, signal = null, cache = null, onEarly = null } = {}) {
   const t0 = performance.now();
   const done = (intent, source, errors = []) => ({ intent, source, errors, ms: Math.round(performance.now() - t0) });
   const fast = fastPath(text, ctx);
@@ -300,7 +310,18 @@ export async function interpret(text, ctx = {}, { llm, tiers, signal = null, cac
   if (hit) return done(hit, 'cache');
   const user = `${contextBlock(ctx)}\nSaid: "${text}"`;
   let last = { intent: null, errors: ['no answer'] };
-  for (const [tier, models] of [['llm', tiers.fast], ['strong', tiers.strong]]) {
+  const shopping = SHOPPING.test(text) && tiers.plan?.length && String(tiers.plan) !== String(tiers.fast);
+  if (shopping && onEarly && tiers.fast?.length) {
+    llm.json(INTERPRET_PROMPT, user, tiers.fast, 400, { schema: INTENT_SCHEMA, signal }).then((c) => {
+      let raw = null;
+      try { raw = JSON.parse(c); } catch {}  // no early look-up then; the plan still comes
+      const v = validate(raw, text);
+      if (v.intent && !v.errors.length && !signal?.aborted) onEarly(v.intent);
+    }).catch(() => {});
+  }
+  // The plan tier first for shopping; if its plan fails the checks, the next tier up (never the same models twice).
+  const order = shopping ? [['plan', tiers.plan], ['strong', String(tiers.strong) === String(tiers.plan) ? tiers.hard : tiers.strong]] : [['llm', tiers.fast], ['strong', tiers.strong]];
+  for (const [tier, models] of order) {
     if (!models?.length || signal?.aborted) continue;
     const content = await llm.json(INTERPRET_PROMPT, user, models, 400, { schema: INTENT_SCHEMA, signal, hedgeMs: tier === 'llm' ? 450 : 0 });
     let raw = null;

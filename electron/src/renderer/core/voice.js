@@ -272,10 +272,12 @@ export class VoiceAgent {
     const ctrl = new AbortController();
     this.ctrl.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
     const url = this.tabs.getCurrentURL();
-    const parsing = interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal: ctrl.signal });
+    // Warm up what acting will need (site lookup, search address, connection) while you finish talking:
+    // from the quick early understanding of a shopping command, or from the understanding itself.
+    const warm = (i) => { if (!ctrl.signal.aborted && i) this.executor?.prefetch?.(i); };
+    const parsing = interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal: ctrl.signal, onEarly: warm });
     this.spec.set(key, { ctrl, url, at: Date.now(), parsing });
-    // Warm up what acting will need (site lookup, search address, connection) while you finish talking.
-    parsing.then((p) => { if (!ctrl.signal.aborted && p?.intent) this.executor?.prefetch?.(p.intent); }).catch(() => {});
+    parsing.then((p) => warm(p?.intent)).catch(() => {});
   }
 
   /** An early understanding of exactly these words, if the page hasn't changed since it started. */
@@ -291,7 +293,8 @@ export class VoiceAgent {
     const grownFrom = st.dispatched.find((d) => key.startsWith(`${d.key} `));
     // A brand-new command (not "and…", not more of this turn) replaces any task still running.
     // (Something that only just started — the page you asked for a moment ago — keeps going: it's queued after.)
-    if (!st.dispatched.length && (this.pending || this.agent?.isRunning) && !CONTINUE.test(clause) && Date.now() - (this.stepStartedAt ?? 0) > 2500) this.cancelAll({ quiet: true });
+    // An answer to Dixi's own question ("Which iPhone?" → "the iPhone 17") never cancels the task asking it.
+    if (!this.clarify && !st.dispatched.length && (this.pending || this.agent?.isRunning) && !CONTINUE.test(clause) && Date.now() - (this.stepStartedAt ?? 0) > 2500) this.cancelAll({ quiet: true });
     const entry = { key, fps: grownFrom ? [...grownFrom.fps] : [] };
     st.dispatched.push(entry);
     this.trace('clause', { clause, grown: Boolean(grownFrom) });
@@ -345,7 +348,7 @@ export class VoiceAgent {
     const gen = this.generation;
     const signal = this.ctrl.signal;
     const t0 = performance.now();
-    const parsing = this.takeSpec(text) ?? interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal });
+    const parsing = this.takeSpec(text) ?? interpret(text, this.context(text), { llm: this.llm, tiers: this.tiers, cache: this.cache, signal, onEarly: (i) => this.executor?.prefetch?.(i) });
     this.set({ answer: null });
     this.pending++;
     this.queue = this.queue.then(async () => {

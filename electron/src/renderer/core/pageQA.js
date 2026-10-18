@@ -22,7 +22,12 @@ export function relevantText(page, question, budget = 7000) {
   const paras = page.split(/\n+/).map((t, i) => ({ t, i }));
   const head = page.slice(0, 1500);
   const scored = paras.map((p) => ({ ...p, s: words(p.t).filter((w) => want.has(w.replace(/s$/, ''))).length })).filter((p) => p.s > 0).sort((a, b) => b.s - a.s || a.i - b.i);
+  // A price, rating or count question names none of the page's words ("how much do these cost" vs
+  // "$249.00"): the page's own headings and the lines carrying those figures go in first.
+  const figures = /\b(how much|cost|price|pay|expensive|cheap|total|rating|rated|stars?|reviews?|how many)\b/i.test(question)
+    ? paras.filter((p) => /[$€£¥]\s?\d|\d\s?(out of 5|stars?)|\b(total|subtotal|rating|reviews?)\b/i.test(p.t) && p.t.length < 300).slice(0, 40) : [];
   let out = head;
+  for (const p of figures) { if (out.length + p.t.length > budget * 0.6) break; if (!out.includes(p.t)) out += `\n${p.t}`; }
   for (const p of scored) {
     if (out.length + p.t.length > budget) continue;
     out += `\n…\n${p.t}`;
