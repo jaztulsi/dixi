@@ -241,6 +241,7 @@ function cartLink() {
 // ---- cart lines: each thing in the cart, its Remove/Delete control and its quantity control ----
 // Read fresh every time (carts redraw after each change); never kept between calls.
 const REMOVE_RE = /^(remove|delete)\b/i;
+const CHECKOUT_RE = /^(check ?out|proceed to (check ?out|checkout|buy)|continue to (check ?out|payment))\b/i;
 const QTY_SEL = 'select, input[type=number], [role=spinbutton], input[name*=qty i], input[name*=quantity i]';
 function cartLines() {
   let anchors = all('button, a[href], [role=button], input[type=submit], input[type=button]').filter((x) => shown(x) && REMOVE_RE.test(name(x)) && !inChrome(x));
@@ -259,11 +260,13 @@ function cartLines() {
   const sets = [...groups.values()];
   const lines = [];
   for (const g of sets) {
-    // The line: the smallest box holding all its controls, grown while it holds no other line's.
+    // The line: the smallest box holding all its controls, grown while it holds no other line's and
+    // none of the cart's own parts (its checkout button, the page header), so a lone line stays its own.
     let box = g[0];
     while (box.parentElement && !g.every((c) => box.contains(c))) box = box.parentElement;
     for (let p = box.parentElement; p && p !== document.body; p = p.parentElement) {
       if (sets.some((o) => o !== g && o.some((c) => p.contains(c)))) break;
+      if (p.querySelector('header, nav, [role=banner], [role=navigation]') || [...p.querySelectorAll('button, a[href], [role=button], input[type=submit]')].some((x) => CHECKOUT_RE.test(name(x)))) break;
       box = p;
     }
     const c = g.find((x) => REMOVE_RE.test(clean(x.innerText || x.value || ''))) || g[0];
