@@ -54,12 +54,16 @@ export async function askPage(question, { tabs, llm, models, webAnswer = globalT
   try { reply = JSON.parse(raw); } catch { reply = null; }
   const verified = reply?.found === true && quoteIsOnPage(reply.quote, page);
   if (verified) return { text: reply.answer, quote: reply.quote.trim(), source, grounded: true };
-  // Something recent the page doesn't cover: the model's memory is out of date, so search the web.
-  if (TIMELY.test(question) && webAnswer) {
-    const web = await webAnswer(question).catch(() => null);
+  // The page doesn't have it ("the page does not show a rating"), or it's something recent the model's
+  // memory can't know: Claude answers with a web search, told which page you're on so "this" makes sense.
+  if (webAnswer && (TIMELY.test(question) || NON_ANSWER.test(reply?.answer ?? '') || !reply?.answer)) {
+    const about = source && !/^(new tab|about:blank)?$/i.test(source.trim()) ? ` (I'm looking at the page "${source.replace(/["\n]/g, ' ').slice(0, 100)}")` : '';
+    const web = await webAnswer(`${question}${about}`).catch(() => null);
     if (web) return { text: web, quote: null, source, grounded: false, web: true };
   }
   if (!reply?.answer) return { text: 'The AI service is busy (rate limit). Ask me again in a few seconds.', quote: null, source, grounded: false, failed: true };
   return { text: reply.answer, quote: null, source, grounded: false, general: true };
 }
+// An answer that is really "I can't tell" (it should be answered another way, not said back to you).
+export const NON_ANSWER = /\b(does(n'?t| not) (show|say|mention|list|include|contain|provide|specify)|(is|are) not (shown|listed|mentioned|available|provided|specified)|not (on|in) (this|the) page|can(no|')?t (see|find|tell|determine)|no (information|details|data) (about|on)|not sure|(don'?t|do not) (know|have)|unable to)\b/i;
 const TIMELY = /\b(latest|newest|new|recent|recently|current|currently|today|tonight|tomorrow|yesterday|this (week|month|year)|right now|now|upcoming|release[sd]?|launch(ed)?|announce[sd]?|price|prices|cost|score|news|weather|open now|hours|20\d\d)\b/i;
