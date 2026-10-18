@@ -17,13 +17,13 @@ const VISIBLE = 3; // cards drawn in the stack; the rest wait behind
 export function ShuffleDeck({ cases }: { cases: UseCase[] }) {
   const reduced = useReduced();
   const [top, setTop] = useState(0);
-  const [paused, setPaused] = useState(false);
 
+  // Shuffles nonstop, hover or not.
   useEffect(() => {
-    if (reduced || paused) return;
-    const id = setInterval(() => setTop((t) => (t + 1) % cases.length), 2600);
+    if (reduced) return;
+    const id = setInterval(() => setTop((t) => (t + 1) % cases.length), 1500);
     return () => clearInterval(id);
-  }, [reduced, paused, cases.length]);
+  }, [reduced, cases.length]);
 
   const list = (
     <ul className="glass rounded-[var(--radius-panel)] px-6 sm:px-8">
@@ -40,12 +40,7 @@ export function ShuffleDeck({ cases }: { cases: UseCase[] }) {
   return (
     <>
       <div className="sr-only">{list}</div>
-      <div
-        aria-hidden="true"
-        className="relative mx-auto h-[312px] w-full max-w-[560px]"
-        onPointerEnter={() => setPaused(true)}
-        onPointerLeave={() => setPaused(false)}
-      >
+      <div aria-hidden="true" className="relative mx-auto h-[312px] w-full max-w-[560px]">
         {cases.map((c, i) => {
           const depth = (i - top + cases.length) % cases.length;
           const leaving = depth === cases.length - 1; // just shuffled from the top to the back
@@ -64,9 +59,9 @@ export function ShuffleDeck({ cases }: { cases: UseCase[] }) {
                   ? { x: ['0%', '70%', '0%'], rotate: [0, 8, 0], y: [0, 0, 32], scale: [1, 1, 0.9], opacity: [1, 1, 0], zIndex: [cases.length, cases.length, 0] }
                   : { x: '0%', rotate: 0, y: depth * 16, scale: 1 - depth * 0.05, opacity: shown ? 1 - depth * 0.3 : 0, zIndex: cases.length - depth }
               }
-              transition={leaving ? { duration: 0.8, times: [0, 0.45, 1], ease: 'easeInOut' } : { type: 'spring', stiffness: 260, damping: 30 }}
+              transition={leaving ? { duration: 0.55, times: [0, 0.45, 1], ease: 'easeInOut' } : { type: 'spring', stiffness: 380, damping: 32 }}
             >
-              <div className={cn('flex h-full flex-col transition-opacity duration-300', depth === 0 || leaving ? 'opacity-100' : 'opacity-0')}>
+              <div className={cn('flex h-full flex-col transition-opacity duration-200', depth === 0 || leaving ? 'opacity-100' : 'opacity-0')}>
               <p className="t-label">{c.kind}</p>
               <p className="mt-4 text-[26px] leading-tight font-bold tracking-[-0.02em] text-fg sm:text-[32px]">“{c.say}”</p>
               <p className="mt-auto flex items-center gap-3 text-[17px] text-fg-2">
