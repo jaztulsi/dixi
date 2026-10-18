@@ -275,7 +275,7 @@ handle('answer:web', async (question) => {
       headers: { 'x-api-key': config.keys.anthropic, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', ...(ws ? { 'anthropic-workspace-id': ws } : {}) },
       body: JSON.stringify({
         model, max_tokens: 400, thinking: { type: 'disabled' },
-        system: `Today is ${new Date().toDateString()}. Answer the spoken question in 1-3 short sentences that sound natural read aloud. Use one web search for anything recent. No lists, no markdown, no links.`,
+        system: `Today is ${new Date().toDateString()}. Answer the spoken question in 1-3 short sentences that sound natural read aloud. Use one web search for anything recent or specific (specs, prices, comparisons). The question may say which web page the user is on, for context only: never mention pages, searching or what you can or can't see; just give the answer. No lists, no markdown, no links.`,
         messages: [{ role: 'user', content: String(question).slice(0, 300) }],
         tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }],
       }),
@@ -284,7 +284,10 @@ handle('answer:web', async (question) => {
     if (!res.ok) { console.warn('[web answer]', res.status, j.error?.message); return null; }
     spend.add(`anthropic:${model}`, j.usage);
     spend.addUSD('anthropic', 0.01 * (j.usage?.server_tool_use?.web_search_requests ?? 1));
-    return (j.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('').replace(/\s+/g, ' ').trim() || null;
+    // Only what comes after the search result is the answer ("I'll look that up." before it is not).
+    const blocks = j.content ?? [];
+    const after = blocks.slice(blocks.findLastIndex((c) => c.type === 'web_search_tool_result') + 1);
+    return after.filter((c) => c.type === 'text').map((c) => c.text).join('').replace(/\s+/g, ' ').trim() || null;
   } catch (err) { console.warn('[web answer]', err.message); return null; }
 });
 // A site's search URL read from its home page HTML (no rendering), so a first search can skip the home page.

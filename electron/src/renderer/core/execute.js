@@ -563,7 +563,9 @@ export class Executor {
     if (!add) return fail(`I couldn't find an add-to-cart button on ${where}`);
     // What you asked for that no answer on the page has ("AirPods with 200 GB"): said, not silently dropped.
     // A number and its unit are one ask ("256 gb" ↔ "256GB").
-    const asks = want.reduce((a, w) => (/^(gb|tb|mb|mm|cm|inch|in|hz|w)$/.test(w) && /^\d+$/.test(a.at(-1) ?? '') ? [...a.slice(0, -1), a.at(-1) + w] : [...a, w]), []);
+    // Spoken units as stores write them ("256 gigabytes" = "256GB", "a terabyte" = "1TB").
+    const UNIT = { gig: 'gb', gigs: 'gb', gigabyte: 'gb', gigabytes: 'gb', terabyte: 'tb', terabytes: 'tb', tera: 'tb', inches: 'inch', millimeter: 'mm', millimeters: 'mm' };
+    const asks = want.map((w) => UNIT[w] ?? w).reduce((a, w) => (/^(gb|tb|mb|mm|cm|inch|in|hz|w)$/.test(w) && /^\d+$/.test(a.at(-1) ?? '') ? [...a.slice(0, -1), a.at(-1) + w] : [...a, w]), []);
     const unheard = asks.filter((w) => ![...seen].some((v) => tokens(v).some((x) => x === w || (/^\d/.test(w) && x.startsWith(w)) || tokens(v).join('') === w)));
     // Words of the product's own page title ("Pro 3" on AirPods Pro 3's page) aren't missing options.
     const titled = new Set(tokens(this.tabs.activeTab?.title ?? ''));

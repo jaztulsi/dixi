@@ -123,7 +123,7 @@ test('a question the page cannot answer goes to Claude with a web search, told w
   let asked = null;
   const a = await askPage('what is the rating of this product', { tabs, llm, models: ['m'], webAnswer: async (q) => { asked = q; return 'It is rated 4.4 out of 5.'; } });
   assert.equal(a.web, true); assert.equal(a.text, 'It is rated 4.4 out of 5.');
-  assert.match(asked, /what is the rating of this product \(I'm looking at the page "Fhumsh Wireless Earbuds - Amazon"\)/);
+  assert.match(asked, /what is the rating of this product \(context: I'm on the page "Fhumsh Wireless Earbuds - Amazon"\)/);
   // A real answer from the page is kept (no web search).
   const llm2 = { json: async () => JSON.stringify({ answer: 'It costs $29.', quote: 'specs specs', found: true }) };
   assert.equal((await askPage('how much is it', { tabs, llm: llm2, models: ['m'], webAnswer: async () => { throw new Error('no'); } })).grounded, true);

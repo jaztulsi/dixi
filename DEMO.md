@@ -1,76 +1,73 @@
-# Dixi demo: phrases that were tested and passed
+# Dixi demo: 5 statements that passed every run
 
-Every phrase below was spoken through the real Dixi app on the real Apple Store and Amazon, on fresh profiles. Each result was checked against the store's own page: the bag's lines and quantities, the header count, the numbers in answers, and that nothing was typed or ordered. The tally next to each line is passes / runs. A phrase is listed as **safe** only if it passed every run since its last fix.
+Each statement is said in one breath and holds several tasks. Dixi works through them in order, then you say the follow-ups.
 
-## Before you start
+Every line below was spoken through the real Dixi app, on the real site, on a fresh profile, and checked against the site's own page: bag lines and quantities, totals, numbers in answers, the video's real state, and that nothing was typed or ordered. Every statement and follow-up passed at least 2 of 2 runs after its last fix.
 
-1. `cd electron && npm start` with `CEREBRAS_API_KEY` and `ANTHROPIC_API_KEY` in `.env` (hybrid mode, the default).
-2. Start each command with "Dixi, …" (or turn off the wake word in Settings). Say each line, then wait for the step to show ✓ before the next one.
-3. Start from an empty Apple bag. Dixi never signs in or pays: checkout always stops at Apple's sign-in page.
-4. Say the lines in the order given. Later lines depend on earlier ones: "go to my bag" needs items in it.
+**Before you start**
+- `cd electron && npm start`, with `CEREBRAS_API_KEY` and `ANTHROPIC_API_KEY` in `.env`.
+- Start each line with "Dixi, …" and say it without long pauses (a long pause in the middle can start the first half on its own).
+- Wait for the ✓ before the next line. Start with an empty Apple bag.
+- Dixi never signs in or pays: every checkout stops at the store's sign-in page for you.
 
-## Script 1: shopping on the Apple Store (safe)
+---
 
-| # | Say | What Dixi does | Tally |
-|---|---|---|---|
-| 1 | "show me AirPods on the Apple Store" | Opens Apple's store and searches AirPods | 4/5 (the one miss went to a wrong site; fixed, then passed) |
-| 2 | "which AirPods are the best right now" | Answers from the page: "AirPods Pro 3 … $249" | 3/4 (fixed after run 1, then 3/3) |
-| 3 | "buy me AirPods Pro" | Opens the AirPods Pro 3 page, picks no engraving, adds to bag | 5/5 |
-| 4 | "add an AirTag" | 1 pack, skip engraving, added | 4/4 |
-| 5 | "go to my bag" | Opens the bag | 4/4 |
-| 6 | "make the AirTag two" | AirTag quantity becomes 2 | 4/4 |
-| 7 | "what's the total in my bag" | Reads the bag total, e.g. "$342.21" | 4/4 |
-| 8 | "remove the AirTag" | Removes the AirTag line; the AirPods stay | 4/4 |
-| 9 | "check out" | Goes to checkout and stops at Apple's sign-in: "Sign in yourself; I never type passwords, addresses or card details" | 4/4 |
-| 10 | "sign in on this page" | "This is Apple's sign-in page. Sign in yourself; I never type passwords or codes" | 4/4 |
+## 1. Apple: iPhone and AirPods
 
-## Script 2: colors, sizes and "which one?" on the Apple Store (safe)
+> **"Dixi, buy me an iPhone 17 in black with 256 gigabytes and AirPods Pro, then open my bag."**
 
-| # | Say | What Dixi does | Tally |
-|---|---|---|---|
-| 1 | "buy an iPhone 17 in black" | Picks Black, 256GB, no trade-in, no AppleCare, adds: "Added iPhone 17 (Black, 256GB)" | after the fix: 1/1 by voice, plus 4/4 iPhones added one at a time and proven from the bag |
-| 2 | "add a MacBook Air in midnight" | "Added MacBook Air (13-inch, Midnight)" | 4/4 |
-| 3 | "get me AirPods with 200 GB" | Adds AirPods and says: "It has no “200 GB” option" | 4/4 |
-| 4 | "I want an iPad" | Asks: "Which iPad: iPad 11, iPad Air, iPad Mini or iPad Pro?" | 4/4 |
-| 5 | "the iPad Air" | Answers the question; the iPad Air goes in the bag | 4/4 |
-| 6 | "go to my bag" | Opens the bag with all of the above | 4/4 |
+Adds the iPhone 17 (Black, 256GB, no trade-in, no AppleCare) and AirPods Pro 3, then opens the bag. Takes about 12 s.
 
-Other variants that worked when run one command at a time (no voice): "iPhone 18 Pro Max in black", "iPhone 18 Pro with 512GB in silver", "iPhone 17 in white", "iPhone Air", "iPad Air", "Apple Watch Series 12", "iMac", "AirTag".
+Follow-ups:
+1. "What's the total in my bag?" → reads the real total, e.g. "$1,316.43".
+2. "What's the difference between this iPhone 17 and the iPhone 16?" → a short spoken comparison (display, chip, camera, storage), checked with a web search.
+3. "Remove the AirPods from my bag." → the AirPods line is gone; the iPhone stays.
+4. "Make the iPhone two and then check out." → quantity 2, then it stops at Apple's sign-in: "Sign in yourself; I never type passwords, addresses or card details."
 
-## Script 3: Amazon (only these lines are safe)
+## 2. Apple: AirTag and MacBook
 
-| # | Say | What Dixi does | Tally |
-|---|---|---|---|
-| 1 | "search for wireless earbuds on Amazon" | Amazon results for "wireless earbuds" | 3/3 |
-| 2 | "open the first result" | Opens the first product | 3/3 |
-| 3 | "what is the rating of this product" | "4.8 out of 5 stars" (read from the page) | 3/3 |
-| 4 | "add it to my cart" | Added, confirmed by Amazon's cart count | 3/3 |
-| 5 | "what is Amazon Prime" | General answer (membership, shipping, Prime Video) | 3/3 |
-| 6 | "go to purchase" | Stops at Amazon's sign-in: "Sign in yourself…" | 2/2 |
+> **"Dixi, add an AirTag and a MacBook Air in midnight to my bag, then open my bag."**
 
-**Not yet safe on Amazon:** "go to my cart", then quantity and remove there. Amazon's "Added to cart" page used to pass for the cart; that's fixed in code, but the rerun was blocked (see below). Use Apple for cart, quantity and remove in the demo.
+Adds an AirTag (1 pack, no engraving) and a MacBook Air (13-inch, Midnight), then opens the bag. Takes about 14–20 s.
 
-## General questions that work anywhere
+Follow-ups:
+1. "Make the AirTag two." → AirTag quantity 2.
+2. "What's the total in my bag?" → the real total.
+3. "Remove the MacBook Air and go to checkout." → the MacBook is removed, then it stops at Apple's sign-in.
 
-- "what is Amazon Prime" and "which AirPods are the best right now": answered in 1–3 spoken sentences.
-- A question about the page ("how much is this", "what's the rating", "what's the total in my bag") is answered from the page and checked against the page's own words.
-- When the model says the page doesn't have the answer, Claude answers with one web search instead of saying "the page doesn't show it". But if the fast model answers from memory instead, the answer can be wrong (see "Not safe yet").
+## 3. Apple: browse, ask, then buy
 
-## Not safe yet
+> **"Dixi, show me AirPods on the Apple Store and tell me which ones are the best right now."**
 
-- **Spec questions the page doesn't show, answered from memory** ("how long does the battery last on the AirPods Pro"). Two runs gave two different answers: "up to 8 hours" (right) and "about 4.5 hours" (wrong). Only questions whose answer is on the page, like price, total or rating, are in the safe lists.
+Opens Apple's AirPods and answers from the page, e.g. "AirPods Pro 3 at $249 and AirPods Max 2 at $549".
 
-## Don't do these in the demo
+Follow-ups:
+1. "Buy me AirPods Pro, then open my bag." → added, bag open.
+2. "I want an iPad." → Dixi asks: "Which iPad: iPad 11, iPad Air, iPad Mini or iPad Pro?"
+3. "The iPad Air." → answers its question; the iPad Air is added. Takes about 17 s, because Apple's page asks 5 questions.
 
-- **Talking over Dixi mid-step.** A new command while a step is still running cancels that step.
-- **Many Amazon runs in a row.** After several automated runs from this Mac, Amazon showed its "continue shopping" human check (`/checkpoint`). Dixi stops there and hands it to you, as it should, but it breaks the flow. Your own browsing session normally doesn't trigger it.
-- **"open the first result" on a page that has no results list.** It picks the first link it sees.
+## 4. Amazon: search, check, buy
 
-## Timing (from the last word to done)
+> **"Dixi, search for wireless earbuds on Amazon, open the first result and tell me its rating."**
 
-- Apple adds: 4–8 s (iPhones 7–12 s, since Apple's page asks 5–6 questions)
-- Bag actions: 0.5–2.5 s
-- Answers: 0.5–1.5 s
-- Amazon search: 2.5–3.5 s
+Searches, opens the first product, and reads its rating from the page, e.g. "4.8 out of 5 stars". Takes about 7–8 s.
 
-A whole Apple script costs about $0.02–0.03 in AI calls.
+Follow-up:
+1. "Add it to my cart and go to purchase." → added, then it stops at Amazon's sign-in.
+
+## 5. YouTube: find, play, control
+
+> **"Dixi, open YouTube, search for lofi beats and play the first video."**
+
+Opens YouTube, searches and plays the first result. Takes about 4–7 s. The first result is sometimes a YouTube Short; it plays that.
+
+Follow-ups:
+1. "Pause it and turn it up." → paused, louder.
+2. "Skip ahead and mute it." → jumps ahead about 10 s, muted.
+3. "What is this video about?" → e.g. "A 2-hour lo-fi mix for studying and chilling."
+
+---
+
+**Avoid during the demo:** putting a quantity change in the same breath as adding that item ("add an AirTag … and make the AirTag two" can add a second AirTag). Say it as a follow-up, as above. Also avoid running many Amazon sessions back to back: Amazon may show its "continue shopping" human check, and Dixi stops there for you.
+
+A whole demo (all 5) costs about $0.05 in AI calls.

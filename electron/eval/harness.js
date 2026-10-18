@@ -142,7 +142,7 @@ export async function say(app, page, text, { wordMS = 240, idleMs = 1500, timeou
       plan: (voice.plan ?? []).map((p) => `${p.label} [${p.state}]`), clarify: voice.clarify?.question ?? null, confirm: voice.confirm?.question ?? null,
       llm: window.__llm, timedOut: window.__busy(),
       doneT: tr.filter((e) => e.stage === 'step_end').at(-1)?.t ?? null,
-    trace: tr.filter((e) => ['interpret', 'resolve', 'step_start', 'step_end', 'eot'].includes(e.stage)).map((e) => ({ ...e, intent: e.intent ? e.intent.steps.map((x) => [x.act, x.said, x.query || x.item || x.value || x.n].filter(Boolean).join('/')) : undefined })),
+    trace: tr.filter((e) => ['interpret', 'resolve', 'step_start', 'step_end', 'eot', 'mark', 'visual_pick', 'error'].includes(e.stage)).map((e) => ({ ...e, message: e.stage === 'mark' ? `${e.label}@${e.ms}` : e.message, intent: e.intent ? e.intent.steps.map((x) => [x.act, x.said, x.query || x.item || x.value || x.n].filter(Boolean).join('/')) : undefined })),
     };
   });
   const stepStart = state.trace.find((e) => e.stage === 'step_start');

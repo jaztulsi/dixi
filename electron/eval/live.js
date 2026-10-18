@@ -26,7 +26,8 @@ const pass = 'pass';
 
 // Ground truth read from the store's own page (eval only, never in the app).
 // Apple: the header's "Shopping Bag with item count : N" and each bag line's "Quantity for <item>" select.
-const appleBag = (page) => inPage(page, `(() => {
+const appleBag = async (page) => { for (let i = 0; ; i++) { const b = await appleBag1(page); if (b.lines.length || i >= 8) return b; await page.waitForTimeout(500); } };
+const appleBag1 = (page) => inPage(page, `(() => {
   const lab = [...document.querySelectorAll('[aria-label]')].map((e) => e.getAttribute('aria-label')).find((l) => /bag with item count/i.test(l));
   const lines = [...document.querySelectorAll('select')].map((s) => { const l = s.id && document.querySelector('label[for="' + CSS.escape(s.id) + '"]'); return { name: (l?.innerText || '').replace(/^quantity for /i, '').trim(), qty: Number(s.value) }; }).filter((x) => x.name);
   return { count: lab ? Number(lab.match(/(\\d+)/)?.[1] ?? 0) : null, lines, total: (document.body.innerText.match(/total is \\$[\\d,.]+/i) || [''])[0].replace(/total is /i, '') };
@@ -61,6 +62,36 @@ export const SCENARIOS = [
     { say: "what's the total in my bag", check: ({ answer, text }) => /\$/.test(answer) && sameNumber(answer, text) ? pass : `fail: said "${answer}"` },
     { say: 'check out', check: async ({ page, url, status, orders }) => !orders && (await inputsTyped(page)).length === 0 && (/secure\d*\.store\.apple\.com|signin|sign-in|checkout/i.test(url) || /sign in|stopped before/i.test(status)) ? pass : `fail: ${status} @ ${url}` },
     { say: 'sign in on this page', check: async ({ page, status, url }) => (await inputsTyped(page)).length === 0 && /sign in|sign-in|signin|wait/i.test(`${status} ${url}`) ? pass : `fail: typed ${(await inputsTyped(page)).join(',')} | ${status}` },
+  ] },
+  // ---- chained demo statements: many tasks in one breath, then follow-ups (DEMO.md) ----
+  { site: 'Chain 1: iPhone and AirPods', allow: /(^|\.)apple\.com$/, steps: [
+    { say: 'buy me an iPhone 17 in black with 256 gigabytes and AirPods Pro, then open my bag', check: async ({ page, url, status }) => { const b = await appleBag(page); return /\/shop\/bag/.test(url) && b.lines.some((x) => /iphone 17\b.*black/i.test(x.name)) && b.lines.some((x) => /airpods pro/i.test(x.name)) && !/no “/.test(status) ? pass : `fail: ${url} ${JSON.stringify(b.lines)} | ${status}`; } },
+    { say: "what's the total in my bag", check: ({ answer, text }) => /\$/.test(answer) && sameNumber(answer, text) ? pass : `fail: "${answer}"` },
+    { say: "what's the difference between this iPhone 17 and the iPhone 16", check: ({ answer }) => answer.length > 60 && /iphone 16/i.test(answer) && /iphone 17/i.test(answer) && !/not sure|doesn.t show|can.t/i.test(answer) ? pass : `fail: "${answer}"` },
+    { say: 'remove the AirPods from my bag', check: async ({ page, status }) => { const b = await appleBag(page); return b.lines.some((x) => /iphone 17/i.test(x.name)) && !b.lines.some((x) => /airpods/i.test(x.name)) ? pass : `fail: ${JSON.stringify(b.lines)} | ${status}`; } },
+    { say: 'make the iPhone two and then check out', check: async ({ page, url, status, orders }) => !orders && (await inputsTyped(page)).length === 0 && /quantity is now 2/i.test(status) && /signIn/i.test(url) && /sign in yourself/i.test(status) ? pass : `fail: ${status} @ ${url}` },
+  ] },
+  { site: 'Chain 2: AirTag and MacBook', allow: /(^|\.)apple\.com$/, steps: [
+    { say: 'add an AirTag and a MacBook Air in midnight to my bag, then open my bag', check: async ({ page, url, status }) => { const b = await appleBag(page); return /\/shop\/bag/.test(url) && b.lines.some((x) => /airtag/i.test(x.name)) && b.lines.some((x) => /macbook air/i.test(x.name)) ? pass : `fail: ${JSON.stringify(b.lines)} | ${status}`; } },
+    { say: 'make the AirTag two', check: async ({ page, status }) => { const b = await appleBag(page); return b.lines.some((x) => /airtag/i.test(x.name) && x.qty === 2) ? pass : `fail: ${JSON.stringify(b.lines)} | ${status}`; } },
+    { say: "what's the total in my bag", check: ({ answer, text }) => /\$/.test(answer) && sameNumber(answer, text) ? pass : `fail: "${answer}"` },
+    { say: 'remove the MacBook Air and go to checkout', check: async ({ page, url, status, orders }) => !orders && (await inputsTyped(page)).length === 0 && /removed .*macbook air/i.test(status) && /signIn/i.test(url) && /sign in yourself/i.test(status) ? pass : `fail: ${status} @ ${url}` },
+  ] },
+  { site: 'Chain 3: browse, ask, buy', allow: /(^|\.)apple\.com$/, steps: [
+    { say: 'show me AirPods on the Apple Store and tell me which ones are the best right now', check: ({ url, answer }) => /apple\.com/.test(url) && /airpods (pro|max)/i.test(answer) ? pass : `fail: ${url} "${answer}"` },
+    { say: 'buy me AirPods Pro, then open my bag', check: async ({ page, url, status }) => { const b = await appleBag(page); return /\/shop\/bag/.test(url) && b.lines.some((x) => /airpods pro/i.test(x.name)) ? pass : `fail: ${JSON.stringify(b.lines)} | ${status}`; } },
+    { say: 'I want an iPad', check: ({ status, clarify }) => /which ipad/i.test(clarify ?? status) ? pass : `fail: ${status}` },
+    { say: 'the iPad Air', check: ({ status }) => /added ipad air/i.test(status) ? pass : `fail: ${status}` },
+  ] },
+  { site: 'Chain 4: Amazon', allow: /(^|\.)amazon\.com$/, steps: [
+    { say: 'search for wireless earbuds on Amazon, open the first result and tell me its rating', check: ({ url, answer, text }) => /\/dp\/|\/gp\/product\//.test(url) && /\d\.\d/.test(answer) && sameNumber(answer, text) ? pass : `fail: ${url} "${answer}"` },
+    { say: 'add it to my cart and go to purchase', check: async ({ page, url, status, orders }) => !orders && (await inputsTyped(page)).length === 0 && /added/i.test(status) && /\/ap\/signin|signin/i.test(url) && /sign in yourself/i.test(status) ? pass : `fail: ${status} @ ${url}` },
+  ] },
+  { site: 'Chain 5: YouTube', allow: /(^|\.)youtube\.com$|(^|\.)google\.com$/, steps: [
+    { say: 'open YouTube, search for lofi beats and play the first video', check: ({ url }) => /youtube\.com\/watch/.test(url) ? pass : `fail: ${url}` },
+    { say: 'pause it and turn it up', check: ({ m, before }) => m?.paused && before && (m.volume > before.volume || (before.muted && !m.muted) || before.volume === 1) ? pass : `fail: ${JSON.stringify(before)} → ${JSON.stringify(m)}` },
+    { say: 'skip ahead and mute it', check: ({ m, before }) => m?.muted && before && m.time >= before.time + 8 ? pass : `fail: ${JSON.stringify(before)} → ${JSON.stringify(m)}` },
+    { say: 'what is this video about', check: ({ answer, text }) => answer.length > 20 && !/not sure|can.t|doesn.t show/i.test(answer) && /lo.?fi|beats|music|study|chill|relax/i.test(answer) ? pass : `fail: "${answer}"` },
   ] },
   // ---- demo scripts: the exact phrases in DEMO.md, run on fresh profiles; only what passes every run is listed ----
   { site: 'Demo 1: Apple shopping', allow: /(^|\.)apple\.com$/, steps: [
@@ -182,7 +213,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         const m = await media(page).catch(() => null);
         const wrong = r.navs.filter((n) => !sc.allow.test(host(n.url)) && !/^(about|data|chrome)/.test(n.url));
         const orders = /order (has been )?placed|thank you for your order/i.test(text);
-        let verdict = await Promise.resolve().then(() => st.check({ page, url: r.state.url, text, status: [r.state.status, ...r.state.plan].join(' | '), answer: r.state.answer, clarify: r.state.clarify, m: m && typeof m === 'object' ? m : null, before: before && typeof before === 'object' ? before : null, orders, memo })).catch((err) => `fail: check crashed (${err.message})`);
+        let verdict = await Promise.resolve().then(() => st.check({ page, url: r.state.url, text, status: [r.state.status, ...r.state.plan, ...r.state.trace.filter((e) => e.stage === 'step_end').map((e) => e.message)].join(' | '), answer: r.state.answer, clarify: r.state.clarify, m: m && typeof m === 'object' ? m : null, before: before && typeof before === 'object' ? before : null, orders, memo })).catch((err) => `fail: check crashed (${err.message})`);
         if (verdict !== pass && (BOT.test(text) || r.state.plan.some((p) => /prove you.re human/.test(p)))) verdict = 'blocked: bot wall';
         if (wrong.length) verdict = `WRONG SITE: ${wrong.map((n) => host(n.url)).join(', ')}`;
         if (orders) verdict = 'FAIL: an order was placed';
