@@ -37,7 +37,7 @@ export const cartCount = (signal) => {
   const ns = signal.split('|').filter((t) => !/^\s*add\b/i.test(t)).join(' ').replace(/[$€£]\s?[\d.,]+|\d+[.,]\d+/g, ' ').match(/\b\d{1,3}\b/g);
   return (ns ?? []).reduce((a, n) => a + Number(n), 0);
 };
-const REMOVED_JS =`(() => /\\b(was removed|has been removed|removed from (your |the )?(cart|bag|basket)|undo)\\b/i.test((document.body?.innerText || '').slice(0, 30000)))()`;
+const REMOVED_JS =`(() => /\\b(was removed|has been removed|removed from (your |the )?(cart|bag|basket))\\b/i.test((document.body?.innerText || '').slice(0, 30000)))()`;
 // Words in a product request that never pick an option ("in black" → black).
 const OPTION_STOP = new Set(['a', 'an', 'the', 'in', 'on', 'of', 'with', 'and', 'for', 'me', 'my', 'buy', 'order', 'get', 'please', 'one', 'some', 'color', 'colour', 'size', 'model', 'version']);
 const TO_STORE = /^(buy(?!\s+(now|it now|with))|configure|(see|choose|view) (all )?(options|models))\b/i;
@@ -590,10 +590,11 @@ export class Executor {
     let after = await this.waitFor(probe, (p) => changed(p) || p.moved, 2500);
     if (!changed(after) && after.moved) {
       // The store moved on (an accessories page, say) without proof on it: its header count can lag
-      // there, so give it a moment, then look in the cart itself rather than press again (the button
-      // is gone, and a second press could add it twice).
-      after = await this.waitFor(probe, changed, 700);
-      if (!changed(after) && await this.inCart(step.picked || step.item)) after = { ...after, cart: true };
+      // there, so look in the cart itself while still watching this page, rather than press again (the
+      // button is gone, and a second press could add it twice). First proof wins.
+      const look = this.inCart(step.picked || step.item).then((yes) => (yes ? { ...after, cart: true } : null));
+      const watch = this.waitFor(probe, changed, 1500).then((p) => (changed(p) ? p : null));
+      after = (await Promise.race([look, watch])) ?? (await look) ?? (await watch) ?? after;
     }
     this.mark(changed(after) ? `cart changed (${why(after)})` : 'cart not changed yet');
     for (let round = 0; round < 2 && !changed(after) && !after.moved; round++) {
@@ -629,7 +630,7 @@ export class Executor {
     const id = this.tabs.createBackgroundTab(link.href);
     try {
       const words = tokens(item).filter((w) => !OPTION_STOP.has(w));
-      const lines = await this.waitFor(() => this.tabs.exec(id, dxCall('cartLines'), 3000), (l) => Array.isArray(l) && l.length, 5000);
+      const lines = await this.waitFor(() => this.tabs.exec(id, dxCall('cartLines'), 3000), (l) => Array.isArray(l) && l.length, 6000);
       // ponytail: the same item already in the cart counts too; compare line counts if that ever matters.
       return Array.isArray(lines) && words.length > 0 && lines.some((l) => words.filter((w) => tokens(l.text).includes(w)).length >= Math.ceil(words.length / 2));
     } finally { this.tabs.closeTab(id); }
@@ -734,18 +735,36 @@ export class Executor {
       // Your words aren't in any line ("the earbuds" for "AirPods Pro"): look at the cart (capped, ~2-4 s).
       const v = await this.visualPick(`the Remove or Delete button for "${step.item}" in the shopping cart (not "Save for later")`);
       if (!v) return fail(`I don't see “${step.item}” in your cart`);
+      const was = await this.cartState();
       await this.tabs.dx('clickRef', v.ref, true);
-      const fewer = await this.waitFor(() => this.tabs.dx('cartLines'), (l) => Array.isArray(l) && l.length < lines.length, 5000);
-      return Array.isArray(fewer) && fewer.length < lines.length ? ok(`Removed ${step.item} from your cart`) : fail(`I pressed remove for ${step.item}, but it's still in the cart`);
+      return await this.lineGone(was, (l) => l.length >= lines.length) ? ok(`Removed ${step.item} from your cart`) : fail(`I pressed remove for ${step.item}, but it's still in the cart`);
     }
     const name = lineName(line);
+    const was = await this.cartState();
     // You named this line and asked for it out: the gate's "delete" confirmation is for the agent, not you.
     const r = line.remove ? await this.tabs.dx('clickRef', line.remove, true) : await this.tabs.dx('setLineQty', line.qty, 0);
     if (r !== 'ok' && !String(r).startsWith('ok')) return fail(`I couldn't press remove for ${name}`);
-    const gone = (l) => Array.isArray(l) && (l.length < lines.length || !l.some((x) => x.text === line.text));
-    const after = await this.waitFor(() => this.tabs.dx('cartLines'), gone, 5000);
-    if (gone(after) || (await this.tabs.exec(null, REMOVED_JS)) === true) return ok(`Removed ${name} from your cart`);
-    return fail(`I pressed remove for ${name}, but it's still in the cart`);
+    const words = tokens(name);
+    const still = (l) => l.some((x) => words.every((w) => tokens(`${x.removeName} ${x.text}`).includes(w)));
+    return await this.lineGone(was, still) ? ok(`Removed ${name} from your cart`) : fail(`I pressed remove for ${name}, but it's still in the cart`);
+  }
+
+  async cartState() { return { n: cartCount(await this.cartSignal()), said: (await this.tabs.exec(null, REMOVED_JS)) === true }; }
+
+  /**
+   * Proof a line left the cart: its count dropped, the page newly says so, or the line is gone from a cart
+   * that has gone quiet. Mid-update a line loses its Remove button and reads differently, which isn't gone
+   * (saying "removed" then, and moving on, can cut the removal off).
+   */
+  async lineGone(was, still, ms = 5000) {
+    const probe = async () => ({ ...(await this.cartState()), lines: await this.tabs.dx('cartLines') });
+    const sure = (p) => (was.n != null && p.n != null && p.n < was.n) || (p.said && !was.said);
+    const gone = (p) => sure(p) || (Array.isArray(p.lines) && !still(p.lines));
+    const p = await this.waitFor(probe, gone, ms);
+    if (!gone(p)) return false;
+    if (sure(p)) return true;
+    await this.tabs.waitForDom(null, 1500);
+    return gone(await probe());
   }
 
   /** "increase the quantity", "make it 3": the page's own +/- buttons or quantity field, then checked. */
