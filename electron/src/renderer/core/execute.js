@@ -15,7 +15,10 @@ const title = (s) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 
 // Generic meanings of buttons, by accessible name (language, not sites).
 const ADD = /^(add( to( your| my)?)? (cart|bag|basket|order|trolley|meal)\b|add( item| to order)?(\s*[+$€£]?\s*[\d.,]+)?$|pre-?order( now)?$|añadir( al carrito)?|ajouter( au panier)?|in den warenkorb)/i;
-const CHECKOUT = /^(check ?out|proceed to (check ?out|checkout|payment)|go to (cart|bag|checkout)|view (cart|bag)|continue to checkout|review (order|bag)|pagar|commander)\b/i;
+// Toward checkout itself; "go to cart" / "view cart" are the cart (CART), so checkout goes there first.
+const CHECKOUT = /^(check ?out|proceed to (check ?out|checkout|payment)|go to checkout|continue to checkout|review (order|bag)|pagar|commander)\b/i;
+// A sign-in step (the store's own or a sign-in service's page): checkout stops here for you.
+const SIGNIN_PATH = /sign-?in|log-?in|\/ap\/|\/auth\b|\/account\/login/i;
 const SECOND_HAND = /\b(renewed|refurbished|used|pre-?owned|open[- ]box|certified refurbished)\b/i;
 // Words that make a listing an accessory for the thing named after them.
 const ACCESSORY = new Set(['for', 'compatible', 'fit', 'fits', 'case', 'cover', 'protector', 'skin', 'sticker', 'strap', 'band', 'holder', 'stand', 'mount', 'replacement', 'charger', 'adapter']);
@@ -546,8 +549,13 @@ export class Executor {
     }
     if (!add) return fail(`I couldn't find an add-to-cart button on ${where}`);
     // What you asked for that no answer on the page has ("AirPods with 200 GB"): said, not silently dropped.
-    const unheard = want.filter((w) => ![...seen].some((v) => tokens(v).some((x) => x === w || (/^\d/.test(w) && x.startsWith(w)))));
-    const asked = unheard.length && unheard.length === want.length && seen.size ? unheard.join(' ') : '';
+    // A number and its unit are one ask ("256 gb" ↔ "256GB").
+    const asks = want.reduce((a, w) => (/^(gb|tb|mb|mm|cm|inch|in|hz|w)$/.test(w) && /^\d+$/.test(a.at(-1) ?? '') ? [...a.slice(0, -1), a.at(-1) + w] : [...a, w]), []);
+    const unheard = asks.filter((w) => ![...seen].some((v) => tokens(v).some((x) => x === w || (/^\d/.test(w) && x.startsWith(w)) || tokens(v).join('') === w)));
+    // Words of the product's own page title ("Pro 3" on AirPods Pro 3's page) aren't missing options.
+    const titled = new Set(tokens(this.tabs.activeTab?.title ?? ''));
+    const missing = unheard.filter((w) => !titled.has(w));
+    const asked = missing.length && seen.size ? missing.map((w) => w.replace(/^(\d+)([a-z]+)$/, (m, n, u) => `${n} ${u.toUpperCase()}`)).join(' ') : '';
     return this.pressAdd(add, { ...(model ? { ...step, picked: model } : step), unheard: asked }, where, picked);
   }
 
@@ -641,7 +649,11 @@ export class Executor {
     }
     for (const re of [CHECKOUT, CART]) {
       const b = await this.tabs.dx('findButton', re);
-      if (b) { await this.clickAndWait(b.ref); if (re === CART) { const c = await this.tabs.dx('findButton', CHECKOUT); if (c) await this.clickAndWait(c.ref); } return this.atCheckout(); }
+      if (!b) continue;
+      await this.clickAndWait(b.ref);
+      // On the cart: its checkout button draws a moment after the page.
+      if (re === CART) { const c = await this.waitFor(() => this.tabs.dx('findButton', CHECKOUT), (x) => x, 3000); if (c) await this.clickAndWait(c.ref); }
+      return this.atCheckout();
     }
     const add = await this.tabs.dx('findButton', ADD, { links: false });
     if (add) {
@@ -787,11 +799,17 @@ export class Executor {
     return after != null && after !== start ? ok(`${name}: quantity is now ${after}`) : fail(`I changed it, but ${name} still shows ${start ?? 'the same'}`);
   }
 
+  /** Where checkout stopped, said plainly. Dixi never signs in, types personal details or pays. */
   async atCheckout() {
-    if (await this.tabs.dx('loginWall')) return ok('The checkout wants you to sign in. Sign in and I\'ll continue', { login: true });
+    await this.tabs.waitForReady(null, 4000);
+    const url = this.tabs.getCurrentURL();
+    if (SIGNIN_PATH.test(pathOf(url)) || await this.tabs.dx('loginWall')) {
+      return ok(`At checkout: ${await this.siteName()} wants you to sign in or check out as a guest. I stop here. Sign in yourself; I never type passwords, addresses or card details`, { login: true });
+    }
     const place = await this.tabs.dx('findButton', PLACE, { links: false });
     if (place) return ok(`At checkout. I stopped before “${place.name}”: say “place the order” when you've checked it`);
-    return ok('Went to checkout');
+    if (CART_PATH.test(pathOf(url))) return fail(`I'm on your cart but couldn't find its checkout button`);
+    return ok('At checkout. I stop before payment; the rest is yours');
   }
 
   /** The gate: read it back, wait for an explicit yes, only then press. */
@@ -920,6 +938,16 @@ export class Executor {
   async do_zoom(step) { this.app?.[{ in: 'zoomIn', out: 'zoomOut', reset: 'zoomReset' }[step.value]]?.(); return ok(`Zoom ${step.value}`); }
 
   async do_click(step) {
+    // Signing in: get you to the sign-in form, then hand over. Dixi never types passwords or codes.
+    if (/^(sign|log) ?in$/i.test(step.value.trim())) {
+      const handOff = async () => ok(`This is ${await this.siteName()}'s sign-in page. Sign in yourself; I never type passwords or codes. Tell me when you're done`, { login: true });
+      if (SIGNIN_PATH.test(pathOf(this.tabs.getCurrentURL())) || await this.tabs.dx('loginWall')) return handOff();
+      const b = await this.tabs.dx('findButton', /^(sign|log) ?in\b|^(my )?account\b|^sign in or create/i);
+      if (!b) return fail(`I don't see a way to sign in on this page`);
+      await this.clickAndWait(b.ref);
+      if (SIGNIN_PATH.test(pathOf(this.tabs.getCurrentURL())) || await this.waitFor(() => this.tabs.dx('loginWall'), (x) => x, 3000)) return handOff();
+      return ok(`Opened “${b.name.slice(0, 40)}”. Sign in there yourself; I never type passwords`, { login: true });
+    }
     const want = tokens(step.value);
     const hit = want.length && await this.waitFor(() => this.tabs.dx('findByWords', want), (x) => x, 3000);
     const seen = hit || await this.visualPick(`"${step.value}"`);
