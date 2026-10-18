@@ -16,9 +16,18 @@ test('catalog: generic words and look-alikes never trigger it', () => {
   for (const item of ['apples', 'a phone', 'headphones', 'apple juice', 'a watch', 'keyboard', 'air fryer']) assert.equal(c.match(item), null, item);
 });
 
-test('catalog: an accessory FOR a product asks whose', () => {
-  assert.ok(c.match('a charger for my iPhone').ask);
-  assert.ok(c.match('a case for my MacBook Air').ask);
+test('catalog: an accessory for a product, or one of Apple\'s own, is searched on Apple\'s store (Apple first)', () => {
+  const acc = makeCatalog({ ...data, accessoryWords: ['case', 'charger', 'pencil', 'protector', 'screen'], appleWords: ['magsafe'] });
+  for (const item of ['a charger for my iPhone', 'a case for my MacBook Air', 'iPhone case', 'an iPhone screen protector', 'MagSafe charger', 'Apple Pencil']) assert.equal(acc.match(item)?.search, true, item);
+  // The product itself, with its options, is never an accessory; a generic accessory isn't Apple's.
+  for (const item of ['iPhone in black', 'MacBook Air 512GB in midnight']) assert.equal(acc.match(item)?.search, undefined, item);
+  assert.equal(acc.match('a phone charger'), null);
+});
+
+test('catalog: a family with several current models and none named asks which; digits inside numbers never match', () => {
+  const m = makeCatalog({ ...data, families: [...data.families, { name: 'iPhone 17', url: 'u17' }, { name: 'iPhone Air', url: 'uair' }, { name: 'AirPods Max 2', url: 'umax' }, { name: 'AirPods 5', url: 'u5' }] });
+  assert.deepEqual(m.match('a black iPhone').models, ['iPhone 17', 'iPhone Air']);
+  assert.notEqual(m.match('AirPods with 200 GB')?.family, 'AirPods Max 2');
 });
 
 test('catalog: missing or old catalog', () => {

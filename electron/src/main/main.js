@@ -30,6 +30,8 @@ if (process.env.DIXI_FAKE_AUDIO) {
   app.commandLine.appendSwitch('disable-features', 'AudioServiceOutOfProcess,AudioServiceSandbox');
 }
 
+// A test launch (eval/harness.js --real) gets its own profile, so it never collides with your running Dixi.
+if (process.env.DIXI_USER_DATA) app.setPath('userData', process.env.DIXI_USER_DATA);
 // The app was called Runic: carry its data folder over once (settings, learned names, tab logins).
 {
   const legacy = path.join(app.getPath('appData'), 'Runic');
@@ -160,6 +162,29 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => app.quit());
 app.on('activate', () => { if (!win) createWindow(); });
 process.on('unhandledRejection', (err) => console.error('[main] unhandled', err));
+
+// Test hook for eval/harness.js --real: the app launched normally (no automation, so sites see exactly
+// what they see in daily use), driven over localhost. Exists only when the harness sets both env vars;
+// every request must carry the token. Runs the given function in the UI page or in this process.
+if (process.env.DIXI_CONTROL_PORT && process.env.DIXI_CONTROL_TOKEN) {
+  const http = await import('node:http');
+  const electronModule = await import('electron');
+  http.createServer((req, res) => {
+    const reply = (code, o) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
+    if (req.method !== 'POST' || req.headers['x-dixi-control'] !== process.env.DIXI_CONTROL_TOKEN) return reply(403, { error: 'forbidden' });
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', async () => {
+      try {
+        const { where, code, arg } = JSON.parse(body);
+        const value = where === 'main'
+          ? await (0, eval)(`(${code})`)(electronModule, arg)
+          : await win.webContents.executeJavaScript(`(${code})(${arg === undefined ? '' : JSON.stringify(arg)})`, true);
+        reply(200, { value: value ?? null });
+      } catch (err) { reply(200, { error: String(err?.message ?? err) }); }
+    });
+  }).listen(Number(process.env.DIXI_CONTROL_PORT), '127.0.0.1');
+}
 
 // ---- IPC: only our own UI page may call these ----
 const ours = (e) => Boolean(win) && e.sender === win.webContents && e.senderFrame?.url?.startsWith('file://');

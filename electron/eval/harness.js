@@ -9,12 +9,63 @@ import { fileURLToPath } from 'node:url';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Launch the app with its own throwaway profile. extraArgs e.g. host-resolver-rules for fixtures. */
-export async function launchApp({ appRoot = root, extraArgs = [], env = {}, profile = null } = {}) {
+/**
+ * The app launched normally (a plain process, no automation), driven through its env-gated localhost
+ * control hook (src/main/main.js). Sites see what they see in daily use (navigator.webdriver is false),
+ * so stores that refuse automated browsers (Apple's bag) behave as they do for you. Same small surface
+ * as Playwright's app/page: evaluate, waitForFunction, waitForTimeout, close, process.
+ */
+async function launchReal({ appRoot, args, env }) {
+  const { spawn } = await import('node:child_process');
+  const net = await import('node:net');
+  const { default: electronPath } = await import('electron');
+  const port = await new Promise((r) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
+  const token = (await import('node:crypto')).randomBytes(16).toString('hex');
+  const child = spawn(electronPath, args, { cwd: appRoot, env: { ...env, DIXI_CONTROL_PORT: String(port), DIXI_CONTROL_TOKEN: token }, stdio: ['ignore', 'ignore', 'pipe'] });
+  child.stderr.on('data', (d) => { if (process.env.VERBOSE) process.stderr.write(d); });
+  const call = async (where, fn, arg) => {
+    let r;
+    // The hook starts with the app: wait for it (up to ~30 s), then fail loudly.
+    for (let i = 0; ; i++) {
+      try { r = await fetch(`http://127.0.0.1:${port}/`, { method: 'POST', headers: { 'x-dixi-control': token }, body: JSON.stringify({ where, code: String(fn), arg }) }); break; } catch (err) {
+        if (i > 150 || child.exitCode != null) throw new Error(`the app's control hook isn't answering (${err.cause?.code ?? err.message}${child.exitCode != null ? `, app exited ${child.exitCode}` : ''})`);
+        await new Promise((res) => setTimeout(res, 200));
+      }
+    }
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    return j.value;
+  };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const page = {
+    evaluate: (fn, arg) => call('ui', fn, arg),
+    waitForTimeout: wait,
+    async waitForFunction(fn, arg, { timeout = 30000 } = {}) {
+      const end = Date.now() + timeout;
+      // Only truthiness crosses (the value itself may not be cloneable, e.g. window.__dixi).
+      const probe = `async (a) => Boolean(await (${fn})(a))`;
+      for (;;) { if (await call('ui', probe, arg).catch(() => false)) return true; if (Date.now() > end) throw new Error('waitForFunction timed out'); await wait(200); }
+    },
+  };
+  const app = {
+    evaluate: (fn, arg) => call('main', fn, arg),
+    process: () => child,
+    close: async () => { child.kill(); await new Promise((r) => (child.exitCode != null ? r() : child.once('exit', r))); },
+    firstWindow: async () => {
+      for (let i = 0; i < 150; i++) { if (await call('main', () => Boolean(globalThis.process)).catch(() => false)) return page; await wait(200); }
+      throw new Error('the app did not start');
+    },
+  };
+  return app;
+}
+
+/** Launch the app with its own throwaway profile. extraArgs e.g. host-resolver-rules for fixtures. real: see launchReal. */
+export async function launchApp({ appRoot = root, extraArgs = [], env = {}, profile = null, real = Boolean(process.env.DIXI_REAL) } = {}) {
   const dir = profile ?? fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-test-'));
   const e = { ...process.env, ...env };
   delete e.ELECTRON_RUN_AS_NODE;  // editors that embed Electron export this; it turns the app into plain Node
-  const app = await electron.launch({ args: [appRoot, `--user-data-dir=${dir}`, ...extraArgs], cwd: appRoot, env: e });
+  const args = [appRoot, `--user-data-dir=${dir}`, ...extraArgs];
+  const app = real ? await launchReal({ appRoot, args, env: { ...e, DIXI_USER_DATA: dir } }) : await electron.launch({ args, cwd: appRoot, env: e });
   app.process().stderr?.on('data', (d) => { if (process.env.VERBOSE) process.stderr.write(d); });
   // Every top-level page load, with its time: wrong-site detection and "first action" timing.
   await app.evaluate(({ session }) => {
