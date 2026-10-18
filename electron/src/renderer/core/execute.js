@@ -4,6 +4,7 @@
 // Every step is checked after it runs (did we land on the named site? did the search go through?).
 
 import { askPage } from './pageQA.js';
+import { dxCall } from '../ui/pagekit.js';
 import { normName, tokens } from './interpret.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -25,7 +26,15 @@ const REMOVE_WORD = /^(remove|delete)\s*/i;
 /** A cart line's short name: what its Remove control names, else its first words. */
 const lineName = (l) => (l.removeName.replace(REMOVE_WORD, '').trim() || l.text).split(/\s+/).slice(0, 6).join(' ');
 const ADDED_JS = `(() => /\\b(added to (your |the )?(cart|bag|basket|trolley)|item added|added!)/i.test((document.body?.innerText || '').slice(0, 30000)))()`;
-const REMOVED_JS = `(() => /\\b(was removed|has been removed|removed from (your |the )?(cart|bag|basket)|undo)\\b/i.test((document.body?.innerText || '').slice(0, 30000)))()`;
+// The cart's count from cartSignal(): the sum of the plain numbers on its badges and labels ("1",
+// "Bag (2)", "item count : 3"), leaving out prices and the add buttons, so fixed numbers cancel out when
+// two reads are compared. Nothing read (a page mid-load, a script error) is null, never 0.
+export const cartCount = (signal) => {
+  if (typeof signal !== 'string' || !signal || signal.startsWith('JS error')) return null;
+  const ns = signal.split('|').filter((t) => !/^\s*add\b/i.test(t)).join(' ').replace(/[$€£]\s?[\d.,]+|\d+[.,]\d+/g, ' ').match(/\b\d{1,3}\b/g);
+  return (ns ?? []).reduce((a, n) => a + Number(n), 0);
+};
+const REMOVED_JS =`(() => /\\b(was removed|has been removed|removed from (your |the )?(cart|bag|basket)|undo)\\b/i.test((document.body?.innerText || '').slice(0, 30000)))()`;
 // Words in a product request that never pick an option ("in black" → black).
 const OPTION_STOP = new Set(['a', 'an', 'the', 'in', 'on', 'of', 'with', 'and', 'for', 'me', 'my', 'buy', 'order', 'get', 'please', 'one', 'some', 'color', 'colour', 'size', 'model', 'version']);
 const TO_STORE = /^(buy(?!\s+(now|it now|with))|configure|(see|choose|view) (all )?(options|models))\b/i;
@@ -347,6 +356,15 @@ export class Executor {
     if (!step.said && this.catalog) {
       const fam = this.catalog.match(step.item);
       if (fam?.ask) return fail(fam.ask);
+      // "a black iPhone": several current models, none named. One short question, then the rest as said.
+      if (fam?.models?.length > 1) {
+        const pick = await this.ask(`Which ${fam.family}: ${fam.models.join(', ')}?`, fam.models);
+        const m = fam.models.find((x) => normName(x) === normName(pick ?? ''));
+        if (!m) return fail(`Okay. Tell me which ${fam.family} you want`);
+        const famWords = new Set(tokens(fam.family));
+        const rest = tokens(step.item).filter((w) => !famWords.has(w) && !['a', 'an', 'the', 'me', 'my', 'new'].includes(w)).join(' ');
+        return this.do_order({ ...step, item: `${m}${rest ? ` ${rest}` : ''}` }, said);
+      }
       // Its own store page: one page load, then add (search is the fallback).
       if (fam?.url) {
         await this.tabs.navigate(fam.url);
@@ -445,9 +463,11 @@ export class Executor {
       await this.tabs.waitForDom(null, 1500);
       this.mark('page settled');
     }
+    const seen = new Set();  // every answer the page offered, to tell you what you asked for that it doesn't have
     for (let round = 0; round < 16; round++) {
       this.check();
       const opts = (await this.tabs.dx('options')) ?? [];
+      for (const o of Array.isArray(opts) ? opts : []) for (const v of o.values ?? []) seen.add(v);
       const list = (Array.isArray(opts) ? opts : []).filter((o) => !tries.has(o.id ?? o.name));
       // First what you asked for ("Pro Max", "black", "512"), even where the page already shows another
       // answer (stores remember the last configuration); then, if it can add, it's ready.
@@ -525,7 +545,10 @@ export class Executor {
       }
     }
     if (!add) return fail(`I couldn't find an add-to-cart button on ${where}`);
-    return this.pressAdd(add, model ? { ...step, picked: model } : step, where, picked);
+    // What you asked for that no answer on the page has ("AirPods with 200 GB"): said, not silently dropped.
+    const unheard = want.filter((w) => ![...seen].some((v) => tokens(v).some((x) => x === w || (/^\d/.test(w) && x.startsWith(w)))));
+    const asked = unheard.length && unheard.length === want.length && seen.size ? unheard.join(' ') : '';
+    return this.pressAdd(add, { ...(model ? { ...step, picked: model } : step), unheard: asked }, where, picked);
   }
 
   /** Press an add button and make sure the cart changed (upsell sheets declined, a real click if needed). */
@@ -533,16 +556,39 @@ export class Executor {
     this.mark('press add');
     const before = await this.cartSignal();
     const saidBefore = await this.tabs.exec(null, ADDED_JS);
+    const url0 = this.tabs.getCurrentURL();
     const r = await this.tabs.dx('clickRef', add.ref, false);
     if (typeof r === 'string' && r.startsWith('confirm')) return this.confirmThen(add.ref, r.slice(9));
-    const url0 = this.tabs.getCurrentURL();
-    // Proof it went in: the cart's count changed, the store took you to its cart, or the page newly says
-    // "added to cart/bag". A new address alone isn't proof (stores that refuse the add change it too).
-    const probe = async () => ({ s: await this.cartSignal(), url: this.tabs.getCurrentURL(), said: (await this.tabs.exec(null, ADDED_JS)) === true });
-    const changed = (p) => Boolean(p) && ((p.s != null && p.s !== before) || (p.url !== url0 && CART_PATH.test(pathOf(p.url))) || (p.said && saidBefore !== true));
-    let after = await this.waitFor(probe, changed, 2500);
-    this.mark(changed(after) ? 'cart changed' : 'cart not changed yet');
-    for (let round = 0; round < 2 && !changed(after); round++) {
+    // Proof it went in: the cart's count went up, the page newly says "added to cart/bag", the store took
+    // you to a cart that has something in it, or the cart/button text changed on this same page. A new
+    // address alone isn't proof (stores that refuse the add change it too, some to an empty bag), and
+    // neither is a page caught mid-load (it reads as nothing, which once passed for "changed").
+    const n0 = cartCount(before);
+    const probe = async () => {
+      const url = this.tabs.getCurrentURL();
+      const cart = url !== url0 && CART_PATH.test(pathOf(url)) && !this.tabs.isLoading() && (await this.tabs.dx('cartLines'))?.length > 0;
+      return { s: await this.cartSignal(), url, cart, said: (await this.tabs.exec(null, ADDED_JS)) === true, moved: url !== url0 && !this.tabs.isLoading() };
+    };
+    const why = (p) => {
+      if (!p) return null;
+      const n = cartCount(p.s);
+      if (n0 != null && n != null && n > n0) return `count ${n0} → ${n}`;
+      if (p.said && saidBefore !== true) return 'added message';
+      if (p.cart) return 'cart page';
+      if (p.url === url0 && cartCount(p.s) != null && p.s !== before) return 'cart text';
+      return null;
+    };
+    const changed = (p) => why(p) != null;
+    let after = await this.waitFor(probe, (p) => changed(p) || p.moved, 2500);
+    if (!changed(after) && after.moved) {
+      // The store moved on (an accessories page, say) without proof on it: its header count can lag
+      // there, so give it a moment, then look in the cart itself rather than press again (the button
+      // is gone, and a second press could add it twice).
+      after = await this.waitFor(probe, changed, 700);
+      if (!changed(after) && await this.inCart(step.picked || step.item)) after = { ...after, cart: true };
+    }
+    this.mark(changed(after) ? `cart changed (${why(after)})` : 'cart not changed yet');
+    for (let round = 0; round < 2 && !changed(after) && !after.moved; round++) {
       // An upsell sheet ("Add protection?") holds the add until answered: no paid extras, as with options.
       const no = await this.tabs.dx('findButton', DECLINE, { links: false });
       if (no) await this.tabs.dx('clickRef', no.ref, false);
@@ -559,13 +605,26 @@ export class Executor {
     if (await this.tabs.dx('storePicker')) return ok(`${where} wants you to pick a store or address before adding ${what}. Choose one and say "add it again"`, { needsStore: true });
     if (await this.tabs.dx('loginWall')) return ok(`${where} wants you to sign in before adding ${what}. Sign in and say "add it again"`, { login: true });
     const choice = picked.length ? ` (${picked.join(', ')})` : '';
-    if (changed(after)) { this.lastAdded = what; return ok(`Added ${what}${choice}${step.qty > 1 ? ` ×${step.qty}` : ''} to your cart at ${where}`); }
+    if (changed(after)) { this.lastAdded = what; return ok(`Added ${what}${choice}${step.qty > 1 ? ` ×${step.qty}` : ''} to your cart at ${where}${step.unheard ? `. It has no “${step.unheard}” option` : ''}`); }
     return fail(`I pressed “${add.name}” on ${where} but the cart didn't change`);
   }
 
   /** Anything that changes when a cart changes: a count in the header, the button's own text. */
   cartSignal() {
-    return this.tabs.exec(null, `(() => [...document.querySelectorAll('a,button,[role=button],span')].filter((e) => /cart|bag|basket|added/i.test((e.getAttribute('aria-label') || '') + e.textContent) && e.textContent.length < 40).map((e) => e.textContent.trim()).join('|'))()`);
+    return this.tabs.exec(null, `(() => [...document.querySelectorAll('a,button,[role=button],span')].filter((e) => /cart|bag|basket|added/i.test((e.getAttribute('aria-label') || '') + e.textContent) && e.textContent.trim().length < 40).map((e) => ((e.getAttribute('aria-label') || '') + ' ' + e.textContent).trim()).join('|'))()`);
+  }
+
+  /** The store's own cart, read in a hidden tab, has a line naming most of this item's words. */
+  async inCart(item) {
+    const link = await this.tabs.dx('cartLink');
+    if (!link?.href) return false;
+    const id = this.tabs.createBackgroundTab(link.href);
+    try {
+      const words = tokens(item).filter((w) => !OPTION_STOP.has(w));
+      const lines = await this.waitFor(() => this.tabs.exec(id, dxCall('cartLines'), 3000), (l) => Array.isArray(l) && l.length, 5000);
+      // ponytail: the same item already in the cart counts too; compare line counts if that ever matters.
+      return Array.isArray(lines) && words.length > 0 && lines.some((l) => words.filter((w) => tokens(l.text).includes(w)).length >= Math.ceil(words.length / 2));
+    } finally { this.tabs.closeTab(id); }
   }
 
   async isStore() {
