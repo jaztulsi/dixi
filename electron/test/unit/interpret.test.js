@@ -66,3 +66,10 @@ test('a part of a site squeezed into "open" becomes open + click', () => {
   const { intent } = validate({ clarify: '', steps: [{ act: 'open', said: 'Zentora', guess: '', urls: [], query: 'menu', item: '', qty: 0, n: 0, value: '' }] }, 'show me the Zentora menu');
   assert.deepEqual(intent.steps.map((s) => [s.act, s.said || s.value]), [['open', 'Zentora'], ['click', 'menu']]);
 });
+
+test('remove from the cart is its own act ("remove it", or a named item kept as said)', () => {
+  assert.deepEqual(fastPath('remove it from my cart').steps.map((s) => s.act), ['remove']);
+  const { intent, errors } = validate({ clarify: '', steps: [{ act: 'remove', said: '', guess: '', urls: [], query: '', item: 'Zentora AirTag', qty: 0, n: 0, value: '' }] }, 'remove the Zentora AirTag from my cart');
+  assert.deepEqual(errors, []);
+  assert.equal(intent.steps[0].item, 'Zentora AirTag');
+});

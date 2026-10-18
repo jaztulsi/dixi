@@ -67,6 +67,7 @@ export function describe(s) {
     case 'find_item': return `Finding “${s.item}”${s.said ? ` on ${s.said}` : ''}`;
     case 'order': return `Getting ${s.qty > 1 ? `${s.qty} × ` : ''}“${s.item}”${s.said ? ` from ${s.said}` : ''}`;
     case 'add_to_cart': return 'Adding to cart';
+    case 'remove': return `Removing ${s.item ? `“${s.item}”` : 'it'} from your cart`;
     case 'cart': return 'Opening your cart';
     case 'quantity': return s.value === 'set' ? `Quantity ${s.qty}` : s.value === 'down' ? 'One fewer' : 'One more';
     case 'checkout': return s.value === 'place_order' ? 'Placing the order (needs your yes)' : 'Going to checkout';

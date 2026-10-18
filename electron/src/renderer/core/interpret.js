@@ -4,7 +4,7 @@
 // No site, brand or product knowledge lives here: names are copied from the words and resolved later
 // by evidence (resolve.js). Words like "up" in "open up" are grammar, never part of a name or query.
 
-export const ACTS = ['open', 'search', 'find_item', 'order', 'add_to_cart', 'cart', 'quantity', 'checkout', 'nth', 'media', 'scroll', 'nav', 'tab', 'zoom', 'click', 'ask_page', 'ask_web', 'stop', 'none'];
+export const ACTS = ['open', 'search', 'find_item', 'order', 'add_to_cart', 'remove', 'cart', 'quantity', 'checkout', 'nth', 'media', 'scroll', 'nav', 'tab', 'zoom', 'click', 'ask_page', 'ask_web', 'stop', 'none'];
 export const VALUES = {
   media: ['play', 'pause', 'mute', 'unmute', 'louder', 'quieter', 'faster', 'slower', 'forward', 'rewind', 'restart', 'next', 'captions', 'skip_ad', 'fullscreen'],
   quantity: ['up', 'down', 'set'], scroll: ['up', 'down', 'top', 'bottom'], nav: ['back', 'forward', 'reload'], tab: ['new', 'close', 'next', 'previous'], zoom: ['in', 'out', 'reset'],
@@ -38,8 +38,9 @@ search: search a site for "query".
 find_item: only look at / find a product ("item") on a store, no buying words.
 order: they want to buy / order / get / grab / "I want" / "can I get" something ("item", qty if said): add it to the cart. "said" = the store, or "" if no store is named (still an order).
 add_to_cart: add what is on the current page to the cart.
+remove: take something out of the shopping cart or bag ("item" = what, as said; "" for "it" / "this").
 cart: go to / show the shopping cart or bag.
-quantity: change how many of an item. value up (one more), down (one fewer) or set (with qty).
+quantity: change how many of an item. value up (one more), down (one fewer) or set (with qty); "item" = which one if said.
 checkout: buy / purchase / check out / go to checkout for what is on the current page (value ""). value "place_order" ONLY when they explicitly ask to place, submit or confirm the order, or to pay.
 nth: open, play or click result number n (1 first, 2 second, -1 last); value "play" when they want it played/watched/listened to.
 media: control what is playing. value: play, pause, mute, unmute, louder, quieter, faster, slower, forward, rewind, restart, next, captions, skip_ad, fullscreen.
@@ -200,6 +201,7 @@ export function fastPath(text, ctx = {}) {
   // before anything is placed). "Add it" only adds.
   if (/^(can you |please )?(buy|purchase|pre-?order|order|get) (me )?(it|this|that|this one|that one)( for me| now| please)?$/.test(t)) return { steps: [step('add_to_cart'), step('checkout')], clarify: '' };
   if (/^(can you |please )?add (it|this|that|this one|that one)( to (my |the )?(cart|bag|basket))?( please)?$/.test(t)) return { steps: [step('add_to_cart')], clarify: '' };
+  if (/^(can you |please )?(remove|delete|take out|take off) (it|this|that|this one|that one)( from (my |the )?(cart|bag|basket))?( please)?$/.test(t)) return { steps: [step('remove')], clarify: '' };
   // A plain question (no command in it) needs no parse: it goes straight to the answerer.
   if (QUESTION.test(t) && !DOING.test(t)) return { steps: [step('ask_page', { value: String(text).trim() })], clarify: '' };
   const nth = t.match(NTH);

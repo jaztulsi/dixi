@@ -235,7 +235,65 @@ function findButton(re, { links = true } = {}) {
 function cartLink() {
   const a = all('a[href]').filter((x) => visible(x) && /cart|bag|basket|trolley/i.test(new URL(x.href, location.href).pathname) && !/add|remove/i.test(name(x)));
   a.sort((x, y) => inChrome(y) - inChrome(x));
-  return a[0] ? { ref: ref(a[0]), name: name(a[0]) } : null;
+  return a[0] ? { ref: ref(a[0]), name: name(a[0]), href: a[0].href } : null;
+}
+
+// ---- cart lines: each thing in the cart, its Remove/Delete control and its quantity control ----
+// Read fresh every time (carts redraw after each change); never kept between calls.
+const REMOVE_RE = /^(remove|delete)\b/i;
+const QTY_SEL = 'select, input[type=number], [role=spinbutton], input[name*=qty i], input[name*=quantity i]';
+function cartLines() {
+  let anchors = all('button, a[href], [role=button], input[type=submit], input[type=button]').filter((x) => shown(x) && REMOVE_RE.test(name(x)) && !inChrome(x));
+  const byQty = !anchors.length;
+  // Carts with no remove control: each quantity box is a line ("0 (Delete)" removes).
+  if (byQty) anchors = all(QTY_SEL).filter((x) => shown(x) && !inChrome(x) && /qty|quantity/i.test(name(x) + ' ' + (x.name || '') + ' ' + (x.id || '')));
+  // Controls naming the same thing ("Delete <title>" on the trash icon and the link) are one line;
+  // a bare "Remove" is its own.
+  const groups = new Map();
+  for (const c of anchors) {
+    const what = byQty ? '' : clean(name(c)).toLowerCase().replace(REMOVE_RE, '').trim();
+    const key = what || 'ref' + ref(c);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  }
+  const sets = [...groups.values()];
+  const lines = [];
+  for (const g of sets) {
+    // The line: the smallest box holding all its controls, grown while it holds no other line's.
+    let box = g[0];
+    while (box.parentElement && !g.every((c) => box.contains(c))) box = box.parentElement;
+    for (let p = box.parentElement; p && p !== document.body; p = p.parentElement) {
+      if (sets.some((o) => o !== g && o.some((c) => p.contains(c)))) break;
+      box = p;
+    }
+    const c = g.find((x) => REMOVE_RE.test(clean(x.innerText || x.value || ''))) || g[0];
+    const q = [...box.querySelectorAll(QTY_SEL)].find(shown);
+    lines.push({ line: ref(box), remove: byQty ? null : ref(c), removeName: byQty ? '' : name(c).slice(0, 80), text: clean(box.innerText).slice(0, 200),
+      qty: q ? ref(q) : null, count: q ? Number(q.value ?? q.getAttribute('aria-valuenow')) : null });
+  }
+  return lines;
+}
+/** Set one cart line's quantity (a select's option or a number box); 0 removes where the store allows. */
+function setLineQty(k, n) {
+  const q = get(k);
+  if (!q) return 'gone';
+  if (q.tagName === 'SELECT') {
+    const o = [...q.options].find((x) => Number(x.value) === n || new RegExp('^' + n + '\\b').test(clean(x.text)));
+    if (!o) return 'none';
+    q.value = o.value;
+  } else Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(q, String(n));
+  q.dispatchEvent(new Event('input', { bubbles: true })); q.dispatchEvent(new Event('change', { bubbles: true }));
+  return 'ok';
+}
+/** One more / one fewer on one cart line: its own +/- buttons. */
+function stepLine(k, dir) {
+  const box = get(k);
+  if (!box) return 'gone';
+  const re = dir > 0 ? /^(\+|increase|increment|add one|plus|more|add 1)\b|increase quantity|add one more/i : /^(-|−|decrease|decrement|remove one|minus|less|subtract)\b|decrease quantity/i;
+  const b = [...box.querySelectorAll('button, [role=button], a[role=button], span[role=button]')].find((x) => shown(x) && !x.disabled && x.getAttribute('aria-disabled') !== 'true' && re.test(name(x)));
+  if (!b) return 'none';
+  b.click();
+  return 'ok';
 }
 /** A matching button exists but sits in a collapsed section (purchase options, accordions): open that section. */
 function reveal(re) {
@@ -487,7 +545,7 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
+window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
   media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)) };
 })();`;
 
