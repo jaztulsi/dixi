@@ -1,0 +1,53 @@
+SCOPE: WEBSITE ONLY. DO NOT TOUCH THE ELECTRON APP.
+
+Redesign the Runic marketing website UI. The Runic desktop app is an Electron app and it is OUT OF SCOPE: do not edit, restyle, refactor, rename, or reformat any app file, its renderer UI, its main process, its package.json, or its build config.
+
+HARD GUARDS
+1. Step 0: find the website's directory (it may be one folder in a monorepo). State its path and list the app's directories as "off limits." Wait for my confirmation before editing.
+2. Edit only files inside the website directory (plus new website-only assets inside it). If you believe a change outside it is needed, stop and ask me; never make it silently.
+3. Before every commit, run `git diff --name-only` and confirm every path is inside the website directory. If any path is outside it, revert it. At the end, show me the final `git diff --stat` against the starting commit.
+4. Do not change root-level shared configs, lockfiles, or shared packages unless the website is its own package and the change is limited to its own dependencies.
+5. The "Launch Runic" button only LINKS to the app via its custom protocol (runic://open, prefill-only, never auto-executing a task). Do not edit the app's protocol registration. If the app doesn't register that protocol yet, show the fallback download card on the site and tell me in your final report that the app needs `app.setAsDefaultProtocolClient("runic")` on its side. Do not implement that yourself.
+
+PROBLEM
+The current site looks generic and AI-generated: gradient headline text, glowing purple/blue button, teal/cyan accent labels, colored card borders, a stray shape under the nav. Redo the look from scratch. Keep the existing website stack (if it is already Next.js/React + Tailwind, keep it; if it is plain HTML, migrate to Next.js + TypeScript + Tailwind + shadcn/ui + Motion) and keep routes and SEO.
+
+CONCEPT: "Marble and glass." Black-and-white Apple minimalism with Roman sculpture imagery. Hard, matte marble against soft liquid glass. Apple restraint: huge type, generous whitespace, one idea per screen.
+
+BAN LIST: gradient text, colored glows/shadows, gradient orbs, purple/blue/cyan/teal, mono-font accent pills, emoji, mixed corner radii, borders over 1px, more than one accent color, decorative elements with no job.
+
+COLOR (Apple dark system, grayscale)
+Background #000000; surfaces #1C1C1E, #2C2C2E; hairlines #38383A. Text #FFFFFF; secondary rgba(235,235,245,.60); tertiary rgba(235,235,245,.30). Light marble zones: bg #EDEDF0 to #F5F5F7, text #1D1D1F, secondary #6E6E73. Functional only: green #30D158 (done), red #FF453A (recording dot). Verify WCAG AA everywhere.
+
+TYPE
+System stack: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", then Inter (next/font) as fallback. Do not self-host SF fonts. Headlines clamp(56px, 9vw, 112px), weight 700, tracking -0.035em, line-height .98, two-tone solid colors (first phrase white, rest secondary gray). Body 19-21px. Cinzel at 12px uppercase, tracking .16em, only for tiny labels and Roman-numeral section markers.
+
+LIQUID GLASS (only on the island, buttons, one or two floating panels; everything else flat)
+rgba(255,255,255,.08) fill, backdrop-filter blur(24px) saturate(180%), 1px rgba(255,255,255,.14) border, inset 0 1px 0 rgba(255,255,255,.35), soft shadow, top-left specular highlight. On light zones use rgba(255,255,255,.55) fill with a 1px rgba(0,0,0,.08) border and dark text. Fallback to solid surfaces without backdrop-filter or under prefers-reduced-transparency.
+
+DYNAMIC ISLAND (replaces the navbar and performs the demo)
+Fixed, centered, top: 12px, pure black with a 1px rgba(255,255,255,.10) ring. Morphs with Motion layout springs; content cross-fades with scale .95 to 1 and blur 8px to 0.
+States: idle (~148x40, mark + tiny waveform); listening (~220x44, red dot, waveform); acting (~420 wide, radius ~28, streaming transcript with interim words dim and stable words bright, plus an action row with a green check); done (~260x44, then collapse); menu on tap (Why, How it works, Launch Runic).
+Hero loop: "Runic, open YouTube and search for lofi beats." On scroll it briefly shows the current section ("II · How it works"). Real <nav>, keyboard accessible, Escape closes, aria-live="polite" transcript, static states under reduced motion. Any timing numbers must be measured or labeled "Illustrative."
+
+ROMAN SCULPTURE IMAGERY
+Hero: large monochrome marble portrait bust, high contrast, rim-lit on black, headline overlapping, subtle parallax. 3-4 images total (bust, hand/gesture, toga-fold drapery, bas-relief strip for the three How-it-works steps). Use only open-license images (The Met Open Access, Smithsonian Open Access, National Gallery of Art open data, public-domain Wikimedia Commons). Verify each license, never hotlink, never invent URLs, credit them on /credits. Grayscale, higher contrast, careful cutouts, AVIF/WebP, hero priority-loaded, others lazy.
+
+MARBLE BACKGROUND (subtle, large-scale, white to black)
+Two blended stones: white Carrara-style (base #EDEDF0, veins #BFBFC4-#D2D2D7) and black Nero-style (base #000, veins only #1C1C1E-#2C2C2E). A long ~160deg sweep with mask-image so white dissolves into black with no hard edge. Target about 65% dark / 35% bright per screen via a --marble-white-ratio token. Add 2-3% grain to prevent banding.
+Rhythm: hero has white marble bleeding in from the top-left (the black island pops over it) with the area behind the bust kept dark; How it works is nearly black; Principles is a full white-marble section with dark text and long gradient masks above and below; Launch has a mirrored white mass bottom-right; footer black.
+Textures: CC0 sources only (Poly Haven, ambientCG, or verified public-domain), static images with CSS masks, no runtime SVG filters, no background-attachment: fixed. Total marble payload under 600KB.
+Legibility: map light/dark zones per section, set data-tone="light|dark" to switch text color, and add a Playwright check that samples background luminance under each text box (fail below 4.5:1, or 3:1 for large text) and reports the dark/bright ratio per viewport.
+
+LAYOUT (centered)
+1 Hero: island, "The web, hands-free.", sub "Say what you want. Runic reads the page and does it, before you finish your sentence.", solid white primary pill "Launch Runic", glass secondary pill "See how it works", tertiary caption "Opens the Runic app on this Mac."
+2 How it works: pinned scroll sequence, I Speak / II Act / III Answer back, as relief panels, with the island as the stage.
+3 Principles on white marble: four huge one-line statements. Only claim what ships; unshipped items get a quiet "Soon." No fake testimonials, logos, user counts, or stats.
+4 "What you can say": minimal list with hairline separators and Roman-numeral gutters.
+5 Privacy. 6 Launch (deep link plus fallback download card). 7 Minimal footer.
+
+QUALITY BAR
+Mobile-first to 320px, no layout shift, Lighthouse mobile perf 90+ and accessibility 95+, keyboard navigation with a visible white 2px focus ring, VoiceOver-tested, transform/opacity-only animation, at most 3-4 backdrop-filter layers on screen, reusable components (Island, GlassPill, Button, StatementSection, ReliefStep, ListRow), one tokens file, no hardcoded colors elsewhere.
+
+PROCESS
+Write DESIGN.md first (website path, tokens, island state machine, image sources and licenses, per-section light/dark maps, wireframes at 1440 / 1024 / 390) and wait for my approval. Then build in small commits. Before showing me, self-review screenshots against the ban list and an 8px grid, then report what you verified versus what you could not run, with before/after screenshots and the final `git diff --stat`.

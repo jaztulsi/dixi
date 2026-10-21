@@ -10,3 +10,4 @@ electron/playwright-report/
 
 electron/eval/out/
 electron/eval/audio-cache/
+electron/claude-lessons-learned/

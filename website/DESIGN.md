@@ -39,7 +39,8 @@ How-it-works cards, the deck's top card and the launch card. Dark glass on the d
 2. **II What you can say**: deck of glass cards that shuffles itself (Apple Music, TV, Maps, Support, App Store, Podcasts, apple.com);
    reduced motion and screen readers get the plain list.
 3. **III How it works**: Speak / Act / Answer back cards; "Soon: Dixi learns the sites you use" with the shrug pose.
-4. **IV Launch**: deep link + fallback card (mascot holding a marble tablet over its edge) + one honest privacy paragraph.
+4. **IV Launch**: deep link + a "How Dixi works" card (mascot holding a marble tablet over its edge): Hears / Understands /
+   Acts / Answers, each with the service that sees it (ElevenLabs, Cerebras, Claude), then no account, no servers, private beta.
 5. **Footer** (black) with the mascot waving. `/credits`, and a 404 with the angry crumbling pose.
 
 Black stripes (inverted Onyx013) are masked masses behind the demo (≥640px), the deck and the launch corner.

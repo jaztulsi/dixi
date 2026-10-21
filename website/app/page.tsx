@@ -26,6 +26,14 @@ const STEPS = [
   { numeral: 'III', title: 'Answer back', body: 'Ask about the page you’re on. Dixi answers from the page’s own text, out loud.' },
 ];
 
+// What happens to a command and which service sees it (as in electron/src/main/providers.js).
+const FLOW = [
+  { numeral: 'I', title: 'Hears', body: 'Say “Dixi” and talk. Your voice streams to ElevenLabs and comes back as text while you speak.', by: 'ElevenLabs' },
+  { numeral: 'II', title: 'Understands', body: 'Simple commands like “open YouTube” need no AI. Quick steps go to Cerebras; shopping and harder steps go to Anthropic’s Claude.', by: 'Cerebras · Claude' },
+  { numeral: 'III', title: 'Acts', body: 'Dixi clicks the page’s real buttons and links while you’re still talking. Claude sees a screenshot only when Dixi gets stuck.', by: 'On your Mac' },
+  { numeral: 'IV', title: 'Answers', body: 'Ask about the page and Dixi reads you the answer, out loud. It stops at sign-in and payment, so those stay yours.', by: 'ElevenLabs voice' },
+];
+
 export default function Home() {
   return (
     <>
@@ -116,10 +124,10 @@ export default function Home() {
           </div>
         </Section>
 
-        {/* IV · Launch, with privacy in one honest paragraph */}
+        {/* IV · Launch, then how Dixi works: each step and the service that sees it */}
         <Section id="launch" numeral="IV" label="Launch" className="overflow-hidden pt-8 pb-48 sm:pt-16 sm:pb-64">
           <div aria-hidden="true" className="marble-stripes stripes-launch" />
-          <div className="relative mx-auto flex max-w-[760px] flex-col items-center text-center">
+          <div className="relative mx-auto flex max-w-[1120px] flex-col items-center text-center">
             <Marker numeral="IV" label="Launch" />
             <h2 id="launch-title" className="t-headline">
               <TwoTone lead="Just say" rest=" what you want." />
@@ -129,18 +137,29 @@ export default function Home() {
               <p className="text-[15px] text-fg-2">Opens the Dixi app on this Mac.</p>
             </div>
 
-            <div className="relative mt-32 w-full max-w-[560px]">
+            <div className="relative mt-32 w-full">
               {/* holding up a blank marble tablet over the card's edge */}
               <MascotSprite pose="sign" height={132} className="mascot-shadow absolute -top-[108px] left-6 z-10" />
               <div className="glass rounded-[var(--radius-panel)] p-8 text-left">
-                <p className="text-[21px] font-semibold text-fg">Don’t have Dixi yet?</p>
-                <p className="mt-2 text-fg-2">Get the source on GitHub and run it on Mac, Windows or Linux.</p>
-                <a href="https://github.com/unixers/runic" className="mt-6 inline-flex h-10 items-center rounded-full bg-ink px-4 text-[15px] font-semibold text-paper">
-                  Get Dixi on GitHub
-                </a>
+                <h3 className="text-[21px] font-semibold text-fg">How Dixi works</h3>
+                {/* One row, left to right, on wide screens; 2×2 on tablets; stacked on phones */}
+                <ol className="mt-8 grid gap-8 md:grid-cols-2 xl:grid-cols-4 xl:gap-0">
+                  {FLOW.map((s) => (
+                    <li key={s.numeral} className="flex flex-col xl:border-l xl:border-line xl:px-6 xl:first:border-l-0 xl:first:pl-0 xl:last:pr-0">
+                      <span aria-hidden="true" className="font-roman text-[12px] tracking-[.16em] text-fg-2">
+                        {s.numeral}
+                      </span>
+                      <p className="mt-3 font-semibold text-fg">{s.title}</p>
+                      <p className="mt-1 text-[15px] text-fg-2">{s.body}</p>
+                      <div className="mt-auto pt-4">
+                        <p className="inline-block rounded-full border border-line px-3 py-1 text-[13px] whitespace-nowrap text-fg-2">{s.by}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
                 <p className="mt-8 border-t border-line pt-6 text-[15px] text-fg-2">
-                  <span className="font-semibold text-fg">No account. No Dixi servers.</span> Your voice streams to Deepgram to be
-                  transcribed. Page text, and a screenshot when it gets stuck, goes to Groq to pick the next step. Pause the mic anytime.
+                  <span className="font-semibold text-fg">No account. No Dixi servers.</span> Pause the mic anytime. Dixi is in private beta
+                  on Mac, by invite.
                 </p>
               </div>
             </div>
