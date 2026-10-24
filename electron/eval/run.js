@@ -29,7 +29,7 @@ const workers = Number(arg('workers', 1));
 const sample = Number(arg('sample', 0));
 const only = arg('cases', '')?.split(',').filter(Boolean);
 const outName = arg('out', `${mode}-${split}-s${seed}`);
-const appRoot = path.resolve(arg('app', root));  // --app ../bayvalleyhacks-baseline/electron runs the baseline code
+const appRoot = path.resolve(arg('app', root));  // --app ../app-baseline/electron runs the baseline code
 const WORD_MS = Number(arg('word-ms', 240));
 const IDLE_MS = 1500, CASE_TIMEOUT_MS = Number(arg('timeout', 25000));
 

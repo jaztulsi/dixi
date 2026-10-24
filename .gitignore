@@ -11,3 +11,13 @@ electron/playwright-report/
 electron/eval/out/
 electron/eval/audio-cache/
 electron/claude-lessons-learned/
+
+.claude-flow/
+**/.claude-flow/
+
+website/.next/
+.next/
+.claude/settings.local.json
+.claude-flow/
+**/.claude-flow/
+node_modules/

@@ -22,7 +22,7 @@ On `<webview>` in Electron 44.7.2, `getURL`, `getTitle`, `isLoading`, `canGoBack
 - **E6 (Medium, effort M): page scripts run in the page's own world.** The page can read or spoof `window.__dixi_elements` and `__dixi_mo_changed`, override `Element.prototype.click`, and detect the automation (`tabs.js:22,58-63`).
 - **E7 (Medium, effort S): hidden tabs run at full speed.** Background throttling is disabled app-wide (`main.js:18-20`), so a YouTube tab keeps playing after "new tab".
 - **E8 (Medium, effort M): no packaging config.** There is no Info.plist, no mic usage string or audio-input entitlement, and no `CFBundleURLTypes` for `dixi://`.
-- **E9 (Low, effort S): the Runic→Dixi migration is slow and doubles disk use.** It copies the whole folder synchronously before the app is ready.
+- **E9 (Low, effort S): the legacy data migration is slow and doubles disk use.** It copies the whole folder synchronously before the app is ready.
 - **E10 (Low, effort S): minor issues.**
   - The `media` permission is granted to any `file://` page, camera included.
   - The SiteCache has no size cap.
