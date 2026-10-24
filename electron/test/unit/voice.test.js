@@ -188,3 +188,30 @@ test('a site never used before waits for its whole name ("Maya" is not "Maya Ind
   await sleep(150);
   assert.equal(r.runs.length, 1);
 });
+
+test('mic paused while it is still connecting stays paused (no live mic after stop)', async () => {
+  let micOn = false, closed = 0;
+  const deepgram = { open: () => sleep(30).then(() => ({ ok: true })), close: async () => { closed++; }, sendAudio() {}, onMessage() {}, onClosed() {} };
+  const mic = { start: async () => { micOn = true; }, stop: () => { micOn = false; } };
+  const v = new VoiceAgent({ deepgram, mic, tabs: {}, llm: {}, tiers: {}, executor: {}, settings: {} });
+  const starting = v.start();
+  await v.stop();
+  await starting;
+  assert.equal(v.isListening, false);
+  assert.equal(micOn, false);
+  assert.ok(closed >= 1);
+});
+
+test('a new command while "which one?" is open is not read as an answer ("make the iPhone two" ≠ the second one)', async () => {
+  const r = rig({ reply: JSON.stringify({ clarify: '', steps: [{ act: 'quantity', said: '', guess: '', urls: [], query: '', item: 'iPhone', qty: 2, n: 0, value: 'set' }] }) });
+  const answer = r.v.ask('Which one: AirPods 5 or AirPods Pro 3?', ['AirPods 5', 'AirPods Pro 3']);
+  r.v.handleText('make the iPhone two and then check out');
+  assert.equal(await answer, null);
+  await sleep(100);
+  assert.equal(r.runs[0]?.act, 'quantity', 'the sentence ran as its own command');
+  for (const [said, want] of [['two', 'AirPods Pro 3'], ['um the first one please', 'AirPods 5'], ['number 2', 'AirPods Pro 3'], ['the Pro 3', 'AirPods Pro 3']]) {
+    const a = r.v.ask('Which one: AirPods 5 or AirPods Pro 3?', ['AirPods 5', 'AirPods Pro 3']);
+    r.v.handleText(said);
+    assert.equal(await a, want, said);
+  }
+});

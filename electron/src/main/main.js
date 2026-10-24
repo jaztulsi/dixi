@@ -48,9 +48,12 @@ if (!app.requestSingleInstanceLock()) app.quit();
 let win = null;
 let pendingURL = null;
 // Speech-to-text: ElevenLabs Scribe when its key is set (or DIXI_STT=elevenlabs), else Deepgram Flux.
+// ElevenLabs out of credit or refused → Deepgram Flux, when DEEPGRAM_API_KEY is set.
 const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');
 const emitToUI = (channel, data) => win?.webContents.send(channel, data);
-const deepgram = sttName === 'elevenlabs' ? new ElevenLabsBridge(config.keys.elevenlabs, emitToUI) : new DeepgramBridge(config.deepgramAPIKey, emitToUI);
+const deepgram = sttName === 'elevenlabs'
+  ? new ElevenLabsBridge(config.keys.elevenlabs, emitToUI, { fallback: config.deepgramAPIKey ? new DeepgramBridge(config.deepgramAPIKey, emitToUI) : null })
+  : new DeepgramBridge(config.deepgramAPIKey, emitToUI);
 // One ledger for the app and test runs (whatever their profile), so per-provider caps hold across both.
 const spendCaps = Object.fromEntries(Object.keys(ENDPOINTS).map((p) => [p, Number(config.env[`DIXI_CAP_${p.toUpperCase()}`]) || 0]));
 const spend = new Spend(path.join(app.getPath('appData'), 'Dixi', 'spend.json'), config.spendCapUSD, spendCaps);

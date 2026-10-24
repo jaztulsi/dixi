@@ -377,9 +377,12 @@ export class Executor {
   }
 
   async do_order(step, said) {
-    // The one sanctioned shortcut: an Apple hardware product, no store named, a buying verb.
+    // The one sanctioned shortcut: an Apple hardware product, no store named, a buying verb. Not while
+    // you're shopping on another store: "add an Apple Watch band" on Amazon means Amazon.
     let s;
-    if (!step.said && this.catalog) {
+    const apple = this.catalog && hostOf(this.catalog.storeURL).split('.').slice(-2).join('.');
+    const elsewhere = Boolean(apple) && !hostOf(this.tabs.getCurrentURL()).endsWith(apple) && await this.isStore();
+    if (!step.said && this.catalog && !elsewhere) {
       const fam = this.catalog.match(step.item);
       if (fam?.ask) return fail(fam.ask);
       // "a black iPhone": several current models, none named. One short question, then the rest as said.

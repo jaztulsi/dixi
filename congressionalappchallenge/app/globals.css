@@ -1,0 +1,192 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Tailwind utilities read the tokens; no literals here. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-paper: var(--light-bg-2);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-line: var(--line);
+  --color-fg-inv: var(--fg-inv);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-ink: var(--light-text);
+  --color-done: var(--done);
+  --color-rec: var(--rec);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', var(--font-inter), sans-serif;
+  --font-roman: var(--font-cinzel), serif;
+}
+
+html {
+  background: var(--light-bg-2);
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+}
+/* The page is white Carrara marble, tiled (the texture is seamless). */
+body {
+  color: var(--fg);
+  background-color: var(--light-bg-2);
+  background-image: image-set(url('/img/marble-white.avif') type('image/avif'), url('/img/marble-white.webp') type('image/webp'));
+  background-size: 1400px;
+  font-family: var(--font-sans);
+  font-size: 19px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+@media (min-width: 1024px) {
+  body { font-size: 21px; }
+}
+
+/* 2-3% grain over everything so marble fades never band. Static, so it is one cheap layer. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  background: url('/img/grain.png');
+  opacity: 0.025;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+
+::selection { background: var(--light-text); color: var(--light-bg-2); }
+
+@layer components {
+  .t-wordmark {
+    font-size: clamp(112px, 21vw, 300px);
+    font-weight: 800;
+    letter-spacing: -0.06em;
+    line-height: 0.8;
+  }
+  .t-headline {
+    font-size: clamp(48px, 7vw, 96px);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 0.98;
+    text-wrap: balance;
+  }
+  .t-label {
+    font-family: var(--font-roman);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--fg-2);
+  }
+
+  /* Liquid glass. Light by default; dark inside [data-tone=dark]; .glass-dark for the demo window. */
+  .glass,
+  .glass-dark {
+    position: relative;
+    isolation: isolate;
+    background: var(--g-fill);
+    border: 1px solid var(--g-border);
+    box-shadow: inset 0 1px 0 var(--glass-spec), 0 16px 48px var(--glass-shadow);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+  }
+  .glass-dark {
+    background: var(--glass-dark-fill);
+    border-color: var(--glass-border);
+  }
+  .glass-dark::before { background: radial-gradient(120% 90% at 0% 0%, var(--glass-sheen), transparent 55%); }
+  /* top-left specular highlight */
+  .glass::before,
+  .glass-dark::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(120% 90% at 0% 0%, var(--g-sheen), transparent 55%);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass { background: var(--light-bg-2); }
+    [data-tone='dark'] .glass, .glass-dark { background: var(--surface-1); }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .glass, .glass-dark { -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .glass { background: var(--light-bg-2); }
+    [data-tone='dark'] .glass, .glass-dark { background: var(--surface-1); }
+  }
+
+  /* Marble masses: static images, CSS masks only. */
+  .marble-stripes {
+    position: absolute;
+    pointer-events: none;
+    background-image: image-set(url('/img/marble-stripes.avif') type('image/avif'), url('/img/marble-stripes.webp') type('image/webp'));
+    background-size: 1100px;
+  }
+}
+
+/* Waveform bars breathe; the transcript caret blinks; the mascot peeks and blinks. Transform/opacity only. */
+.wave-bar {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wave-bar 0.9s ease-in-out infinite alternate;
+}
+@keyframes wave-bar {
+  from { transform: scaleY(0.4); }
+  to { transform: scaleY(1); }
+}
+.caret { animation: caret 1s steps(1) infinite; }
+@keyframes caret {
+  50% { opacity: 0; }
+}
+.mascot-peek { animation: peek 7s cubic-bezier(.3, 1.4, .5, 1) infinite; }
+@keyframes peek {
+  0%, 8% { transform: translateY(78%); }
+  16%, 70% { transform: translateY(0); }
+  78%, 100% { transform: translateY(78%); }
+}
+.mascot-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink 3.5s infinite;
+}
+@keyframes blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wave-bar, .caret, .mascot-eyes { animation: none; }
+  .mascot-peek { animation: none; transform: none; }
+}
+
+/* Black stripe masses (~15% of a screen). Each dissolves into the white marble; text stays clear of them. */
+/* Phones skip the hero mass: it sat mostly behind the demo window and was the slowest paint (LCP). */
+.stripes-hero {
+  display: none;
+  inset: auto 0 0 0;
+  height: 38%;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 62%, var(--bg) 30%, transparent 72%);
+}
+@media (min-width: 640px) {
+  .stripes-hero { display: block; }
+}
+@media (min-width: 1024px) {
+  .stripes-hero {
+    height: 70%;
+    mask-image: radial-gradient(ellipse 62% 58% at 50% 70%, var(--bg) 30%, transparent 72%);
+  }
+}
+.stripes-deck {
+  inset: 0;
+  mask-image: radial-gradient(ellipse 48% 42% at 50% 70%, var(--bg) 30%, transparent 75%);
+}
+.stripes-launch {
+  inset: 0;
+  mask-image: radial-gradient(ellipse 50% 45% at 100% 100%, var(--bg) 25%, transparent 75%);
+}
+
+/* The mascot is white marble on white marble: a soft neutral shadow gives it ground. One filter per mascot. */
+.mascot-shadow { filter: drop-shadow(0 10px 16px var(--glass-shadow)); }

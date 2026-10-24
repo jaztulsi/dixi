@@ -125,7 +125,8 @@ export async function launchApp({ appRoot = root, extraArgs = [], env = {}, prof
 /** Say something and wait until Dixi is done (idle for idleMs) or the timeout. Returns timings. */
 export async function say(app, page, text, { wordMS = 240, idleMs = 1500, timeoutMs = 25000, style = 'flux' } = {}) {
   const navsBefore = (await app.evaluate(() => globalThis.__navs.length));
-  const { end, eot, start = Date.now() } = await page.evaluate(({ text, ms, style }) => (style === 'elevenlabs' ? window.__sayEL(text, ms) : window.__say(text, ms)), { text, ms: wordMS, style });
+  const t0 = Date.now();  // before speaking: steps done mid-sentence count (negative doneMs), not null
+  const { end, eot, start = t0 } = await page.evaluate(({ text, ms, style }) => (style === 'elevenlabs' ? window.__sayEL(text, ms) : window.__say(text, ms)), { text, ms: wordMS, style });
   let idleSince = null;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

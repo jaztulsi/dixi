@@ -50,6 +50,7 @@ const YES = /^(yes|yeah|yep|yup|sure|do it|go ahead|confirm|ok(ay)?|please do|pl
 const NO = /^(no|nope|nah|cancel|stop|don'?t|never ?mind|wait)\b/i;
 const CONTINUE = /^(and|then|also|now|after that|plus)\b/i;
 const ORD = { first: 0, one: 0, '1': 0, second: 1, two: 1, '2': 1, third: 2, three: 2, '3': 2, last: -1 };
+const ORD_FILLER = new Set(['the', 'a', 'number', 'option', 'choice', 'please', 'um', 'uh', 'i', 'mean', 'want', 'like', 'pick', 'take', 'that', 'it', 'is', 'its', 'oh', 'ok', 'okay', 'yeah', 'go', 'with', 'dixi']);
 
 const lev = (a, b) => {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
@@ -115,16 +116,20 @@ export class VoiceAgent {
   get requireWakeWord() { return this.settings?.requireWakeWord ?? true; }
   get confirm() { return this.confirmQ; }
   set(fields) { Object.assign(this, fields); this.onChange(); }
-  busy() { return this.pending > 0 || Boolean(this.agent?.isRunning) || [...this.turns.values()].some((t) => t.timer); }
+  busy() { return this.pending > 0 || Boolean(this.agent?.isRunning) || Boolean(this.carry) || [...this.turns.values()].some((t) => t.timer); }
 
   // ---- lifecycle ----
   async start() {
     if (this.isListening || this.isStarting) return;
     this.isStarting = true;
+    this.stopped = false;
     try {
       const opened = await this.deepgram.open({ keyterms: this.keyterms() });
       if (!opened.ok) throw new Error(opened.error);
+      // Paused while connecting: stay paused (the mic never opens).
+      if (this.stopped) { await this.deepgram.close(); return; }
       await this.mic.start((chunk) => this.deepgram.sendAudio(chunk));
+      if (this.stopped) { this.mic.stop(); await this.deepgram.close(); return; }
       this.set({ isListening: true, statusLine: '' });
     } catch (err) {
       await this.deepgram.close();
@@ -132,7 +137,7 @@ export class VoiceAgent {
       throw err;
     } finally { this.isStarting = false; }
   }
-  async stop() { this.isListening = false; this.mic?.stop(); await this.deepgram?.close(); this.set({ liveTranscript: '', statusLine: '' }); }
+  async stop() { this.stopped = true; this.isListening = false; this.mic?.stop(); await this.deepgram?.close(); this.set({ liveTranscript: '', statusLine: '' }); }
   async toggle() { return this.isListening ? this.stop() : this.start().catch(() => {}); }
   async handleClosed() {
     if (!this.isListening) return;
@@ -247,9 +252,11 @@ export class VoiceAgent {
     if (ended && incomplete(last)) {
       const c = { text: last, at: Date.now() };
       this.carry = c;
-      // Nothing followed: do what was said anyway (a lone "can" or "uh" is dropped).
+      // Nothing followed: do what was said anyway (a lone "can" or "uh" is dropped). The start of a demo
+      // line is already a whole command ("buy an iPhone 17 in black"): it waits less (the speech service
+      // already waited ~0.9 s of silence), half a sentence ("can you") waits longer.
       clearTimeout(this.carryTimer);
-      this.carryTimer = setTimeout(() => { if (this.carry === c) { this.carry = null; if (tokens(c.text).length >= 3 || demoPartial(c.text)) this.handleText(c.text); } }, 2500);
+      this.carryTimer = setTimeout(() => { if (this.carry === c) { this.carry = null; this.onChange(); if (tokens(c.text).length >= 3 || demoPartial(c.text)) this.handleText(c.text); } }, demoPartial(last) ? 1200 : 2500);
       return;
     }
     if (ended) this.dispatch(st, last);
@@ -439,9 +446,15 @@ export class VoiceAgent {
     let pick = null;
     if (c.options[0] === 'yes') pick = YES.test(text.trim()) ? 'yes' : NO.test(text.trim()) ? 'no' : null;
     else {
+      // By position only when that's all the reply says ("two", "the second one"): in "make the iPhone two"
+      // the two is a quantity, and the sentence is a new command.
       const n = t.find((w) => w in ORD);
-      if (n) pick = ORD[n] < 0 ? c.options.at(-1) : c.options[ORD[n]] ?? null;
-      pick ??= c.options.find((o) => tokens(o).every((w) => t.includes(w))) ?? c.options.find((o) => tokens(o).some((w) => w.length > 3 && t.includes(w))) ?? null;
+      if (n && t.every((w) => w in ORD || ORD_FILLER.has(w))) pick = ORD[n] < 0 ? c.options.at(-1) : c.options[ORD[n]] ?? null;
+      // By name: the whole name, else the words that tell the options apart ("the Pro 3", "the Air").
+      const shared = tokens(c.options[0]).filter((w) => c.options.every((o) => tokens(o).includes(w)));
+      const score = (o) => tokens(o).filter((w) => !shared.includes(w) && t.includes(w)).length;
+      const best = Math.max(0, ...c.options.map(score));
+      pick ??= c.options.find((o) => tokens(o).every((w) => t.includes(w))) ?? (best && c.options.filter((o) => score(o) === best).length === 1 ? c.options.find((o) => score(o) === best) : null);
     }
     this.onChange();
     c.resolve(pick);

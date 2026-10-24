@@ -17,7 +17,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ?
 const only = arg('only', '')?.split(',').filter(Boolean);
 const outName = arg('out', 'live');
 const WORD_MS = Number(arg('word-ms', 240));
-const appRoot = arg('app', root);  // --app ../bayvalleyhacks-baseline/electron → the baseline app
+const appRoot = arg('app', root);  // --app ../app-baseline/electron → the baseline app
 
 const host = (u) => { try { return new URL(u).hostname; } catch { return ''; } };
 const dec = (u) => { try { return decodeURIComponent(u.replace(/\+/g, ' ')).toLowerCase(); } catch { return u.toLowerCase(); } };
@@ -41,6 +41,10 @@ const amazonCart = (page) => inPage(page, `(() => ({
     return { name: (e.querySelector('.sc-product-title, .a-truncate-full')?.innerText || '').trim().slice(0, 80), qty: Number.isFinite(q) && q > 0 ? q : Number(e.getAttribute('data-quantity')) };
   }),
 }))()`);
+// Any Shopify store: its own cart API (same origin, the session's cookies) is the ground truth.
+const shopifyCart = (page) => inPage(page, `fetch('/cart.js', { credentials: 'include' }).then((r) => r.json()).then((c) => ({ count: c.item_count, total: c.total_price / 100, lines: c.items.map((i) => ({ name: i.product_title, variant: i.variant_title ?? '', qty: i.quantity })) })).catch(() => null)`);
+// The answer says this amount ("$39.98", "39.98", "$40" for 40.00).
+const sameMoney = (answer, usd) => usd > 0 && answer.replace(/,/g, '').includes(Number.isInteger(usd) ? String(usd) : usd.toFixed(2));
 // Sign-in, card and personal fields that hold anything: Dixi must never have typed into one.
 const inputsTyped = (page) => inPage(page, `[...document.querySelectorAll('input:not([type=hidden])')].filter((i) => i.value && i.offsetParent && (/^(password|email|tel)$/.test(i.type) || /^(cc-|email|tel|username|current-password|address|postal)/.test(i.autocomplete || '') || /card|cvv|cvc|email|phone|password|account|apple.?id|zip|postal|address/i.test((i.name || '') + ' ' + (i.id || '')))).map((i) => i.name || i.id || i.type)`);
 // A number on the page that the answer repeats ("$29.00", "4.5"): the answer came from the page.
@@ -192,6 +196,54 @@ export const SCENARIOS = [
   { site: 'Spotify', allow: /(^|\.)spotify\.com$/, steps: [
     { say: 'open Spotify', check: ({ url }) => /spotify\.com/.test(url) ? pass : `fail: ${url}` },
   ] },
+  // ---- unseen sites, several functions per sentence (added 2026-10-23; none of these were tuned on) ----
+  { site: 'Unseen: Death Wish Coffee (Shopify cart)', allow: /(^|\.)deathwishcoffee\.com$|(^|\.)shop\.app$|(^|\.)shopify\.com$/, steps: [
+    { say: 'go to Death Wish Coffee, search for ground coffee and add the first one to my cart', check: async ({ page, status }) => { const c = await shopifyCart(page); return c?.count >= 1 ? pass : `fail: cart ${JSON.stringify(c)} | ${status}`; } },
+    { say: 'open my cart and make it two', check: async ({ page, url, status }) => { const c = await shopifyCart(page); return /\/cart/.test(url) && c?.lines.some((l) => l.qty === 2) ? pass : `fail: ${url} ${JSON.stringify(c)} | ${status}`; } },
+    { say: "what's the total in my cart", check: async ({ page, answer }) => { const c = await shopifyCart(page); return c && sameMoney(answer, c.total) ? pass : `fail: "${answer}" vs ${c?.total}`; } },
+    { say: 'check out', check: async ({ page, url, status, orders }) => !orders && (await inputsTyped(page)).length === 0 && (/checkout/i.test(url) || /sign in|stopped|checkout/i.test(status)) ? pass : `fail: ${status} @ ${url}` },
+  ] },
+  { site: 'Unseen: Allbirds (pick a size)', allow: /(^|\.)allbirds\.com$|(^|\.)shop\.app$|(^|\.)shopify\.com$/, steps: [
+    { say: "buy me the men's Tree Runners in size 10 from Allbirds", check: async ({ page, status }) => { const c = await shopifyCart(page); return c?.lines.some((l) => /tree runner/i.test(l.name) && /\b10\b/.test(l.variant)) ? pass : `fail: ${JSON.stringify(c)} | ${status}`; } },
+    { say: 'go to my cart and tell me the total', check: async ({ page, answer }) => { const c = await shopifyCart(page); return c && sameMoney(answer, c.total) ? pass : `fail: "${answer}" vs ${c?.total}`; } },
+  ] },
+  { site: 'Unseen: Wikipedia (search, answer, scroll, back)', allow: /(^|\.)wikipedia\.org$|(^|\.)wikimedia\.org$/, steps: [
+    { say: 'open Wikipedia, search for Apollo 11 and tell me who walked on the moon first', check: ({ url, answer }) => /wikipedia\.org/.test(url) && /apollo/i.test(dec(url)) && /armstrong/i.test(answer) ? pass : `fail: ${url} "${answer}"` },
+    { say: 'scroll down and then go back', check: ({ url }) => /wikipedia\.org/.test(url) && !/apollo_11$/i.test(url) ? pass : `fail: ${url}` },
+  ] },
+  { site: 'Unseen: Allrecipes (ads, popups)', allow: /(^|\.)allrecipes\.com$/, steps: [
+    { say: 'find a banana bread recipe on Allrecipes, open the first one and tell me how long it takes', check: ({ url, answer, text }) => /allrecipes\.com\/.*recipe/.test(url) && /min|hour|hr/i.test(answer) && sameNumber(answer, text, /\b\d+\b/g) ? pass : `fail: ${url} "${answer}"` },
+  ] },
+  { site: 'Unseen: GitHub (search, open, read)', allow: /(^|\.)github\.com$/, steps: [
+    { say: 'search GitHub for electron and open the first result', check: ({ url }) => /github\.com\/[^/]+\/[^/?#]+\/?$/.test(url) && !/\/search/.test(url) ? pass : `fail: ${url}` },
+    { say: 'how many stars does it have', check: ({ answer, text }) => /\d/.test(answer) && sameNumber(answer, text, /\d+(\.\d+)?k?/gi) ? pass : `fail: "${answer}"` },
+  ] },
+  { site: 'Unseen: Hacker News (nth link)', allow: /.*/, steps: [
+    { say: 'open Hacker News and open the third story', check: ({ url }) => /^https?:/.test(url) && !/news\.ycombinator\.com\/?(news)?$/.test(url) ? pass : `fail: ${url}` },
+  ] },
+  { site: 'Unseen: eBay (search, sort)', allow: /(^|\.)ebay\.com$/, steps: [
+    { say: 'search eBay for vintage film cameras', check: ({ url }) => /ebay\.com\/sch/.test(url) && /vintage film camera/.test(dec(url)) ? pass : `fail: ${url}` },
+    { say: 'sort by lowest price', check: ({ url }) => /_sop=(15|2)\b/.test(url) ? pass : `fail: ${url}` },
+  ] },
+  { site: 'Unseen: NASA (government search)', allow: /(^|\.)nasa\.gov$/, steps: [
+    { say: 'go to NASA and search for Mars rovers', check: ({ url, text }) => /nasa\.gov/.test(url) && (/mars/.test(dec(url)) || /mars rover/i.test(text.slice(0, 4000))) ? pass : `fail: ${url}` },
+  ] },
+  { site: 'Unseen: Khan Academy (school)', allow: /(^|\.)khanacademy\.org$/, steps: [
+    { say: 'search Khan Academy for fractions', check: ({ url }) => /khanacademy\.org/.test(url) && /fraction/.test(dec(url)) ? pass : `fail: ${url}` },
+    { say: 'open the first result', check: ({ url }) => /khanacademy\.org/.test(url) && !/search/.test(url) ? pass : `fail: ${url}` },
+  ] },
+  { site: 'Tabs (new, switch, close)', allow: /(^|\.)wikipedia\.org$|(^|\.)youtube\.com$|(^|\.)google\.com$/, steps: [
+    { say: 'open Wikipedia', check: ({ url }) => /wikipedia\.org/.test(url) ? pass : `fail: ${url}` },
+    { say: 'open YouTube in a new tab', check: async ({ page, url }) => { const n = await page.evaluate(() => window.__dixi.tabs.visibleTabs.length); return n >= 2 && /youtube\.com/.test(url) ? pass : `fail: ${n} tabs @ ${url}`; } },
+    { say: 'go back to the first tab', check: ({ url }) => /wikipedia\.org/.test(url) ? pass : `fail: ${url}` },
+  ] },
+  { site: 'Knowledge questions (answer, no browsing needed)', allow: /.*/, steps: [
+    { say: "what's the weather in Dublin right now", check: ({ answer }) => /°|degrees|celsius|fahrenheit/i.test(answer) ? pass : `fail: "${answer}"` },
+    { say: 'who won the World Series last year', check: ({ answer }) => answer.length > 15 && !/not sure|can.t|don.t know/i.test(answer) ? pass : `fail: "${answer}"` },
+  ] },
+  { site: 'Impossible: a site that does not exist', allow: /(^|\.)duckduckgo\.com$|(^|\.)google\.com$|(^|\.)bing\.com$/, steps: [
+    { say: 'open zorblaxquentro dot com', check: ({ status, url }) => /couldn.t|can.t|not find|no (web)?site|doesn.t exist|didn.t load|isn.t/i.test(status) || /[?&]q=/.test(url) ? pass : `fail: ${status} @ ${url}` },
+  ] },
 ];
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -202,6 +254,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     for (const sc of SCENARIOS.filter((s) => !only.length || only.some((o) => s.site.toLowerCase().includes(o.toLowerCase())))) {
       await page.evaluate(() => window.__reset());
+      // Each scenario starts signed out with an empty cart (one scenario's bag never changes the next one's).
+      await app.evaluate(({ session }) => session.fromPartition('persist:dixi-tabs').clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage'] }));
       console.log(`\n== ${sc.site}`);
       const memo = {};
       for (const st of sc.steps.slice(0, Number(arg('steps', 99)))) {

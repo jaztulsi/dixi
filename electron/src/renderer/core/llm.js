@@ -165,7 +165,7 @@ export class LLM {
       for (const model of models) {
         if (this.cooldowns.cooling(model)) continue;
         last = await this.call(model, { messages: readsImages(model) ? compacted : strippingImages(compacted), tools, tool_choice: 'required', max_tokens: 1024, temperature: 0 }, signal, why);
-        if (last.status !== 429) break;
+        if (last.status !== 429 && last.status !== 402) break;  // rate limited or past its spend cap: next model
       }
       if (last && last.status !== 429) break;
       if (round === 2) break;

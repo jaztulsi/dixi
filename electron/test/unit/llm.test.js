@@ -22,6 +22,12 @@ test('rate-limited models cool down and are skipped', async () => {
   assert.deepEqual(seen, ['a', 'b', 'b']);
 });
 
+test('agent chat: a model past its spend cap (402) falls through to the next (Cerebras out → Groq free tier)', async () => {
+  const llm = new LLM(({ model }) => (model === 'cerebras:x' ? { status: 402, json: { error: { message: 'Spend cap reached for cerebras' } } } : okReply('groq')), {});
+  assert.equal((await llm.chat([{ role: 'user', content: 'hi' }], [], null, ['cerebras:x', 'groq:y'])).content, 'groq');
+  await assert.rejects(llm.chat([{ role: 'user', content: 'hi' }], [], null, ['cerebras:x']), /402.*Spend cap/);
+});
+
 test('reasoning effort per provider/model family', () => {
   assert.equal(reasoningEffort('groq:qwen/qwen3.8-27b'), 'none');
   assert.equal(reasoningEffort('groq:openai/gpt-oss-20b'), 'low');

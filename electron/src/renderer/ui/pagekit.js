@@ -9,7 +9,10 @@
 export const PAGE_LIB = String.raw`(() => {
 if (window.__dx) return;
 const refs = new Map(); let nextRef = 1;
-const ref = (el) => { for (const [k, v] of refs) if (v === el) return k; const k = nextRef++; refs.set(k, el); return k; };
+// Element → its ref in O(1) (a scan of every ref ever made slowed each call down as a page was used).
+// ponytail: refs lives as long as the page; switch to WeakRef values if long single-page sessions bloat.
+const refOf = new WeakMap();
+const ref = (el) => { let k = refOf.get(el); if (k == null) { k = nextRef++; refs.set(k, el); refOf.set(el, k); } return k; };
 const get = (k) => refs.get(k) || null;
 
 // ---- seeing the page ----
