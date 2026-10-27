@@ -63,7 +63,15 @@ export function MascotI() {
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerdown', onDown);
     doze();
+    // Lands from the intro hop (globals.css, 3.75 s after first paint) with a happy face.
+    const landed = matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? undefined
+      : setTimeout(() => {
+          setMood('happy');
+          moodTimer = setTimeout(() => setMood(null), 1200);
+        }, Math.max(0, 3750 - Number(document.timeline.currentTime)));
     return () => {
+      clearTimeout(landed);
       clearInterval(glance);
       clearTimeout(sleepTimer);
       clearTimeout(moodTimer);
@@ -75,8 +83,8 @@ export function MascotI() {
   const showFace = !mood && turn === 0;
 
   return (
-    <span ref={box} className="relative ml-[0.02em] inline-block h-[0.86em] w-[0.62em] align-baseline [perspective:600px]">
-      <motion.span className="mascot-shadow absolute inset-0" style={reduced ? undefined : { rotateY: rotY, rotateX: rotX }}>
+    <span ref={box} className="intro-hop relative ml-[0.02em] inline-block h-[0.86em] w-[0.62em] align-baseline [perspective:600px]">
+      <motion.span className="intro-pop mascot-shadow absolute inset-0" style={reduced ? undefined : { rotateY: rotY, rotateX: rotX }}>
         {/* Face with live eyes */}
         <span className="absolute bottom-0 left-1/2 h-full -translate-x-1/2 transition-opacity duration-200" style={{ aspectRatio: `${FW} / ${FH}`, opacity: showFace ? 1 : 0 }}>
           <MascotSprite pose="face" height={640} eager className="absolute inset-0 h-full w-full" />
@@ -107,6 +115,8 @@ export function MascotI() {
           />
         ))}
       </motion.span>
+      {/* the marble orb the mascot pops out of in the intro */}
+      <span aria-hidden="true" className="intro-orb" />
     </span>
   );
 }

@@ -11,7 +11,7 @@ export function Footer() {
         </a>
         <nav aria-label="Footer" className="flex gap-6">
           <a href="/credits/">Credits</a>
-          <span>© 2026 Dixi</span>
+          <span>© 2026 Dixi · Jasraj Tulsi, founder</span>
         </nav>
       </div>
     </footer>

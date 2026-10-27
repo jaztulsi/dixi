@@ -119,8 +119,8 @@ export function Island() {
                   </li>
                 ))}
                 <li className="p-1">
-                  <a href="dixi://open" onClick={() => setMenu(false)} className="flex h-12 items-center justify-center rounded-full bg-text text-[17px] font-semibold text-bg">
-                    Launch Dixi
+                  <a href="#waitlist" onClick={() => setMenu(false)} className="flex h-12 items-center justify-center rounded-full bg-text text-[17px] font-semibold text-bg">
+                    Join the waitlist
                   </a>
                 </li>
               </ul>

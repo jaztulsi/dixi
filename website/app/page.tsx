@@ -1,12 +1,14 @@
 import { DemoWindow } from '@/components/DemoWindow';
 import { Footer } from '@/components/Footer';
 import { GlassPill } from '@/components/GlassPill';
+import { Intro } from '@/components/Intro';
 import { Island } from '@/components/Island';
-import { LaunchButton } from '@/components/LaunchButton';
 import { MascotI } from '@/components/MascotI';
 import { MascotSprite } from '@/components/MascotSprite';
 import { Marker, Section, TwoTone } from '@/components/Section';
 import { ShuffleDeck, type UseCase } from '@/components/ShuffleDeck';
+import { Button } from '@/components/ui/button';
+import { Waitlist } from '@/components/Waitlist';
 
 // Website brand is "Dixi" (Latin: "I have spoken"). Every phrase below was run in the app on the live Apple sites.
 const CASES: UseCase[] = [
@@ -30,7 +32,7 @@ const STEPS = [
 const FLOW = [
   { numeral: 'I', title: 'Hears', body: 'Say “Dixi” and talk. Your voice streams to ElevenLabs and comes back as text while you speak.', by: 'ElevenLabs' },
   { numeral: 'II', title: 'Understands', body: 'Simple commands like “open YouTube” need no AI. Quick steps go to Cerebras; shopping and harder steps go to Anthropic’s Claude.', by: 'Cerebras · Claude' },
-  { numeral: 'III', title: 'Acts', body: 'Dixi clicks the page’s real buttons and links while you’re still talking. Claude sees a screenshot only when Dixi gets stuck.', by: 'On your Mac' },
+  { numeral: 'III', title: 'Acts', body: 'Dixi clicks the page’s real buttons and links while you’re still talking. Claude sees a screenshot only when Dixi gets stuck.', by: 'On your computer' },
   { numeral: 'IV', title: 'Answers', body: 'Ask about the page and Dixi reads you the answer, out loud. It stops at sign-in and payment, so those stay yours.', by: 'ElevenLabs voice' },
 ];
 
@@ -40,6 +42,7 @@ export default function Home() {
       <a href="#how" className="sr-only focus:not-sr-only focus:fixed focus:top-16 focus:left-4 focus:z-50 focus:rounded-full focus:bg-ink focus:px-4 focus:py-2 focus:text-paper">
         Skip to content
       </a>
+      <Intro />
       <Island />
 
       <main>
@@ -50,30 +53,41 @@ export default function Home() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <h1 id="top-title" className="t-wordmark text-ink">
                 <span aria-hidden="true" className="whitespace-nowrap">
-                  Dix
+                  {/* the letters drop in one by one after the intro curtain (globals.css) */}
+                  {[...'Dix'].map((c, i) => (
+                    <span key={i} className="intro-letter inline-block" style={{ animationDelay: `${2.35 + i * 0.12}s` }}>
+                      {c}
+                    </span>
+                  ))}
                   <MascotI />
                 </span>
                 <span className="sr-only">Dixi: the web, hands-free</span>
               </h1>
-              <p aria-hidden="true" className="t-headline lg:pt-6 lg:text-right">
+              <p aria-hidden="true" className="intro-hero t-headline lg:pt-6 lg:text-right">
                 <span className="text-fg">The web,</span>
                 <br />
                 <span className="whitespace-nowrap text-fg-2">hands‑free.</span>
               </p>
             </div>
 
-            <div className="mt-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="intro-hero mt-10 flex flex-col gap-6 [animation-delay:2.1s] lg:flex-row lg:items-end lg:justify-between">
               <p className="max-w-[520px] text-fg-2">Say what you want. Dixi reads the page and does it, before you finish your sentence.</p>
               <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
                 <span data-mood="happy" className="contents">
-                  <LaunchButton />
+                  <Button asChild className="w-full sm:w-auto">
+                    <a href="#waitlist">Join the waitlist</a>
+                  </Button>
                 </span>
                 <span data-mood="curious" className="contents">
                   <GlassPill href="#how">See how it works</GlassPill>
                 </span>
               </div>
             </div>
-            <p className="mt-4 text-[15px] text-fg-2 lg:text-right">Opens the Dixi app on this Mac.</p>
+            <p className="mt-4 text-[15px] text-fg-2 lg:text-right">
+              Private beta on Mac, Windows and Linux, by invite.
+              <br />
+              By <span className="font-semibold text-fg">Jasraj Tulsi</span>, founder.
+            </p>
 
             <div className="mt-36">
               <DemoWindow />
@@ -124,18 +138,15 @@ export default function Home() {
           </div>
         </Section>
 
-        {/* IV · Launch, then how Dixi works: each step and the service that sees it */}
-        <Section id="launch" numeral="IV" label="Launch" className="overflow-hidden pt-8 pb-48 sm:pt-16 sm:pb-64">
+        {/* IV · Waitlist, then how Dixi works: each step and the service that sees it */}
+        <Section id="waitlist" numeral="IV" label="Waitlist" className="overflow-hidden pt-8 pb-48 sm:pt-16 sm:pb-64">
           <div aria-hidden="true" className="marble-stripes stripes-launch" />
           <div className="relative mx-auto flex max-w-[1120px] flex-col items-center text-center">
-            <Marker numeral="IV" label="Launch" />
-            <h2 id="launch-title" className="t-headline">
-              <TwoTone lead="Just say" rest=" what you want." />
+            <Marker numeral="IV" label="Waitlist" />
+            <h2 id="waitlist-title" className="t-headline">
+              <TwoTone lead="Be first" rest=" to try it." />
             </h2>
-            <div className="mt-10 flex w-full flex-col items-center gap-4 sm:w-auto">
-              <LaunchButton />
-              <p className="text-[15px] text-fg-2">Opens the Dixi app on this Mac.</p>
-            </div>
+            <Waitlist className="mt-10" />
 
             <div className="relative mt-32 w-full">
               {/* holding up a blank marble tablet over the card's edge */}
@@ -159,7 +170,7 @@ export default function Home() {
                 </ol>
                 <p className="mt-8 border-t border-line pt-6 text-[15px] text-fg-2">
                   <span className="font-semibold text-fg">No account. No Dixi servers.</span> Pause the mic anytime. Dixi is in private beta
-                  on Mac, by invite.
+                  on Mac, Windows and Linux, by invite.
                 </p>
               </div>
             </div>

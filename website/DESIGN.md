@@ -11,7 +11,9 @@ use-case deck, the marble mascot throughout, and a shorter page.
 | Website | `website/` (package `dixi-website`: Next.js 15 static export, TypeScript, Tailwind v4, shadcn Button, Motion) |
 | Electron UI restyle (requested later by the owner) | `electron/src/renderer/{index.html,styles.css,app.js,ui/mascot.js,assets/}` + one test title assertion. No voice/agent/main-process logic, no `package.json`, no protocol changes. |
 
-"Launch Dixi" links to `dixi://open` only (prefill, never runs a task). The Electron app registers `dixi://`.
+The site never launches the app: every call to action goes to the waitlist (`components/Waitlist.tsx`), which inserts
+into an insert-only Supabase table (`supabase/waitlist.sql`; keys in `.env.example`). `/admin/` (noindex, unlinked)
+asks for a password only (signs in to Supabase Auth as `NEXT_PUBLIC_ADMIN_EMAIL`) and lists the waitlist; only the email named in `supabase/waitlist.sql` can read rows.
 
 ## Tokens (`app/tokens.css`, the only file with color literals)
 
@@ -33,13 +35,18 @@ How-it-works cards, the deck's top card and the launch card. Dark glass on the d
 
 ## Page (4 sections + footer)
 
-1. **Hero**: island; giant "Dix" + the mascot as the last **i**; "The web, hands-free." top right; sub; Launch /
-   See how it works; dark-glass **demo window** (Apple Music search → play a preview → Apple TV → buy AirPods Pro) with
+0. **Intro** (`components/Intro.tsx`, CSS only, ~2.7 s, skipped under reduced motion): a waveform talks, flattens into a
+   line, Cinzel "DIXI" rises out of it, then the black curtain splits along the line and the hero rises in. The wordmark
+   then builds itself (after the owner's `dixi.mp4`): a marble orb on the D pops into the mascot, D-i-x drop in, and the
+   mascot hops over the letters to land, happy, as the last **i**. Done ~3.75 s after first paint.
+1. **Hero**: island; giant "Dix" + the mascot as the last **i**; "The web, hands-free." top right; sub; Join the waitlist /
+   See how it works; "Private beta on Mac, Windows and Linux" and "By Jasraj Tulsi, founder."; dark-glass **demo window** (Apple Music search → play a preview → Apple TV → buy AirPods Pro) with
    the mascot hiding behind its edge and popping up to react.
 2. **II What you can say**: deck of glass cards that shuffles itself (Apple Music, TV, Maps, Support, App Store, Podcasts, apple.com);
    reduced motion and screen readers get the plain list.
 3. **III How it works**: Speak / Act / Answer back cards; "Soon: Dixi learns the sites you use" with the shrug pose.
-4. **IV Launch**: deep link + a "How Dixi works" card (mascot holding a marble tablet over its edge): Hears / Understands /
+4. **IV Waitlist**: one glass card holding the form (first/last name, email, optional phone, hidden honeypot), which
+   becomes a "Thank you, {name}!" card with the happy mascot; then a "How Dixi works" card (mascot holding a marble tablet over its edge): Hears / Understands /
    Acts / Answers, each with the service that sees it (ElevenLabs, Cerebras, Claude), then no account, no servers, private beta.
 5. **Footer** (black) with the mascot waving. `/credits`, and a 404 with the angry crumbling pose.
 
@@ -53,7 +60,7 @@ high-res waving render with its painted eyes inpainted away, so the site draws l
 
 | Where | Behaviour |
 |---|---|
-| The "i" in Dixi | Eyes follow the cursor (glints lag), blink, 3D tilt; three-quarter turn at the far left/right; idle glances; mood from `data-mood` on what you hover (happy on Launch, curious on See how); nods on click; sleeps after 12 s idle |
+| The "i" in Dixi | Eyes follow the cursor (glints lag), blink, 3D tilt; three-quarter turn at the far left/right; idle glances; mood from `data-mood` on what you hover (happy on Join the waitlist, curious on See how); nods on click; sleeps after 12 s idle |
 | Demo window | Hides behind the top edge; curious while listening, happy when a step lands, nods when done |
 | Island | Avatar: neutral / curious / happy / nod |
 | Launch card, Soon, footer, 404 | sign, shrug, wave, angry |
@@ -69,6 +76,6 @@ Apple Pay is not claimed: it only works in Safari, not in an Electron app. The w
 
 - `tests/contrast.spec.ts`: samples the rendered background under every text box at 1440/1024/390/320 (text hidden),
   fails below 4.5:1 (3:1 large); prints bright share per screen.
-- `tests/a11y.spec.ts`: island keyboard flow (Enter, Tab, Escape restores focus, 2px ring), launch links only
-  `dixi://open`, no horizontal scroll and CLS < 0.01 at four widths, credits complete.
+- `tests/a11y.spec.ts`: island keyboard flow (Enter, Tab, Escape restores focus, 2px ring), no `dixi://` links,
+  the waitlist form (Supabase mocked), no horizontal scroll and CLS < 0.01 at four widths, credits complete.
 - Lighthouse (static export): mobile 93 perf / 100 a11y / 100 best practices / 100 SEO; desktop 100 / 100.

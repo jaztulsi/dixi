@@ -7,13 +7,21 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'sw
 const cinzel = Cinzel({ subsets: ['latin'], weight: '400', variable: '--font-cinzel', display: 'swap' });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://dixiai.vercel.app'), // link previews need an absolute image URL
   title: 'Dixi: the web, hands-free',
   description: 'Dixi is a voice-powered browser that acts before you finish your sentence.',
+  authors: [{ name: 'Jasraj Tulsi' }],
   openGraph: {
     title: 'Dixi: the web, hands-free',
     description: 'Say what you want. Dixi reads the page and does it, before you finish your sentence.',
     type: 'website',
+    url: '/',
+    siteName: 'Dixi',
+    // Set here, not via app/opengraph-image: that writes og:image:width before og:image, and LinkedIn then
+    // falls back to an image from the page (the eyeless face.webp). Built by scripts/og.py.
+    images: [{ url: '/og.jpg', width: 1200, height: 630, alt: 'Dixi, the marble mascot, waving' }],
   },
+  twitter: { card: 'summary_large_image', images: ['/og.jpg'] },
 };
 
 export const viewport: Viewport = { colorScheme: 'light' };
