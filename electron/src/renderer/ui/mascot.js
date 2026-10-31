@@ -9,12 +9,12 @@ const EYES = [
 const POSES = ['neutral', 'curious', 'happy', 'nod', 'sleep'];
 const NS = 'http://www.w3.org/2000/svg';
 
-export function mountMascot(root, { eyes = true } = {}) {
+export function mountMascot(root, { eyes = true, base = 'assets/' } = {}) {
   root.classList.add('mascot');
   root.setAttribute('aria-hidden', 'true');
   const face = document.createElement('div');
   face.className = 'mascot-face';
-  face.innerHTML = `<img src="assets/mascot-face.webp" alt="" draggable="false">`;
+  face.innerHTML = `<img src="${base}mascot-face.webp" alt="" draggable="false">`;
   const groups = [];
   if (eyes) {
     const svg = document.createElementNS(NS, 'svg');
@@ -34,7 +34,7 @@ export function mountMascot(root, { eyes = true } = {}) {
   root.append(face);
   const poses = Object.fromEntries(POSES.map((p) => {
     const img = document.createElement('img');
-    img.src = `assets/mascot-${p}.webp`;
+    img.src = `${base}mascot-${p}.webp`;
     img.alt = '';
     img.draggable = false;
     img.className = 'mascot-pose';

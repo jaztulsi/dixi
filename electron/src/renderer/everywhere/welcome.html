@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;">
+  <title>Set up Dixi</title>
+  <link rel="stylesheet" href="overlay.css">
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <main class="glass" aria-labelledby="hello">
+    <header>
+      <span id="buddy" class="buddy"></span>
+      <div class="heading">
+        <h1 id="hello">Hi, I’m Dixi</h1>
+        <small>Switch on a few things, and I can help in any app.</small>
+      </div>
+      <button id="close" class="icon" aria-label="Close setup">✕</button>
+    </header>
+    <ol id="list" aria-label="Setup steps"></ol>
+    <section id="try" aria-labelledby="try-title" hidden>
+      <h2 id="try-title">Try it</h2>
+      <ul id="tips"></ul>
+      <button id="done" class="choice primary">Start using Dixi</button>
+    </section>
+    <p id="live" class="sr" aria-live="polite"></p>
+  </main>
+  <script type="module" src="welcome.js"></script>
+</body>
+</html>

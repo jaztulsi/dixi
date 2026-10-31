@@ -13,6 +13,7 @@ import { ParseCache } from './core/learn.js';
 import { normName } from './core/interpret.js';
 import { makeCatalog } from './core/catalog.js';
 import { normalizeURL } from './ui/tabs.js';
+import { HIVE, ABOUT_SCREEN, COMMAND, DESKTOP_WORDS } from './core/everywhere-words.js';
 
 const $ = (id) => document.getElementById(id);
 const fillIcons = (root = document) => root.querySelectorAll('[data-icon]').forEach((el) => { if (!el.firstChild || el.tagName === 'BUTTON') el.innerHTML = icons[el.dataset.icon] ?? ''; });
@@ -30,7 +31,9 @@ for (const k of Object.keys(localStorage)) {
   if (localStorage.getItem(renamed) == null) localStorage.setItem(renamed, localStorage.getItem(k));
   localStorage.removeItem(k);
 }
-const WAKE_KEY = 'dixi.requireWakeWord';
+// A new key: the old one had been switched off, so Dixi took everything said nearby as a command. It
+// listens only after "Dixi" again; the Settings switch still turns that off on purpose.
+const WAKE_KEY = 'dixi.wakeWordOnly';
 const settings = {
   get requireWakeWord() { return localStorage.getItem(WAKE_KEY) !== 'false'; },
   set requireWakeWord(v) { localStorage.setItem(WAKE_KEY, String(v)); },
@@ -98,6 +101,50 @@ executor.agent = agent;
 const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic(), tabs, speaker, llm, tiers: config.tiers, executor, settings, terms: catalog?.names ?? [],
   registry, cache: new ParseCache(localStorage), agent, trace, onChange: () => render() });
 window.dixi.onPopup((url) => tabs.createTab(url));
+
+// ---- Dixi Everywhere (macOS): the same voice, about whatever app is in front ----
+// What goes there: anything right after ⌥Space; with another app in front, what's about the screen (and
+// follow-ups for a short while); a job for your Claude team from anywhere.
+const ew = window.dixi.everywhere;
+let ewArmed = 0, ewUntil = 0, ewConfirm = null;
+ew?.enabled().then(({ listening = true, phrases = [] } = {}) => {
+  if (!listening) voice.stop();   // microphone switched off (⌘⌥Space): nothing is heard until it's back on
+  ew.onMic((on) => { if (on) voice.start().catch(() => {}); else voice.stop(); });
+  // The Mac agent needs a word from you ("Which file?"): asked out loud, your answer goes back.
+  ew.onAsk(async ({ id, question }) => ew.answer(id, await voice.ask(question, [], { raw: true })));
+  // Your own commands (the dashboard): heard from any window. And with this window out of sight, everything
+  // you say is about the Mac.
+  const heard = (list) => (list ?? []).map((p) => new RegExp(`(?:^|\\W)${String(p).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\W|$)`, 'i'));
+  let mine = heard(phrases);
+  ew.onCommands?.((list) => { mine = heard(list); });
+  voice.everywhere = {
+    wants: (t) => Date.now() < ewArmed || HIVE.test(t) || COMMAND.test(t.trim()) || mine.some((re) => re.test(t)) || document.visibilityState === 'hidden' || (!document.hasFocus() && (Date.now() < ewUntil || ABOUT_SCREEN.test(t) || DESKTOP_WORDS.test(t.trim()))),
+    transcript: (t) => { if (Date.now() < ewArmed || !document.hasFocus()) ew.transcript(t); },
+    run: (t, mode) => { ewArmed = 0; ewUntil = Date.now() + 30000; return ew.run(t, mode).catch(() => {}); },
+    stop: () => ew.stop(),
+  };
+  speaker.onSpeaking = (on) => ew.speaking(on);   // the mascot in the glass panel talks while Dixi does
+  ew.onListen(() => {
+    ewArmed = Date.now() + 15000;
+    voice.set({ isAwake: true, awakeUntil: ewArmed });
+    if (!voice.isListening) voice.start().catch(() => {});
+  });
+  ew.onDisarm(() => { ewArmed = 0; voice.set({ awakeUntil: 0, isAwake: false }); });
+  // (No listening window after Dixi speaks: a follow-up starts with "Dixi", so its own voice can't loop.)
+  ew.onSay((t) => { speaker.say(t); ewUntil = Date.now() + 30000; });
+  ew.onKill(() => { speaker.stop(); voice.cancelAll({ quiet: true }); });
+  // A yes/no from the Mac agent: said, or the card's button (whichever is first).
+  ew.onConfirm(async ({ id, question }) => {
+    ewConfirm = id;
+    const ok = await voice.confirmAction(question);
+    if (ewConfirm === id) ew.confirmReply(id, ok);
+  });
+  ew.onConfirmDone((id) => {
+    if (ewConfirm !== id) return;
+    ewConfirm = null;
+    if (voice.confirmQ) { voice.clarify?.resolve(null); voice.set({ clarify: null, confirmQ: null }); }
+  });
+}).catch(() => {});
 
 // ---- start page ----
 function renderExamples() {

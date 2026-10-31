@@ -7,11 +7,15 @@
 
 import { interpret, fastPath, normName, tokens, incomplete, QUESTION, SHOPPING, isDixi, splitClauses } from './interpret.js';
 import { demoSteps, demoPartial } from './demo.js';
+import { HIVE } from './everywhere-words.js';
 
 export { splitClauses };
 
 // ---- the wake word ("Dixi"): isDixi (interpret.js) matches it by sound ----
 const GREET = new Set(['hey', 'hi', 'ok', 'okay', 'yo', 'hello', 'so', 'um', 'uh']);
+// "Dixi browser, just save…", "Dixi is getting activated": talking ABOUT Dixi. With a pause after the name
+// ("Dixi, is it raining?") or a greeting before it ("hey Dixi…"), it's talking TO Dixi.
+const MENTION = /^\s+(?:browser|app|window|dashboard|button|thing|code|voice|overlay|website|site|extension|project|features?|team|version|mascot|is|was|has|had|does|did|keeps|kept|isn'?t|wasn'?t|doesn'?t|didn'?t|should|would|could|can'?t|will|won'?t|just|always|never|still|gets?|getting|got|activat\w*|said|says|heard|hears|thinks|works|worked|needs)\b/i;
 /** Character index just after the wake word, or -1. Only at the start, or right after a sentence break. */
 export function wakeEnd(text) {
   const s = String(text);
@@ -23,7 +27,9 @@ export function wakeEnd(text) {
     let i = 0;
     while (i < words.length && GREET.has(tokens(words[i][0])[0]) && i < 2) i++;
     const w = words[i];
-    if (w && isDixi(tokens(w[0])[0])) return start + w.index + w[0].length;
+    const end = w ? start + w.index + w[0].length : 0;
+    const greeted = words.slice(0, i).some((x) => /^(?:hey|hi|ok|okay|yo|hello)$/.test(tokens(x[0])[0]));   // ("so", "um": fillers, not a greeting)
+    if (w && isDixi(tokens(w[0])[0]) && (greeted || /[,.!?:;]$/.test(w[0]) || !MENTION.test(s.slice(end)))) return end;
     if (re.lastIndex === m.index) re.lastIndex++;
   }
   return -1;
@@ -46,9 +52,16 @@ export function afterWakeWord(text) {
 }
 
 const STOP = /^(?:stop|cancel|never ?mind|stop (?:it|that|everything)|cancel (?:it|that))[.!]?$/i;
+// "No, no, not that! Oh my god, why did Dixi do that?": nothing but a protest. It stops Dixi, never runs.
+const PROTEST_BIT = String.raw`(?:no+|nope|not(?: (?:that|this|now|yet|again))?|wait|stop|don'?t(?: do (?:that|it|this))?|oh (?:my )?(?:god|gosh|no)|what are you doing|why (?:did|are|is) (?:you|dixi)[^.!?]*)`;
+const PROTEST = new RegExp(String.raw`^${PROTEST_BIT}(?:[\s,.!?]+${PROTEST_BIT})*[\s,.!?]*$`, 'i');
 const YES = /^(yes|yeah|yep|yup|sure|do it|go ahead|confirm|ok(ay)?|please do|place it|that'?s right|correct)\b/i;
 const NO = /^(no|nope|nah|cancel|stop|don'?t|never ?mind|wait)\b/i;
 const CONTINUE = /^(and|then|also|now|after that|plus)\b/i;
+// "Stop and listen": a long, detailed request over as many sentences as you need, sent when you say "go".
+const DICTATE = /^(?:ok(?:ay)?,?\s+)?(?:stop and listen|listen to me|listen carefully|let me explain|hear me out|i'?ll explain|take (?:a )?dictation|type (?:this|what i say)|dictate|write (?:this|what i say) down)\b[.!,:]?\s*/i;
+const TYPE_IT = /^(?:ok(?:ay)?,?\s+)?(?:take (?:a )?dictation|type (?:this|what i say)|dictate|write (?:this|what i say) down)\b/i;
+const DICTATED = /(?:^|[.!?,]\s*)(?:that'?s (?:it|all|everything)|i'?m (?:done|finished)|(?:ok(?:ay)?,?\s+)?go(?: ahead)?|done|over to you|send it)[.!?]*$/i;
 const ORD = { first: 0, one: 0, '1': 0, second: 1, two: 1, '2': 1, third: 2, three: 2, '3': 2, last: -1 };
 const ORD_FILLER = new Set(['the', 'a', 'number', 'option', 'choice', 'please', 'um', 'uh', 'i', 'mean', 'want', 'like', 'pick', 'take', 'that', 'it', 'is', 'its', 'oh', 'ok', 'okay', 'yeah', 'go', 'with', 'dixi']);
 
@@ -107,6 +120,7 @@ export class VoiceAgent {
     this.turnsDone = new Set();
     this.clarify = null;       // {question, options, resolve}
     this.confirmQ = null;
+    this.bornTalking = new Map();   // turn → it began while Dixi was talking
     this.affordances = null;
     this.preconnected = new Set();
     deepgram?.onMessage((text) => this.handleMessage(text));
@@ -175,40 +189,72 @@ export class VoiceAgent {
     if (json.type === 'TurnInfo') this.handleTurn(json);
   }
 
+  /** True when the words heard are Dixi's own, from something it said in the last 20 seconds. */
+  heardSelf(text) {
+    const sp = this.speaker;
+    const end = sp?.spans?.at(-1)?.end;
+    if (!sp || (end != null && Date.now() - end > 20000)) return false;
+    const t = tokens(text), c = this.clarify;
+    // Just one of the open question's choices ("EJ Music", "the EJ one") is you answering, even in its
+    // words. Not for yes/no questions: the tail "do it for you" of "Want me to do it for you?" mustn't confirm itself.
+    if (c && c.options[0] !== 'yes' && c.options.some((o) => { const ow = tokens(o); return t.some((w) => ow.includes(w)) && t.every((w) => ow.includes(w) || ORD_FILLER.has(w) || w in ORD); })) return false;
+    return tokens(text).length >= 2 && [sp.lastText, ...(sp.recentText ?? [])].some((s) => s && isEcho(text, s));
+  }
+
   /** The command part of what was heard, or null if it wasn't for Dixi. Wake word alone → listen next. */
   addressed(text) {
     if (!this.requireWakeWord) return text;
     const rest = afterWakeWord(text);
     if (rest != null) {
       this.isAwake = true;
-      this.awakeUntil = Date.now() + this.followUpMS;
+      // "Dixi." on its own: the next words are for Dixi. With a command after it, nothing stays open.
+      if (!rest.trim()) this.awakeUntil = Date.now() + this.followUpMS;
       return rest;
     }
-    if (Date.now() < this.awakeUntil) return text;
+    // Only "Dixi" (or ⌥Space) wakes it, and the answer to a question it just asked you.
+    if (this.clarify || Date.now() < this.awakeUntil) return text;
     return null;
   }
 
   handleTurn(json) {
     const text = (json.transcript ?? '').trim();
     const turn = json.turn_index ?? 0;
+    // Which turns began while Dixi was still talking: a yes to "Press Send?" must start after the question.
+    if (!this.bornTalking.has(turn)) { if (this.bornTalking.size > 50) this.bornTalking.clear(); this.bornTalking.set(turn, Boolean(this.speaker?.isBusy?.())); }
     // While Dixi talks the mic also hears Dixi: ignore it, unless you barge in ("stop", or the wake word).
     if (this.speaker?.isBusy?.()) {
       if (STOP.test(text)) { this.speaker.stop(); this.cancelAll(); return; }
-      // Dixi's own words coming back through the mic: ignore. Anything else is you talking over it.
-      if (afterWakeWord(text) == null && isEcho(text, this.speaker.lastText ?? '')) return;
+      if (this.confirmQ) return;   // a yes over the question (a TV, its echo) never counts; let it finish
+      // Dixi's own words coming back through the mic (this line, or the last few heard late): ignore. So
+      // is one stray word (a TV, the tail of its own sentence) unless Dixi asked a question. Anything
+      // else is you talking over it.
+      const named = afterWakeWord(text) != null;
+      if (!named && (!this.clarify && tokens(text).length < 2)) return;
+      // (Its own lines can contain "Dixi": "…, Dixi needs permission". Still its own words.)
+      if ([this.speaker.lastText, ...(this.speaker.recentText ?? [])].some((s) => isEcho(text, s ?? ''))) return;
       this.speaker.stop();
     }
+    // ...and after it stops: speech-to-text can deliver Dixi's own words seconds late. Words that repeat
+    // what Dixi said in the last 20 s are Dixi, not you, even with "Dixi" in them. "Stop" always wins.
+    if (text && !STOP.test((afterWakeWord(text) ?? text).trim()) && this.heardSelf(text)) { if (json.event === 'EndOfTurn') this.turnsDone.add(turn); return; }
     if (json.event === 'StartOfTurn') { this.refreshAffordances(); return; }
     if (json.event === 'TurnResumed') return;
     if (!text || this.turnsDone.has(turn)) return;
     this.lastTurn = turn;
     // Mostly another language (people talking nearby; Dixi listens for English): not for Dixi.
     if ((text.match(/[^\u0000-\u024f\s\d\p{P}\p{S}]/gu) ?? []).length > text.replace(/\s/g, '').length * 0.3) return;
+    const final = json.event === 'EndOfTurn';
+    if (this.dictation && this.dictate(text, turn, final)) return;
     const cmd = this.addressed(text);
     this.set({ liveTranscript: text, isAwake: cmd != null });
-    const final = json.event === 'EndOfTurn';
     if (cmd == null) { if (final) this.turnsDone.add(turn); return; }
-    if (STOP.test(cmd.trim())) { this.cancelAll(); this.carry = null; this.turnsDone.add(turn); return; }
+    // (A "stop" still being said keeps the turn open, so "stop and listen" can follow.)
+    if (STOP.test(cmd.trim())) { this.cancelAll(); this.carry = null; if (final || !/^stop[.!]?$/i.test(cmd.trim())) this.turnsDone.add(turn); return; }
+    if (!this.clarify && PROTEST.test(cmd.trim())) { this.cancelAll(); this.everywhere?.stop(); this.carry = null; if (final) this.turnsDone.add(turn); return; }
+    if (DICTATE.test(cmd.trim())) {
+      if (final) { this.turnsDone.add(turn); this.dictation = { parts: [], at: Date.now(), type: TYPE_IT.test(cmd.trim()) }; this.dictate(cmd.trim().replace(DICTATE, ''), turn, true, { first: true }); }
+      return;
+    }
     // Finishing the sentence the last turn left hanging (within a few seconds).
     const carried = this.carry && Date.now() - this.carry.at < 6000 && !this.clarify ? this.carry.text : '';
     const command = carried ? `${carried} ${cmd.trim()}` : cmd.trim();
@@ -217,8 +263,21 @@ export class VoiceAgent {
     if (this.clarify) {   // answering a question Dixi asked: wait for the whole answer
       // ...said after the question: the end of the sentence that asked for it ("I want an iPad.", its
       // final words arriving after a hard-coded line already asked "Which iPad?") is not the answer.
-      if (turn === this.clarify.turn) { if (final) this.turnsDone.add(turn); return; }
-      if (final || json.event === 'EagerEndOfTurn') { this.turnsDone.add(turn); this.handleText(command); }
+      if (turn === this.clarify.turn || (this.confirmQ && this.bornTalking.get(turn))) { if (final) this.turnsDone.add(turn); return; }
+      // A yes to "Press Send?" without "Dixi" counts only right after the question (8 s); later anyone in
+      // the room could answer it, so then it takes "Dixi, yes" or the card's button.
+      const named = afterWakeWord(text) != null;
+      if (this.confirmQ && !named && Date.now() - (this.speaker?.spans?.at(-1)?.end ?? 0) > 8000) { if (final) this.turnsDone.add(turn); return; }
+      if (final || json.event === 'EagerEndOfTurn') { this.turnsDone.add(turn); this.handleText(command, { named }); }
+      return;
+    }
+    // Dixi Everywhere: about the app in front (or just after ⌥Space) is answered on the whole Mac.
+    if (command && (this.everywhereTurn === turn || this.everywhere?.wants(command))) {
+      this.everywhereTurn = turn;
+      const st = this.turns.get(turn);
+      if (st) { clearTimeout(st.timer); clearTimeout(st.specTimer); this.turns.delete(turn); }
+      this.everywhere.transcript(command);
+      if (final) { this.turnsDone.add(turn); this.awakeUntil = 0; this.everywhere.run(command); }
       return;
     }
     if (command) {
@@ -226,6 +285,49 @@ export class VoiceAgent {
       this.progress(turn, command, final || json.event === 'EagerEndOfTurn');
     }
     if (final) { clearTimeout(this.turns.get(turn)?.timer); this.turnsDone.add(turn); this.turns.delete(turn); }
+  }
+
+  /**
+   * "Stop and listen" mode: every sentence is kept, nothing is done, until "go" / "that's it" (sent) or
+   * "stop" (dropped). Returns false when the mode has gone stale (2 minutes of silence): heard as usual.
+   */
+  dictate(text, turn, final, { first = false } = {}) {
+    const d = this.dictation;
+    if (!first && Date.now() - d.at > 120000) { this.dictation = null; return false; }
+    const said = (afterWakeWord(text) ?? text).trim();
+    const sofar = [...d.parts, said].join(' ').trim();
+    if (!final) { this.set({ liveTranscript: sofar, isAwake: true, statusLine: 'Listening. Say “go” when you’re done.' }); this.everywhere?.transcript(sofar); return true; }
+    this.turnsDone.add(turn);
+    if (STOP.test(said)) { this.dictation = null; this.cancelAll(); return true; }
+    const end = said.match(DICTATED);
+    const body = (end ? said.slice(0, end.index) : said).trim();
+    if (body) d.parts.push(body);
+    d.at = Date.now();
+    this.awakeUntil = Date.now() + 120000;
+    if (!end) {
+      this.set({ liveTranscript: d.parts.join(' '), isAwake: true, statusLine: 'Listening. Say “go” when you’re done.' });
+      if (first) this.say(d.type ? 'Go ahead, I’ll type what you say. Say “go” when you’re done.' : 'I’m listening. Take your time, and say “go” when you’re done.');
+      return true;
+    }
+    this.dictation = null;
+    const all = d.parts.join(' ');
+    this.set({ liveTranscript: all, statusLine: '' });
+    if (!all) return true;
+    this.awakeUntil = 0;
+    if (d.type) { if (this.everywhere) this.everywhere.run(all, 'type'); else this.say('Typing into other apps needs Dixi for Mac.'); return true; }
+    this.sendDictated(all);
+    return true;
+  }
+  /** A long request can go to your own Claude Code agents: asked, never assumed. */
+  async sendDictated(all) {
+    const ew = this.everywhere;
+    if (ew && !HIVE.test(all) && tokens(all).length >= 25) {
+      const a = await this.ask('That’s a big one. Should your Claude team take it?', ['yes', 'no']);
+      if (a === 'yes') return ew.run(all, 'hive');
+      if (a !== 'no') return;   // no answer, or something else said instead (that's handled as its own request)
+    }
+    if (ew?.wants(all)) ew.run(all);
+    else this.handleText(all);
   }
 
   /**
@@ -361,8 +463,8 @@ export class VoiceAgent {
    * A finished command (or clause), spoken or typed. Understanding starts at once (in parallel with
    * anything still running); the doing waits its turn in the queue, so clauses happen in spoken order.
    */
-  handleText(text, { entry = null, turn = null } = {}) {
-    if (this.clarify) { this.answerClarify(text); return Promise.resolve(); }
+  handleText(text, { entry = null, turn = null, named = true } = {}) {
+    if (this.clarify) { this.answerClarify(text, named); return Promise.resolve(); }
     if (STOP.test(text)) { this.cancelAll(); return Promise.resolve(); }
     const gen = this.generation;
     const signal = this.ctrl.signal;
@@ -386,7 +488,6 @@ export class VoiceAgent {
       if (entry) entry.fps = steps.map(fp);
       if (!steps.length) return;
       if (steps.some((s) => s.act === 'stop')) { this.cancelAll(); return; }
-      this.awakeUntil = Date.now() + this.followUpMS;
       if (!this.plan.some((p) => p.state === 'running' || p.state === 'queued')) this.plan = [];
       const items = steps.map((s) => ({ said: text, label: describe(s), state: 'queued', step: s }));
       this.plan.push(...items);
@@ -421,13 +522,12 @@ export class VoiceAgent {
   say(text) { this.speaker?.say(text); }
 
   /** A short spoken question; the next thing said answers it (or null after 25 s / cancel). */
-  ask(question, options = []) {
+  ask(question, options = [], { raw = false } = {}) {
     this.clarify?.resolve(null);
     return new Promise((resolve) => {
       const timer = setTimeout(() => { if (this.clarify?.resolve === done) { this.clarify = null; this.onChange(); } resolve(null); }, 25000);
       const done = (v) => { clearTimeout(timer); resolve(v); };
-      this.clarify = { question, options, resolve: done, turn: this.lastTurn };
-      this.awakeUntil = Date.now() + 25000;
+      this.clarify = { question, options, resolve: done, turn: this.lastTurn, raw };   // (open: its answer needs no "Dixi")
       this.set({ statusLine: question });
       this.say(question);
     });
@@ -439,9 +539,10 @@ export class VoiceAgent {
     this.onChange();
     return a === 'yes';
   }
-  answerClarify(text) {
+  answerClarify(text, named = true) {
     const c = this.clarify;
     this.clarify = null;
+    if (c.raw) { this.onChange(); c.resolve(text); return; }   // a question wanting words, not a pick
     const t = tokens(text);
     let pick = null;
     if (c.options[0] === 'yes') pick = YES.test(text.trim()) ? 'yes' : NO.test(text.trim()) ? 'no' : null;
@@ -456,6 +557,9 @@ export class VoiceAgent {
       const best = Math.max(0, ...c.options.map(score));
       pick ??= c.options.find((o) => tokens(o).every((w) => t.includes(w))) ?? (best && c.options.filter((o) => score(o) === best).length === 1 ? c.options.find((o) => score(o) === best) : null);
     }
+    // Not an answer and not addressed to Dixi (the TV, someone talking): ignored, and the question stays
+    // open. Only a new request that starts with "Dixi" replaces it.
+    if (pick == null && !NO.test(text.trim()) && !named) { this.clarify = c; return; }
     this.onChange();
     c.resolve(pick);
     if (pick == null && !NO.test(text.trim())) this.handleText(text);
@@ -470,8 +574,10 @@ export class VoiceAgent {
     this.clarify = null;
     this.confirmQ = null;
     this.carry = null;
+    this.dictation = null;
     clearTimeout(this.carryTimer);
     if (this.agent?.isRunning) this.agent.stop();
+    this.everywhere?.stop();
     for (const p of this.plan) if (p.state === 'queued' || p.state === 'running') p.state = 'cancelled';
     this.plan = this.plan.filter((p) => p.state !== 'cancelled' && p.state !== 'failed');
     this.queue = Promise.resolve();

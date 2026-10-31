@@ -135,7 +135,9 @@ test('clauses split only where a new command starts', () => {
 });
 
 test('wake word by sound, at the start or after a sentence break; alone it opens a listening window', async () => {
-  assert.equal(afterWakeWord('Headaches, open Zentora'), 'open Zentora');
+  // Everyday words that share Dixi's consonants never wake it (they used to).
+  for (const t of ['Headaches, open Zentora', 'Ducks, open Zentora', 'The decks are wet', 'Docks open at nine']) assert.equal(afterWakeWord(t), null, t);
+  assert.equal(afterWakeWord('Dixie, open Zentora'), 'open Zentora');
   assert.equal(afterWakeWord('Hey Dixie open Zentora'), 'open Zentora');
   assert.equal(afterWakeWord('So anyway, yeah. Hey, Dixi. Open Zentora'), 'Open Zentora');
   assert.equal(afterWakeWord('I was telling Dixie about Zentora'), null);
@@ -144,6 +146,15 @@ test('wake word by sound, at the start or after a sentence break; alone it opens
   r.turn(2, [['Update', 'open Zentora'], ['EndOfTurn', 'Open Zentora.']]);
   await sleep(150);
   assert.equal(r.runs.length, 1, 'the command after "Hey Dixi" alone was heard');
+});
+
+test('after a command, the next words without "Dixi" are not a command', async () => {
+  const r = rig({ wake: true });
+  r.turn(1, [['Update', 'Dixi open Zentora'], ['EndOfTurn', 'Dixi, open Zentora.']]);
+  await sleep(150);
+  r.turn(2, [['Update', 'open Kestrel'], ['EndOfTurn', 'Open Kestrel.']]);
+  await sleep(150);
+  assert.equal(r.runs.length, 1, 'only the request that started with Dixi ran');
 });
 
 test('understanding starts at a short pause and is reused when the turn ends (one model call)', async () => {
@@ -214,4 +225,40 @@ test('a new command while "which one?" is open is not read as an answer ("make t
     r.v.handleText(said);
     assert.equal(await a, want, said);
   }
+});
+
+test('"stop and listen": nothing runs until "go", then it all goes as one request (to Everywhere when it wants it)', async () => {
+  const r = rig({ wake: true });
+  const sent = [];
+  r.turn(1, [['Update', 'Dixi stop'], ['Update', 'Dixi stop and listen'], ['EndOfTurn', 'Dixi, stop and listen.']]);
+  assert.ok(r.v.dictation, 'the "stop" being said did not end the turn');
+  r.turn(2, [['Update', 'open Zentora'], ['EndOfTurn', 'Open Zentora and find the history homework.']]);
+  r.turn(3, [['EndOfTurn', 'It is due Friday.']]);
+  await sleep(80);
+  assert.equal(r.runs.length, 0, 'nothing done while listening');
+  r.turn(4, [['EndOfTurn', "That's it."]]);
+  await sleep(150);
+  assert.equal(r.v.dictation, null);
+  assert.equal(r.runs.length, 1);
+  assert.match(r.llmCalls.at(-1), /Open Zentora and find the history homework\. It is due Friday\./);
+  // With Everywhere wanting it, the whole request goes there instead.
+  r.v.everywhere = { wants: () => true, transcript() {}, run: (t) => sent.push(t), stop() {} };
+  r.turn(5, [['EndOfTurn', 'Dixi, let me explain.']]);
+  r.turn(6, [['EndOfTurn', 'Reply to this email and say thanks. Go.']]);
+  assert.deepEqual(sent, ['Reply to this email and say thanks']);
+});
+
+test('talking about Dixi is not talking to Dixi; a protest stops it', async () => {
+  assert.equal(afterWakeWord('Dixi browser, just save them in a separate file'), null);
+  assert.equal(afterWakeWord('Dixi is getting activated when I never say it'), null);
+  assert.equal(afterWakeWord('So. Dixi keeps pressing the wrong area'), null);
+  assert.equal(afterWakeWord('Dixi, is it raining?'), 'is it raining?');
+  assert.equal(afterWakeWord('Hey Dixi is it raining'), 'is it raining');
+  assert.equal(afterWakeWord('Dixi open Safari'), 'open Safari');
+  const r = rig({ wake: true });
+  let stops = 0;
+  r.v.everywhere = { wants: () => true, transcript() {}, run: () => { throw new Error('a protest must never run'); }, stop: () => { stops++; } };
+  r.v.awakeUntil = Date.now() + 10000;   // as if just woken
+  r.turn(1, [['EndOfTurn', 'No. No. Not not that. Not that. Oh my god. Why did Dixi activate now?']]);
+  assert.equal(stops, 1);
 });

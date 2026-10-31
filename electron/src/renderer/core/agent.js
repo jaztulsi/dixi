@@ -132,7 +132,8 @@ export class BrowserAgent {
         if (el.sensitive) return 'refused: private field';
         const f = await this.tabs.exec(null, dxCall('typeInto', el.ref, args.text));
         if (f !== 'ok') return String(f);
-        await this.tabs.typeText(args.text, { submit: Boolean(args.submit) });
+        const g = await this.tabs.typeText(args.text, { submit: Boolean(args.submit) });
+        if (typeof g === 'string') return g;   // Enter would press something that needs your yes: typed, not sent
         await this.tabs.waitForDom(null, 3000);
         return `typed "${String(args.text).slice(0, 40)}"`;
       }

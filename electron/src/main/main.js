@@ -11,6 +11,7 @@ import { DeepgramBridge } from './deepgram.js';
 import { ElevenLabsBridge } from './stt.js';
 import { Resolver } from './resolve.js';
 import { speakable } from './speakable.js';
+import { setupEverywhere } from './everywhere.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
@@ -47,6 +48,9 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 let win = null;
 let pendingURL = null;
+let everywhere = { enabled: false };   // Dixi on the whole Mac (everywhere.js), set up once the app is ready
+let quitting = false;
+app.on('before-quit', () => { quitting = true; });
 // Speech-to-text: ElevenLabs Scribe when its key is set (or DIXI_STT=elevenlabs), else Deepgram Flux.
 // ElevenLabs out of credit or refused → Deepgram Flux, when DEEPGRAM_API_KEY is set.
 const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');
@@ -97,13 +101,18 @@ async function loadPage(url) {
 }
 let resolver = null;
 
+const dashboardFirst = process.platform === 'darwin' && !EVAL && !process.env.DIXI_FAKE_AUDIO && config.env.DIXI_EVERYWHERE !== '0' && config.env.DIXI_START !== 'browser';
 function createWindow() {
   win = new BrowserWindow({
     title: 'Dixi', width: 1400, height: 900, minWidth: 720, minHeight: 500, backgroundColor: '#ffffff',
-    webPreferences: { preload: path.join(here, '../preload/preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true },
+    // On the Mac the dashboard is the front window and this one listens out of sight (everywhere.js).
+    show: !dashboardFirst,
+    webPreferences: { preload: path.join(here, '../preload/preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true, backgroundThrottling: false },
   });
   win.loadFile(path.join(here, '../renderer/index.html'));
   win.on('closed', () => { win = null; deepgram.close(); });
+  // With Everywhere on, closing the window hides it: Dixi keeps listening from the menu bar.
+  win.on('close', (e) => { if (everywhere.keepsRunning && !quitting) { e.preventDefault(); win.hide(); } });
   win.webContents.on('did-finish-load', () => { if (pendingURL) { win.webContents.send('app:open-url', pendingURL); pendingURL = null; } });
   // The UI page never navigates away (a dropped link would otherwise get the window.dixi bridge).
   win.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -164,7 +173,8 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
-app.on('activate', () => { if (!win) createWindow(); });
+const showMain = () => { if (!win) createWindow(); else { win.show(); win.focus(); } };
+app.on('activate', () => (everywhere.showDashboard ? everywhere.showDashboard() : showMain()));
 process.on('unhandledRejection', (err) => console.error('[main] unhandled', err));
 
 // Test hook for eval/harness.js --real: the app launched normally (no automation, so sites see exactly
@@ -194,6 +204,12 @@ if (process.env.DIXI_CONTROL_PORT && process.env.DIXI_CONTROL_TOKEN) {
 const ours = (e) => Boolean(win) && e.sender === win.webContents && e.senderFrame?.url?.startsWith('file://');
 const handle = (channel, fn) => ipcMain.handle(channel, (e, ...args) => { if (!ours(e)) throw new Error('forbidden'); return fn(...args); });
 const on = (channel, fn) => ipcMain.on(channel, (e, ...args) => { if (ours(e)) fn(...args); });
+
+// Dixi Everywhere (macOS): ⌥Space, or "Dixi, …" about the app in front. Off in tests and with DIXI_EVERYWHERE=0.
+app.whenReady().then(() => {
+  if (EVAL || process.env.DIXI_FAKE_AUDIO) return;
+  everywhere = setupEverywhere({ config, spend, here, userData: app.getPath('userData'), getMainWindow: () => win, handle, on, onShowMain: showMain, webAnswer });
+});
 
 handle('config:get', async () => {
   await Promise.race([discovered0, new Promise((r) => setTimeout(r, 4000))]);
@@ -237,6 +253,10 @@ handle('tab:exec', async (id, code, timeoutMs = 8000) => {
         blockedWorlds.add(wc.id);
       }
     }
+    // The page's own world is one the page can tamper with: never there on a page that takes payment
+    // (the address test matches pagekit's PAY_PATH; read here, where the page can't fake it).
+    const u = new URL(wc.getURL() || 'about:blank');
+    if (/check-?out|payment|billing|\/buy\/|place-?order/i.test(u.hostname + u.pathname)) throw new Error("this payment page blocks Dixi's safe mode; it's yours to finish");
     return wc.executeJavaScript(String(code), true);
   };
   return Promise.race([run(), timeout]);
@@ -254,8 +274,12 @@ export function openSearchTemplate(xml) {
 handle('tab:opensearch', async (url) => openSearchTemplate((await fetchPage(String(url)).catch(() => null))?.html ?? ''));
 // Spoken replies in an ElevenLabs voice (key stays here). DIXI_VOICE = voice id, DIXI_TTS_MODEL = model.
 // Returns mp3 bytes, or null (the renderer then falls back to the system voice).
+// Without ElevenLabs (no key, over the cap, out of credit) the Mac's own voice is rendered here and played
+// like any other audio, so the microphone's echo canceller removes it (speechSynthesis plays outside Chrome).
+let ttsPausedUntil = 0;
+const localSpeech = (text) => import('./localvoice.js').then((m) => m.localVoice(speakable(String(text).slice(0, 400)))).catch(() => null);
 handle('tts:speak', async (text) => {
-  if (!config.keys.elevenlabs || spend.over) return null;
+  if (!config.keys.elevenlabs || spend.over || Date.now() < ttsPausedUntil) return localSpeech(text);
   // Matilda (knowledgeable, upbeat; the user's pick). Others that sound good: Jessica cgSgspJ2msm6clMCkdW9, Bella hpp4J3VqNfWAUOO0d1Us.
   const voice = config.env.DIXI_VOICE || 'XrExE9yKIg1WjnnlVkGX';
   try {
@@ -266,13 +290,18 @@ handle('tts:speak', async (text) => {
       // unhurried pace; numbers written out first (speakable), which every model then says right.
       body: JSON.stringify({ text: speakable(String(text).slice(0, 400)), model_id: config.env.DIXI_TTS_MODEL || 'eleven_turbo_v2_5', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 0.95 } }),
     });
-    if (!res.ok) { console.warn('[tts]', res.status, (await res.text()).slice(0, 160)); return null; }
+    if (!res.ok) {
+      const why = (await res.text()).slice(0, 160);
+      console.warn('[tts]', res.status, why);
+      if (/quota|credit|payment|limit/i.test(why)) ttsPausedUntil = Date.now() + 600000;   // don't wait on it for every line
+      return localSpeech(text);
+    }
     return new Uint8Array(await res.arrayBuffer());
-  } catch (err) { console.warn('[tts]', err.message); return null; }
+  } catch (err) { console.warn('[tts]', err.message); return localSpeech(text); }
 });
 // A spoken answer about something recent ("latest Apple products"): Claude with one web search.
 // About $0.01 per search plus tokens, counted against the Anthropic cap. DIXI_WEB_MODEL to change.
-handle('answer:web', async (question) => {
+async function webAnswer(question) {
   if (!config.keys.anthropic || spend.overFor('anthropic')) return null;
   const model = config.env.DIXI_WEB_MODEL || 'claude-haiku-5-5';
   const ws = config.env.ANTHROPIC_WORKSPACE_ID;
@@ -296,7 +325,8 @@ handle('answer:web', async (question) => {
     const after = blocks.slice(blocks.findLastIndex((c) => c.type === 'web_search_tool_result') + 1);
     return after.filter((c) => c.type === 'text').map((c) => c.text).join('').replace(/\s+/g, ' ').trim() || null;
   } catch (err) { console.warn('[web answer]', err.message); return null; }
-});
+}
+handle('answer:web', webAnswer);
 // A site's search URL read from its home page HTML (no rendering), so a first search can skip the home page.
 // A site's search URL read from its home page HTML (no rendering), so a first search skips the home
 // page: its OpenSearch link, else its own GET search form. One lookup per site (also while you talk).

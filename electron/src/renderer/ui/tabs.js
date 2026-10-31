@@ -169,7 +169,7 @@ export class TabManager {
     if (!t?.ready) return;
     t.webview.focus();
     await t.webview.insertText(text);
-    if (submit) await this.key('Return', tabId);
+    if (submit) return this.key('Return', tabId);
   }
   /** A real (trusted) mouse click at page coordinates, for controls that ignore script clicks. */
   async clickAt({ x, y }, tabId) {
@@ -182,9 +182,15 @@ export class TabManager {
     t.webview.sendInputEvent({ type: 'mouseUp', ...p });
     await sleep(30);
   }
+  /** A real key press. Enter presses whatever the focused field's form would submit, so it passes the gate first
+   * (returns "confirm: …" instead of pressing); if the page can't be asked, Enter isn't pressed. */
   async key(keyCode, tabId) {
     const t = this.tab(tabId);
     if (!t?.ready) return;
+    if (keyCode === 'Return') {
+      const g = await this.exec(t.id, dxCall('enterGate'), 2000);
+      if (g !== null) return typeof g === 'string' && g.startsWith('confirm') ? g : 'refused: could not check what Enter would press';
+    }
     t.webview.sendInputEvent({ type: 'keyDown', keyCode });
     if (keyCode === 'Return') t.webview.sendInputEvent({ type: 'char', keyCode: '\r' });
     t.webview.sendInputEvent({ type: 'keyUp', keyCode });

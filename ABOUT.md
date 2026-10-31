@@ -167,3 +167,7 @@ Dixi is currently in beta. Here's where we're taking it next:
 - **See you, not just hear you.** With your permission, the camera lets Dixi notice where you're looking and what you're pointing at, so "open that one" just works. It can also tell when you've stepped away.
 - **Take on bigger goals.** Go from single steps to whole tasks: "plan a weekend trip under $500 and show me the options side by side." Dixi will handle the nuance ("the cheaper one, unless it arrives after Friday") and check in with you only at the moments that matter.
 - **Learn the way you work.** Dixi will remember your favorite sites, sizes and stores, so over time you say less and it does more.
+
+---
+
+Ideas from other projects that shaped Dixi, and their licenses, are credited in [ATTRIBUTIONS.md](ATTRIBUTIONS.md). No code was copied.

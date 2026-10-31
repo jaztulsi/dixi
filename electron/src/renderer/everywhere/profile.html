@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self';">
+  <title>Your profile</title>
+  <link rel="stylesheet" href="profile.css">
+</head>
+<body>
+  <main class="glass">
+    <header>
+      <h1 id="heading">Your profile</h1>
+      <p id="intro">Dixi uses this to fill in forms for you, and reads it back to you first. It stays on this Mac. Only what you type here is used, never what Dixi hears.</p>
+    </header>
+    <form id="form" aria-labelledby="heading" aria-describedby="intro" novalidate>
+      <label for="name">Full name</label>
+      <input id="name" name="name" autocomplete="name" maxlength="120" spellcheck="false">
+
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" maxlength="120" spellcheck="false">
+
+      <label for="phone">Phone</label>
+      <input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="20">
+
+      <fieldset>
+        <legend>Address</legend>
+        <label for="street">Street</label>
+        <input id="street" name="street" autocomplete="street-address" maxlength="120">
+        <div class="row">
+          <div class="grow">
+            <label for="city">City</label>
+            <input id="city" name="city" autocomplete="address-level2" maxlength="60">
+          </div>
+          <div>
+            <label for="state">State</label>
+            <input id="state" name="state" autocomplete="address-level1" maxlength="30" class="short">
+          </div>
+        </div>
+        <label for="zip">ZIP code</label>
+        <input id="zip" name="zip" inputmode="numeric" autocomplete="postal-code" maxlength="10" class="short">
+      </fieldset>
+
+      <label for="birthday">Birthday <span class="optional">(optional)</span></label>
+      <input id="birthday" name="birthday" type="date" autocomplete="bday" class="short">
+
+      <p id="status" role="alert"></p>
+      <div class="buttons">
+        <button type="button" id="cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </main>
+  <script type="module" src="profile.js"></script>
+</body>
+</html>

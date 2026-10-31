@@ -4,10 +4,19 @@
 // media, overlays, required options, and the purchase gate: every click goes through gate(), and
 // typing into password/card/one-time-code fields is refused.
 //
-// Calls: dxCall('name', ...args) → a JS string that runs window.__dx.name(...args) in the page.
+// Calls: dxCall('name', ...args) → a JS string that runs window[DX].name(...args) in the page.
+
+// The toolkit's name in each page, new every launch: a page that runs it in its own world (strict-CSP
+// fallback) can't plant a fake toolkit under a name it knows in advance.
+export const DX = '__dx_' + crypto.getRandomValues(new Uint32Array(2)).join('');
+// Presses that can't be undone (pay, place the order, send, delete...): they need a yes. Also used by the desktop gate.
+export const IRREVERSIBLE = /\b(place (my |your |the )?order|submit (my |your |the )?order|complete (my |your |the )?(order|purchase|checkout|booking|reservation)|confirm (and pay|(my |your |the )?(order|purchase|payment|booking|reservation))|pay( now| \$| securely)?$|^pay\b|buy (it )?now|^purchase\b|1-click|send( message| email| now)?$|^send\b|delete|remove (account|permanently)|transfer( money| funds)?|start (my |your )?(free )?trial|^donate\b|donate now|^(book|reserve)( now| it)?$|(book|reserve) now|(buy|pay|check ?out|donate) with|apple pay|google pay|shop ?pay|paypal|venmo|amazon pay|realizar pedido|pagar|comprar)\b/i;
+// Options that turn a one-time buy into a repeating one (Subscribe & Save, auto-refill, "deliver every 2 weeks").
+export const RECURRING = /\b(subscri(be|ption)|auto-?(renew|ship|refill|deliver)\w*|recurring|deliver(y|ed)? every|every \d+ (weeks?|months?))\b/i;
 
 export const PAGE_LIB = String.raw`(() => {
-if (window.__dx) return;
+if (window[${JSON.stringify(DX)}]) return;
+const RECURRING = new RegExp(${JSON.stringify(RECURRING.source)}, 'i');
 const refs = new Map(); let nextRef = 1;
 // Element → its ref in O(1) (a scan of every ref ever made slowed each call down as a page was used).
 // ponytail: refs lives as long as the page; switch to WeakRef values if long single-page sessions bloat.
@@ -50,13 +59,55 @@ const CLICKABLE = 'a[href], button, input[type=submit], input[type=button], [rol
 const inChrome = (el) => Boolean(el.closest('header, nav, footer, aside, [role=navigation], [role=banner], [role=contentinfo]'));
 
 // ---- the gate: things that can't be undone need a yes; secrets are never typed ----
-const IRREVERSIBLE = /\b(place (my |your |the )?order|submit (my |your |the )?order|complete (my |your |the )?(order|purchase)|confirm (and pay|(my |your |the )?(order|purchase|payment))|pay( now| \$| securely)?$|^pay\b|buy now with 1-click|1-click|send( message| email| now)?$|^send\b|delete|remove (account|permanently)|transfer( money| funds)?|realizar pedido|pagar)\b/i;
-const SENSITIVE = (el) => el && (el.type === 'password' || /^cc-|one-time-code/.test(el.getAttribute('autocomplete') || '')
-  || /card.?number|cvv|cvc|security.?code|\botp\b|verification.?code|passcode/i.test([el.name, el.id, el.getAttribute('aria-label'), el.placeholder].join(' ')));
+// Every way of pressing something goes through gate(): clicks, Enter (enterGate) and form submits (submitGate).
+const IRREVERSIBLE = new RegExp(${JSON.stringify(IRREVERSIBLE.source)}, 'i');
+const hints = (el) => [el.name, el.id, el.getAttribute('aria-label'), el.placeholder].join(' ');
+const CARD = (el) => /^cc-/.test(el.getAttribute('autocomplete') || '') || /card.?number|cvv|cvc|security.?code/i.test(hints(el));
+const SENSITIVE = (el) => el && (el.type === 'password' || CARD(el) || /one-time-code/.test(el.getAttribute('autocomplete') || '')
+  || /\botp\b|verification.?code|passcode/i.test(hints(el)));
+// A page that takes payment: its address says so, or it has a card field.
+// ponytail: card fields inside a payment provider's cross-origin frame can't be seen; the address check covers those checkouts.
+const PAY_PATH = /check-?out|payment|billing|\/buy\/|place-?order/i;
+const paying = () => PAY_PATH.test(location.hostname + location.pathname) || all('input').some(CARD);
+const SUBMITS = 'button:not([type]), button[type=submit], input[type=submit], input[type=image]';
+// A price on a button that buys ("Rent HD $3.99", "Join for $4.99/mo"). Adding to the cart isn't buying.
+const PRICED_BUY = (el, n) => el.matches('button, input[type=submit], input[type=button], [role=button]') && /[$€£₹]\s?\d/.test(n) && /\b(buy|rent|pay|order|subscribe|join|upgrade|renew|purchase|donate)\b/i.test(n) && !/\badd\b/i.test(n);
 function gate(el, force) {
+  if (force) return null;
   const n = name(el);
-  if (!force && IRREVERSIBLE.test(n)) return 'confirm: ' + n.slice(0, 60);
+  if (IRREVERSIBLE.test(n) || RECURRING.test(n) || PRICED_BUY(el, n)) return 'confirm: ' + n.slice(0, 60);
+  // On a payment page, a control with no name or one that submits a form could be the one that pays: ask.
+  // ("Order now" starts a restaurant order elsewhere, so it asks only here.)
+  if ((!n || (el.form && el.matches(SUBMITS)) || /\border now\b/i.test(n)) && paying()) return 'confirm: ' + (n || 'the unlabeled button on this payment page').slice(0, 60);
   return null;
+}
+// Choosing an option never starts a subscription by itself: a repeating one needs your yes, like a buy button.
+const repeats = (label) => (RECURRING.test(label || '') ? 'confirm: ' + clean(label).slice(0, 60) : null);
+/** What submitting this field's form would press (Enter, requestSubmit), through the same gate. */
+function submitGate(el) {
+  const form = el && (el.form || el.closest('form'));
+  if (!form) return paying() ? 'confirm: Enter on this payment page' : null;
+  const btn = [...form.elements].find((x) => x.matches(SUBMITS)) || form.querySelector('input[type=image]');
+  return btn ? gate(btn) : paying() ? 'confirm: sending this payment form' : null;
+}
+/** The field or control that has focus, inside open shadow roots and same-origin frames too. */
+function focused() {
+  let a = document.activeElement;
+  for (;;) {
+    let inner = a?.shadowRoot?.activeElement;
+    if (!inner && a?.tagName === 'IFRAME') { try { inner = a.contentDocument?.activeElement; } catch {} }
+    if (!inner || inner === a) return a;
+    a = inner;
+  }
+}
+/** Before a real Enter: what it would press. null = nothing that needs a yes. */
+function enterGate() {
+  const el = focused();
+  if (!el || el.tagName === 'TEXTAREA' || el.tagName === 'BODY') return null;
+  // Focus inside another site's frame (a card form, a payment button): what Enter does there can't be seen.
+  if (el.tagName === 'IFRAME') return "confirm: Enter inside a part of the page Dixi can't read";
+  if (el.tagName === 'INPUT') return submitGate(el);
+  return el.matches(CLICKABLE) ? gate(el) : null;
 }
 function click(el, force) {
   const g = gate(el, force);
@@ -74,7 +125,8 @@ function dismissOverlays() {
     if (!visible(el)) continue;
     const r = rect(el);
     const covers = r.width > innerWidth * 0.5 || r.height > innerHeight * 0.3 || getComputedStyle(el).position === 'fixed';
-    if (!covers) continue;
+    // A box that names a price is an offer ("Add protection for $4.99?"), not a banner: its "Continue" could buy.
+    if (!covers || /[$€£₹]\s?\d/.test(el.innerText)) continue;
     const b = [...el.querySelectorAll(CLICKABLE)].find((x) => visible(x) && ACCEPT.test(name(x)));
     if (b) { b.click(); n++; }
   }
@@ -130,16 +182,16 @@ function submitSearch(k) {
   const el = get(k);
   const form = el && el.closest('form');
   const btn = form && [...form.querySelectorAll('button, input[type=submit]')].find(visible);
-  if (btn) { btn.click(); return 'clicked'; }
-  if (form) { form.requestSubmit ? form.requestSubmit() : form.submit(); return 'submitted'; }
+  if (btn) return gate(btn) || (btn.click(), 'clicked');
+  if (form) return submitGate(el) || ((form.requestSubmit ? form.requestSubmit() : form.submit()), 'submitted');
   const near = el && [...(el.parentElement?.querySelectorAll('button, [role=button]') || [])].find(visible);
-  if (near) { near.click(); return 'clicked'; }
+  if (near) return gate(near) || (near.click(), 'clicked');
   return 'none';
 }
 /** The URL a native GET submit of this box's form would load (for pages whose script swallows Enter and the button). */
 function formURL(k) {
   const el = get(k), form = el && el.closest('form');
-  if (!form || (form.getAttribute('method') || 'get').toLowerCase() !== 'get' || !el.name) return null;
+  if (!form || (form.getAttribute('method') || 'get').toLowerCase() !== 'get' || !el.name || submitGate(el)) return null;
   const u = new URL(form.getAttribute('action') || location.href, location.href);
   if (!/^https?:$/.test(u.protocol)) return null;
   u.search = new URLSearchParams(new FormData(form)).toString();
@@ -323,7 +375,8 @@ function reveal(re) {
       // The section's own header: an expandable control or an option radio just before / around it.
       const header = [p.previousElementSibling, p.parentElement?.querySelector(':scope > [aria-expanded="false"], :scope > * > [aria-expanded="false"]')].filter(Boolean)
         .map((h) => (h.matches('[aria-expanded="false"], input[type=radio], [role=radio]') ? h : h.querySelector('[aria-expanded="false"], input[type=radio], [role=radio], a, [role=button]'))).find((h) => h && visible(h.closest('label') || h));
-      if (header) { (header.closest('label') || header).click(); return 'opened: ' + name(header).slice(0, 40); }
+      // A section whose header is a repeating option (Subscribe & Save) is never opened: that would choose it.
+      if (header && !repeats(name(header.closest('label') || header))) { (header.closest('label') || header).click(); return 'opened: ' + name(header).slice(0, 40); }
     }
   }
   return 'none';
@@ -410,12 +463,14 @@ function choose(group, value) {
     if (el.tagName === 'SELECT') {
       const o = [...el.options].find((x) => x.value && (!value || clean(x.text).toLowerCase() === value.toLowerCase()));
       if (!o) return 'none';
+      if (repeats(o.text)) return repeats(o.text);
       el.value = o.value; el.dispatchEvent(new Event('change', { bubbles: true })); return 'ok';
     }
     const labelOf = (x) => clean(x.closest('label')?.innerText || (x.id && x.ownerDocument.querySelector('label[for="' + CSS.escape(x.id) + '"]')?.innerText) || name(x) || x.value).split('\n')[0].slice(0, 60).toLowerCase();
     const r = [...el.querySelectorAll('input[type=radio], [role=radio]')].find((x) => !value || labelOf(x) === value.toLowerCase());
     if (!r) return 'none';
     if (r.disabled || r.getAttribute('aria-disabled') === 'true') return 'disabled';
+    if (repeats(labelOf(r))) return repeats(labelOf(r));
     (r.closest('label') || r).click();
     if (r.type === 'radio' && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
     return 'ok';
@@ -424,6 +479,7 @@ function choose(group, value) {
     const labelOf = (x) => (clean(x.closest('label')?.innerText || (x.id && x.ownerDocument.querySelector('label[for="' + CSS.escape(x.id) + '"]')?.innerText) || name(x) || x.value).split('\n')[0].slice(0, 60) || x.value).toLowerCase();
     const r = all('input[type=radio]').find((x) => x.name === group.slice(6) && (!value || labelOf(x) === value.toLowerCase()));
     if (!r) return 'none';
+    if (repeats(labelOf(r))) return repeats(labelOf(r));
     (r.closest('label') || (r.id && r.ownerDocument.querySelector('label[for="' + CSS.escape(r.id) + '"]')) || r).click();
     if (!r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
     return 'ok';
@@ -433,11 +489,13 @@ function choose(group, value) {
     if (label !== group) continue;
     const labelOf = (x) => clean(x.closest('label')?.innerText || (x.id && x.ownerDocument.querySelector('label[for="' + CSS.escape(x.id) + '"]')?.innerText) || name(x) || x.value).split('\n')[0].slice(0, 60).toLowerCase();
     const r = [...fs.querySelectorAll('input[type=radio], [role=radio]')].find((x) => !value || labelOf(x) === value.toLowerCase());
+    if (r && repeats(labelOf(r))) return repeats(labelOf(r));
     if (r) { (r.closest('label') || r).click(); if (r.type === 'radio' && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } return 'ok'; }
   }
   for (const s of all('select')) {
     if (name(s) !== group) continue;
     const o = [...s.options].find((x) => x.value && (!value || clean(x.text).toLowerCase() === value.toLowerCase()));
+    if (o && repeats(o.text)) return repeats(o.text);
     if (o) { s.value = o.value; s.dispatchEvent(new Event('change', { bubbles: true })); return 'ok'; }
   }
   return 'none';
@@ -568,9 +626,9 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window.__dx = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
-  media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)) };
+window[${JSON.stringify(DX)}] = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
+  media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)), enterGate };
 })();`;
 
-/** JS that runs window.__dx[fn](...args) in the page, injecting the toolkit first if this page lacks it. */
-export const dxCall = (fn, ...args) => `${PAGE_LIB}\nwindow.__dx.${fn}(${args.map((a) => (a instanceof RegExp ? a.toString() : JSON.stringify(a))).join(', ')})`;
+/** JS that runs window[DX][fn](...args) in the page, injecting the toolkit first if this page lacks it. */
+export const dxCall = (fn, ...args) => `${PAGE_LIB}\nwindow[${JSON.stringify(DX)}].${fn}(${args.map((a) => (a instanceof RegExp ? a.toString() : JSON.stringify(a))).join(', ')})`;

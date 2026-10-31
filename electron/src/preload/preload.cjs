@@ -37,4 +37,23 @@ contextBridge.exposeInMainWorld('dixi', {
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   onOpenURL: (fn) => ipcRenderer.on('app:open-url', (_e, url) => fn(url)),
   onPopup: (fn) => ipcRenderer.on('tab:popup', (_e, url) => fn(url)),
+  // Dixi Everywhere: the whole Mac (main/everywhere.js). enabled() rejects when it's off.
+  everywhere: {
+    enabled: () => ipcRenderer.invoke('everywhere:enabled'),
+    run: (text, mode) => ipcRenderer.invoke('everywhere:run', text, mode),
+    speaking: (on) => ipcRenderer.send('everywhere:speaking', on),
+    transcript: (text) => ipcRenderer.send('everywhere:transcript', text),
+    stop: () => ipcRenderer.send('everywhere:stop'),
+    confirmReply: (id, ok) => ipcRenderer.send('everywhere:confirm-reply', id, ok),
+    onListen: (fn) => ipcRenderer.on('everywhere:listen', () => fn()),
+    onDisarm: (fn) => ipcRenderer.on('everywhere:disarm', () => fn()),
+    onSay: (fn) => ipcRenderer.on('everywhere:say', (_e, text) => fn(text)),
+    onConfirm: (fn) => ipcRenderer.on('everywhere:confirm', (_e, c) => fn(c)),
+    onConfirmDone: (fn) => ipcRenderer.on('everywhere:confirm-done', (_e, id) => fn(id)),
+    onMic: (fn) => ipcRenderer.on('everywhere:mic', (_e, on) => fn(on)),
+    onKill: (fn) => ipcRenderer.on('everywhere:kill', () => fn()),
+    onAsk: (fn) => ipcRenderer.on('everywhere:ask', (_e, q) => fn(q)),
+    onCommands: (fn) => ipcRenderer.on('everywhere:commands', (_e, list) => fn(list)),
+    answer: (id, text) => ipcRenderer.send('everywhere:answer', id, text),
+  },
 });

@@ -4,7 +4,7 @@
 // Every step is checked after it runs (did we land on the named site? did the search go through?).
 
 import { askPage } from './pageQA.js';
-import { dxCall } from '../ui/pagekit.js';
+import { DX, RECURRING, dxCall } from '../ui/pagekit.js';
 import { normName, tokens } from './interpret.js';
 import { productPage } from './demo.js';
 
@@ -512,7 +512,7 @@ export class Executor {
       if (!g && (await this.tabs.dx('findButton', ADD, { links: false }))) break;
       g ??= list.find((o) => !o.chosen);
       if (g) {
-        const value = saidValue(g) ?? g.values.find((v) => /^(no|none|without|skip|not now)\b|^no[A-Z]|\b(later|unlocked)\b/i.test(v)) ?? g.values[0] ?? '';
+        const value = saidValue(g) ?? g.values.find((v) => /^(no|none|without|skip|not now)\b|^no[A-Z]|\b(later|unlocked)\b/i.test(v)) ?? g.values.find((v) => !RECURRING.test(v)) ?? '';
         tries.set(g.id ?? g.name, (tries.get(g.id ?? g.name) ?? 0) + 1);
         this.mark(`chose ${g.name.slice(0, 20)} = ${value.slice(0, 24)}`);
         // A real mouse click on the answer (stores' page code ignores script clicks on some questions);
@@ -630,7 +630,7 @@ export class Executor {
     let after = await this.waitFor(probe, (p) => changed(p) || p.moved, 2500);
     // Still working on it (the button went away or turned off: a slow store, Apple's iPhones take ~3-4 s):
     // wait for it, never a second press, which could add it twice.
-    const pressable = async () => (await this.tabs.exec(null, `(() => { const b = window.__dx?.get(${Number(add.ref)}); return Boolean(b && b.isConnected && !b.disabled && b.getAttribute('aria-disabled') !== 'true' && b.offsetWidth); })()`)) === true;
+    const pressable = async () => (await this.tabs.exec(null, `(() => { const b = window[${JSON.stringify(DX)}]?.get(${Number(add.ref)}); return Boolean(b && b.isConnected && !b.disabled && b.getAttribute('aria-disabled') !== 'true' && b.offsetWidth); })()`)) === true;
     if (!changed(after) && !after.moved && !(await pressable())) after = await this.waitFor(probe, (p) => changed(p) || p.moved, 6000);
     if (!changed(after) && after.moved) {
       // The store moved on (an accessories page, say) without proof on it: its header count can lag

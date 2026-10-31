@@ -1,0 +1,68 @@
+/* Your profile: the same liquid glass as the overlay (overlay.css), as a window. macOS vibrancy blurs what's
+   behind it; this adds the tint, the rim and the light on the top edge. Large type, big targets. */
+:root {
+  --ink: #fff;
+  --ink-2: rgba(255, 255, 255, 0.78);
+  --tint: rgba(18, 18, 26, 0.42);
+  --rim: rgba(255, 255, 255, 0.38);
+  --glow: 99, 179, 255;
+  --warn: 255, 170, 90;
+  color-scheme: dark;   /* the date picker and its icon match */
+  font: 500 18px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  color: var(--ink);
+}
+html, body { margin: 0; min-height: 100%; background: transparent; -webkit-font-smoothing: antialiased; }
+body { padding: 38px 16px 16px; box-sizing: border-box; }   /* room for the traffic lights */
+
+.glass {
+  position: relative; border-radius: 30px; padding: 22px 24px 24px; isolation: isolate;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04) 30%, rgba(255, 255, 255, 0) 55%), var(--tint);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 0 0 1px var(--rim);
+}
+header { -webkit-app-region: drag; }   /* drag the window by its heading */
+h1 { margin: 0 0 6px; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+#intro { margin: 0 0 18px; color: var(--ink-2); text-wrap: pretty; }
+
+form { display: grid; gap: 6px; }
+label, legend { font-weight: 650; margin-top: 10px; }
+.optional { font-weight: 500; color: var(--ink-2); }
+fieldset { margin: 10px 0 0; padding: 4px 16px 16px; border: 0; border-radius: 22px; display: grid; gap: 6px;
+  background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+legend { float: left; width: 100%; padding: 0; font-size: 18px; }
+.row { display: flex; gap: 12px; }
+.row > div { display: grid; gap: 6px; }
+.grow { flex: 1; min-width: 0; }
+
+input {
+  font: inherit; font-size: 20px; color: var(--ink); min-height: 52px; box-sizing: border-box; width: 100%;
+  padding: 10px 14px; border: 0; border-radius: 14px; background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+input.short { width: 11em; max-width: 100%; }
+input:focus { outline: 3px solid rgb(var(--glow)); outline-offset: 2px; }
+input[aria-invalid="true"] { box-shadow: inset 0 0 0 2px rgb(var(--warn)); }
+
+#status { margin: 12px 0 0; min-height: 1.45em; font-weight: 650; color: rgb(var(--warn)); }
+#status:empty { min-height: 0; margin: 0; }
+.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+button {
+  font: inherit; font-size: 19px; font-weight: 650; color: inherit; min-height: 56px; border: 0; border-radius: 18px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+button.primary { background: rgba(255, 255, 255, 0.92); color: #111; }
+button:hover { filter: brightness(1.1); }
+button:focus-visible { outline: 3px solid rgb(var(--glow)); outline-offset: 2px; }
+
+@media (prefers-reduced-transparency: reduce) {
+  html, body { background: rgb(28, 28, 34); }
+  .glass { background: rgb(36, 36, 44); }
+}
+@media (prefers-contrast: more) {
+  :root { --ink-2: #fff; --rim: #fff; }
+  .glass { background: rgb(20, 20, 26); }
+  input { background: #000; box-shadow: inset 0 0 0 2px #fff; }
+  button { box-shadow: inset 0 0 0 2px #fff; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 1ms !important; }
+}

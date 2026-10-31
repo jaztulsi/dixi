@@ -73,9 +73,11 @@ export const tokens = (s) => String(s ?? '').toLowerCase().replace(/[’']s\b/g,
 export const normName = (s) => tokens(s).join(' ');
 
 // ---- the wake word ("Dixi"), matched by sound: speech recognition writes it many ways ----
-// Consonant skeleton: "dixi", "dixie", "dicksy", even "headaches" (hey-dixie) all become "dks".
+// Consonant skeleton "dks" ending on Dixi's "ee": "dixi", "dixie", "dicksy", "heydixie". Not "ducks",
+// "decks", "docks" or "headaches": everyday words that used to wake it.
 const skeleton = (w) => w.toLowerCase().replace(/x/g, 'ks').replace(/ch|ck|c|q/g, 'k').replace(/[^a-z]/g, '').replace(/[aeiouyhw]/g, '').replace(/(.)\1+/g, '$1');
-export const isDixi = (w) => Boolean(w) && w.length <= 9 && (skeleton(w) === 'dks' || (/^he/.test(w) && skeleton(w.slice(2)) === 'dks'));
+const EE = /(i|ie|y|ee|ey|ea)$/;
+export const isDixi = (w) => Boolean(w) && w.length <= 9 && EE.test(w) && (skeleton(w) === 'dks' || (/^he/.test(w) && skeleton(w.slice(2)) === 'dks'));
 
 // ---- clauses: a new one starts at "and/then/also" (or punctuation) followed by a command verb ----
 const CLAUSE_VERB = '(?:open|go|search|find|look|play|pause|watch|add|buy|order|get|grab|show|scroll|click|tap|select|put|check|turn|mute|unmute|skip|close|zoom|take|pull|bring|launch|visit|navigate|type|increase|decrease|remove|purchase|proceed|stop|cancel|make|set|change|listen|read|tell|start|restart|rewind|sign|log|choose|pick|filter|sort|switch|reload|refresh|now)';

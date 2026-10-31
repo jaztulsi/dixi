@@ -1,0 +1,42 @@
+/* The first-run window: the overlay's glass (overlay.css) filling a small window over macOS's own blur
+   (the window is made with vibrancy), with bigger type and buttons: it's the first thing anyone sees. */
+.glass { inset: 0; width: auto; transform: none; border-radius: 0; box-shadow: none; overflow-y: auto; font-size: 16px; }
+header { padding: 22px 22px 10px; -webkit-app-region: drag; }
+header button { -webkit-app-region: no-drag; }
+h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.heading small { color: var(--ink-2); font-size: 15px; }
+.buddy { width: 64px; height: 64px; }
+.buddy .mascot { width: 54px; height: 66px; }
+
+/* the steps, each with a live checkmark */
+#list { list-style: none; margin: 8px 22px; padding: 0; display: grid; gap: 10px; }
+#list li { display: grid; grid-template-columns: 30px 1fr; gap: 14px; padding: 14px 16px; border-radius: 22px;
+  background: rgba(255, 255, 255, 0.07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); animation: rise 320ms var(--spring); }
+#list li[data-state="current"] { background: rgba(255, 255, 255, 0.13); box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.75), 0 0 26px rgba(var(--glow), 0.16); }
+#list li[data-state="later"], #list li[data-state="skipped"] { color: var(--ink-2); }
+#list b { display: block; font-size: 18px; font-weight: 650; }
+.opt { font-weight: 500; color: var(--ink-2); }
+.why { color: var(--ink-2); }
+.tick { width: 28px; height: 28px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; font-weight: 800;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.4); transition: background 300ms ease; }
+[data-state="current"] .tick { box-shadow: inset 0 0 0 3px rgb(var(--glow)); }
+[data-state="done"] .tick { background: rgb(var(--ok)); color: #0b2a17; box-shadow: none; animation: pop 420ms var(--spring); }
+[data-state="done"] .tick::before { content: "✓"; }
+[data-state="skipped"] .tick::before { content: "–"; }
+.go { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 12px; }
+.go .choice { flex: 1 1 220px; min-height: 56px; padding: 0 22px; }
+.skip { min-height: 44px; padding: 0 8px; background: none; color: var(--ink-2); font-size: 15px; text-decoration: underline; }
+.note { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
+
+/* the "try it" card */
+#try { margin: 4px 22px 22px; padding: 18px; border-radius: 22px; background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(var(--ok), 0.6), 0 0 30px rgba(var(--ok), 0.15); animation: rise 320ms var(--spring); }
+#try h2 { margin: 0 0 10px; font-size: 20px; }
+#tips { margin: 0 0 16px; padding-left: 1.2em; display: grid; gap: 8px; font-size: 17px; }
+#done { width: 100%; }
+
+html.contrast #list li, html.contrast #try { background: #000; box-shadow: inset 0 0 0 2px #fff; }
+html.contrast #list li[data-state="current"] { box-shadow: inset 0 0 0 3px rgb(var(--glow)); }
+@media (prefers-reduced-transparency: reduce) {
+  #list li, #try { background: rgb(40, 40, 48); }
+}

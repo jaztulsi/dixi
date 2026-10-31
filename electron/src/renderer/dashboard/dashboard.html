@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;">
+  <title>Dixi Dashboard</title>
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <div class="drag" aria-hidden="true"></div>
+
+  <aside class="side glass">
+    <div class="brand">
+      <span id="mascot" class="side-mascot"></span>
+      <span class="brand-name">Dixi</span>
+    </div>
+    <p id="status" class="status-pill" role="status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">Mic off</span></p>
+    <nav aria-label="Dashboard">
+      <ul id="nav">
+        <li><button data-go="home" aria-current="page"><span data-icon="home"></span>Home</button></li>
+        <li><button data-go="commands"><span data-icon="commands"></span>Commands</button></li>
+        <li><button data-go="skills"><span data-icon="skills"></span>Skills</button></li>
+        <li><button data-go="activity"><span data-icon="clock"></span>Activity</button></li>
+        <li><button data-go="settings"><span data-icon="gear"></span>Settings</button></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main id="main">
+    <div class="scroll">
+
+      <section id="home" aria-labelledby="home-h">
+        <h1 id="home-h" tabindex="-1">Home</h1>
+
+        <div class="island" id="listen-card">
+          <div class="island-top">
+            <span class="island-dot" aria-hidden="true"></span>
+            <div class="island-words">
+              <h2 id="listen-title">Dixi isn’t listening</h2>
+              <p id="listen-sub">Turn listening on, then say “Dixi” and what you need.</p>
+            </div>
+            <label class="switch-hit">
+              <span class="sr">Listening</span>
+              <input type="checkbox" role="switch" class="switch" data-pref="listening">
+            </label>
+          </div>
+          <dl id="keys" class="keys"></dl>
+        </div>
+
+        <div class="card">
+          <div class="setting">
+            <div>
+              <label for="careful-home" class="setting-name">Careful mode</label>
+              <p class="setting-desc" id="careful-home-d">Dixi checks with you before every click and every word it types.</p>
+            </div>
+            <input type="checkbox" role="switch" class="switch" id="careful-home" data-pref="careful" aria-describedby="careful-home-d">
+          </div>
+        </div>
+
+        <div id="try-wrap">
+          <h2 class="sub">Things to try</h2>
+          <div id="try"></div>
+        </div>
+
+        <h2 class="sub">Permissions</h2>
+        <p class="lede-sm">Dixi needs these to hear you, see your screen and click for you.</p>
+        <ul id="perms" class="card perm-list"></ul>
+
+        <div class="actions">
+          <button class="btn primary" data-open="browser">Open the Dixi browser</button>
+          <button class="btn" data-open="setup">Run setup again</button>
+        </div>
+      </section>
+
+      <section id="commands" aria-labelledby="commands-h" hidden>
+        <h1 id="commands-h" tabindex="-1">Commands</h1>
+        <p class="lede">Make up your own words for the things you do often.</p>
+        <p class="tip"><span data-icon="quote"></span>Say “Dixi, Claude” or “Dixi, open Claude”.</p>
+
+        <ol id="cmd-list" class="cmd-list" aria-label="Your commands"></ol>
+
+        <div id="cmd-empty" class="empty" hidden>
+          <h2>No commands yet</h2>
+          <p>Pick one to start with, or add your own.</p>
+          <div id="suggest" class="chips"></div>
+        </div>
+
+        <div class="list-foot">
+          <button id="add-cmd" class="btn primary"><span data-icon="plus"></span>Add command</button>
+          <p id="save-status" class="save-status" aria-live="polite"></p>
+          <button id="save-retry" class="btn small" hidden>Try again</button>
+        </div>
+        <datalist id="apps"></datalist>
+      </section>
+
+      <section id="skills" aria-labelledby="skills-h" hidden>
+        <h1 id="skills-h" tabindex="-1">Skills</h1>
+        <p class="lede">Things you showed Dixi once, that it can now do again on its own.</p>
+        <ul id="skill-list" class="skill-grid"></ul>
+        <div id="skill-empty" class="empty" hidden>
+          <h2>No skills yet</h2>
+          <p>Do something with Dixi once, then say “save that as a skill”.</p>
+        </div>
+      </section>
+
+      <section id="activity" aria-labelledby="activity-h" hidden>
+        <div class="head-row">
+          <h1 id="activity-h" tabindex="-1">Activity</h1>
+          <button id="refresh" class="btn"><span data-icon="refresh"></span>Refresh</button>
+        </div>
+        <p class="lede">What Dixi did for you, newest first.</p>
+        <div id="timeline"></div>
+        <div id="activity-empty" class="empty" hidden>
+          <h2>Nothing yet</h2>
+          <p>When Dixi does something for you, it shows up here.</p>
+        </div>
+      </section>
+
+      <section id="settings" aria-labelledby="settings-h" hidden>
+        <h1 id="settings-h" tabindex="-1">Settings</h1>
+
+        <h2 class="sub">Listening and safety</h2>
+        <div class="card">
+          <div class="setting">
+            <div>
+              <label for="listening-set" class="setting-name">Listen for “Dixi”</label>
+              <p class="setting-desc" id="listening-set-d">Off stops the microphone. <span id="mic-key-desc"></span></p>
+            </div>
+            <input type="checkbox" role="switch" class="switch" id="listening-set" data-pref="listening" aria-describedby="listening-set-d">
+          </div>
+          <div class="setting">
+            <div>
+              <label for="careful-set" class="setting-name">Careful mode</label>
+              <p class="setting-desc" id="careful-set-d">Dixi checks with you before every click and every word it types.</p>
+            </div>
+            <input type="checkbox" role="switch" class="switch" id="careful-set" data-pref="careful" aria-describedby="careful-set-d">
+          </div>
+        </div>
+
+        <h2 class="sub">Look and sound</h2>
+        <div class="card">
+          <div class="setting">
+            <div>
+              <label for="large-set" class="setting-name">Large text</label>
+              <p class="setting-desc" id="large-set-d">Bigger words in Dixi’s panel and this window.</p>
+            </div>
+            <input type="checkbox" role="switch" class="switch" id="large-set" data-pref="large" aria-describedby="large-set-d">
+          </div>
+          <div class="setting">
+            <div>
+              <label for="contrast-set" class="setting-name">High contrast</label>
+              <p class="setting-desc" id="contrast-set-d">Solid backgrounds and darker outlines, easier to read.</p>
+            </div>
+            <input type="checkbox" role="switch" class="switch" id="contrast-set" data-pref="contrast" aria-describedby="contrast-set-d">
+          </div>
+          <div class="setting">
+            <div>
+              <label for="sounds-set" class="setting-name">Sounds</label>
+              <p class="setting-desc" id="sounds-set-d">A soft sound when Dixi starts listening and when it’s done.</p>
+            </div>
+            <input type="checkbox" role="switch" class="switch" id="sounds-set" data-pref="sounds" aria-describedby="sounds-set-d">
+          </div>
+        </div>
+
+        <h2 class="sub">More</h2>
+        <div class="actions">
+          <button class="btn" data-open="profile">My profile (for forms)</button>
+          <button class="btn" data-open="tasks">Open the Dixi Tasks folder</button>
+          <button class="btn" data-open="setup">Run setup again</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- kept in the page (only faded out) so screen readers hear each new line -->
+  <div id="toast" class="toast-island" role="status" aria-live="polite">
+    <span id="toast-mascot" class="toast-mascot"></span>
+    <p id="toast-text"></p>
+  </div>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>
