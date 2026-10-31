@@ -1,5 +1,7 @@
 // End-to-end: launches the real app. Live Groq + Deepgram calls (keys from .env), real websites.
 import { test, expect, _electron as electron } from '@playwright/test';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,9 +9,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const fixture = (name) => path.join(root, 'test/e2e/fixtures', name);
 
 async function launch(env = {}) {
-  const e = { ...process.env, ...env };
+  // Its own throwaway profile, and no Everywhere: the founder's Dixi holds the single-instance lock and ⌥Space.
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-e2e-'));
+  const e = { ...process.env, DIXI_USER_DATA: profile, DIXI_EVERYWHERE: '0', ...env };
   delete e.ELECTRON_RUN_AS_NODE;  // editors that embed Electron export this; it turns the app into plain Node
-  const app = await electron.launch({ args: [root], cwd: root, env: e });
+  const app = await electron.launch({ args: [root, `--user-data-dir=${profile}`], cwd: root, env: e });
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

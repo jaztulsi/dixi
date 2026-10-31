@@ -1,0 +1,12 @@
+{
+  "name": "dixi-qa",
+  "private": true,
+  "type": "module",
+  "description": "QA runner for the Dixi Electron app (the app itself lives in electron/).",
+  "scripts": {
+    "qa": "node qa/run.js",
+    "qa:fast": "node qa/run.js --skip live",
+    "qa:soak": "node qa/soak.js",
+    "qa:dashboard": "node qa/dashboard.js"
+  }
+}
