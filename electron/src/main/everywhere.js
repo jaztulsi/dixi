@@ -23,6 +23,7 @@ import { indexFolder, watchFolder, indexActivity, addTurn } from './ingest.js';
 import { createJobs } from './jobs.js';
 import { createUndo } from './undo.js';
 import { BUILTIN_TOOLS } from './builtin-tools.js';
+import { grabSelection, pasteText, actOn } from './capture.js';
 import { IRREVERSIBLE, RECURRING } from '../renderer/ui/pagekit.js';
 import { HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
 import { openMemory, factsLine, memoryTurn, openProfile, loadProfile, profileLine, masked, FORM, secretField, profileFocused } from './memory.js';
@@ -650,6 +651,18 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       const t = text.trim();
       if (MIC_OFF.test(t)) return setListening(false);
       if (CAREFUL_ON.test(t) || CAREFUL_OFF.test(t)) return setCareful(CAREFUL_ON.test(t));
+      // Something you selected and then pressed ⌥⇧Space on (capture.js): this request is about it. "Rewrite it in my
+      // tone", "translate to Spanish", "fix my English" replace the text (⌘Z undoes it); anything else is shown and said.
+      if (!forced && state.selection && Date.now() - state.selection.at < 60000) {
+        const item = state.selection; state.selection = null;
+        show({ state: 'thinking', text: 'On it…' });
+        const r = await actOn(item, t, { ask });
+        if (signal.aborted) return;
+        if (r.mode === 'replace' && r.text) { await pasteText({ clipboard, key: input.key, text: r.text }); say('Done. Command Z undoes it.'); }
+        else { if (r.text) clipboard.writeText(r.text); say(r.say); }
+        show({ state: 'done', title: r.mode === 'replace' ? 'Replaced' : 'Done · copied', text: r.text.slice(0, 600) || r.say, linger: 15000 });
+        return;
+      }
       const ai = activityIntent(t);   // "what did you do today?": from the log, no AI
       if (ai) return await activityTurn(ai);
       const wi = watchIntent(t);   // "tell me when the download finishes"
@@ -967,6 +980,20 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     state.armed = shot ? { shot, ctx, at: Date.now() } : null;
     if (shot) ui('ew:backdrop', shot.b64);
   }
+  // ⌥⇧Space: take what's selected (text, a picture, files), then listen for what to do with it.
+  async function selectionKey() {
+    if (active()) return stopAll();
+    const front = await input.frontApp();
+    const item = await grabSelection({ clipboard, key: input.key }).catch(() => null);
+    overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
+    if (!item) { show({ state: 'done', title: 'Nothing selected', text: 'Select something first, then press ⌥⇧Space.', linger: 4000 }); say('Select something first, then press it again.'); return; }
+    state.selection = { ...item, app: front?.name, at: Date.now() };
+    show({ state: 'listening', title: item.kind === 'text' ? `“${item.text.slice(0, 60)}”` : item.kind === 'files' ? `${item.files.length} file(s)` : 'The picture', text: 'What should I do with it?' });
+    toMain('everywhere:listen');
+    micAfter(20000);
+  }
+  const SEL_KEY = env.DIXI_SELECTION_KEY || 'Alt+Shift+Space';
+  if (!globalShortcut.register(SEL_KEY, selectionKey)) console.warn(`[everywhere] ${SEL_KEY} is taken; set DIXI_SELECTION_KEY`);
   const KEY = env.DIXI_EVERYWHERE_KEY || 'Alt+Space';
   const MIC_KEY = env.DIXI_MIC_KEY || 'Command+Alt+Space';
   const label = (k) => k.replace('Command', '⌘').replace('Alt', '⌥').replace('Control', '⌃').replace('Shift', '⇧').replaceAll('+', '');
