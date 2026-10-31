@@ -250,7 +250,7 @@ export class VoiceAgent {
     if (cmd == null) { if (final) this.turnsDone.add(turn); return; }
     // (A "stop" still being said keeps the turn open, so "stop and listen" can follow.)
     if (STOP.test(cmd.trim())) { this.cancelAll(); this.carry = null; if (final || !/^stop[.!]?$/i.test(cmd.trim())) this.turnsDone.add(turn); return; }
-    if (!this.clarify && PROTEST.test(cmd.trim())) { this.cancelAll(); this.everywhere?.stop(); this.carry = null; if (final) this.turnsDone.add(turn); return; }
+    if (!this.clarify && PROTEST.test(cmd.trim())) { this.cancelAll(); if (final) this.turnsDone.add(turn); return; }
     if (DICTATE.test(cmd.trim())) {
       if (final) { this.turnsDone.add(turn); this.dictation = { parts: [], at: Date.now(), type: TYPE_IT.test(cmd.trim()) }; this.dictate(cmd.trim().replace(DICTATE, ''), turn, true, { first: true }); }
       return;
