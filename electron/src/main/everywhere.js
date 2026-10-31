@@ -9,14 +9,20 @@
 // unnamed controls ask too. Hard, many-part jobs go to your own Claude Code agents (hive.js).
 
 import electron from 'electron';   // the default import, so plain Node (the unit tests) can load the pure parts
-const { BrowserWindow, Menu, Tray, clipboard, desktopCapturer, globalShortcut, ipcMain, nativeImage, powerMonitor, screen, shell, systemPreferences } = electron;
+const { BrowserWindow, Menu, Notification, Tray, clipboard, desktopCapturer, globalShortcut, ipcMain, nativeImage, powerMonitor, screen, shell, systemPreferences } = electron;
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import * as input from './input.js';
 import { startBridge } from './bridge.js';
 import * as guardian from './guardian.js';
-import { ENDPOINTS } from './providers.js';
+import { ENDPOINTS, chat } from './providers.js';
+import { makeAsk } from './ask.js';
+import { openIndex } from './index.js';
+import { indexFolder, watchFolder, indexActivity, addTurn } from './ingest.js';
+import { createJobs } from './jobs.js';
+import { createUndo } from './undo.js';
+import { BUILTIN_TOOLS } from './builtin-tools.js';
 import { IRREVERSIBLE, RECURRING } from '../renderer/ui/pagekit.js';
 import { HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
 import { openMemory, factsLine, memoryTurn, openProfile, loadProfile, profileLine, masked, FORM, secretField, profileFocused } from './memory.js';
@@ -177,6 +183,19 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const look = () => ({ large: prefs.large, contrast: prefs.contrast, sounds: prefs.sounds });
   const toMain = (ch, d) => getMainWindow()?.webContents.send(ch, d);
   const say = (text) => { if (text) { state.saidAt = Date.now(); toMain('everywhere:say', String(text).slice(0, 400)); } };   // (saidAt: a reply on its way counts as busy)
+  // Fast text answers (ask.js: Groq first, then fallbacks), your own things searched locally (index.js), long
+  // work in the background (jobs.js), and file changes that "undo that" can put back (undo.js).
+  const ask = makeAsk((req) => chat(config, spend, req), undefined, { log: (l) => act.log({ kind: 'step', ...l }) });
+  const index = (() => { try { return openIndex(path.join(userData, 'index.db')); } catch (err) { console.warn('[everywhere] index off:', err.message); return null; } })();
+  const undo = createUndo(path.join(userData, 'undo.jsonl'));
+  const jobs = createJobs({ say, notify: ({ title, body }) => new Notification({ title, body }).show(), onChange: (list) => ui('ew:jobs', list), log: (l) => act.log({ kind: 'step', ...l }) });
+  const personal = BUILTIN_TOOLS.find((x) => x.name === 'personal_memory');
+  function learnFolder(dir) {
+    if (!index) return;
+    jobs.start(`Indexing ${path.basename(dir)}`, (c) => indexFolder(index, dir, { signal: c.signal, onProgress: c.progress }), { speak: false, notifyDone: false });
+    try { watchFolder(index, dir); } catch {}
+  }
+  if (index) { for (const dir of prefs.indexFolders ?? []) learnFolder(dir); indexActivity(index, act, { since: Date.now() - 30 * 864e5 }).catch(() => {}); }
 
   // ---- the glass overlay: one transparent, click-through window over the screen you're on ----
   function overlayOn(bounds) {
@@ -654,6 +673,19 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // A bare "what's next" right after a walkthrough is about the walkthrough, not the calendar.
       const nextStep = /^what(?:['’]?s| is) next\W*$/i.test(t) && Date.now() - (state.recent.at(-1)?.at ?? 0) < 120000;
       if (BRIEF.test(t) || TOMORROW.test(t) || (NEXT.test(t) && !nextStep)) return await dailyBrief(t, signal);
+      // "Index my Documents folder": Dixi reads it (on this Mac only) so "what did Sam say about the budget" can answer.
+      const lf = !forced && index && t.match(/^(?:please\s+)?(?:index|learn|read through|search) my ([\w .-]{1,40}?) folder\W*$/i);
+      if (lf) {
+        const name = fs.readdirSync(os.homedir()).find((n) => n.toLowerCase() === lf[1].toLowerCase());
+        const dir = name && homePath(`~/${name}`, os.homedir());
+        if (!dir || !fs.statSync(dir).isDirectory()) { say(`I couldn't find a ${lf[1]} folder in your home folder.`); return; }
+        prefs.indexFolders = [...new Set([...(prefs.indexFolders ?? []), dir])]; savePrefs(); learnFolder(dir);
+        say(`Reading your ${name} folder now. Ask me about it any time.`); show({ state: 'done', title: 'Indexing', text: dir, linger: 4000 }); return;
+      }
+      if (UNDO.test(t) && Date.now() - (state.fileChangeAt ?? 0) < 120000) {
+        const u = await undo.undo().catch(() => null);
+        if (u) { state.fileChangeAt = 0; say(`Undone: ${u.label}.`); show({ state: 'done', title: 'Undone', text: u.label, linger: 2500 }); return; }
+      }
       if (UNDO.test(t)) { await input.key('cmd+z'); say('Undone.'); show({ state: 'done', title: 'Undone', text: '⌘Z', linger: 1500 }); return; }
       if (forced === 'type') return await typeOut(text, signal);
       // The Mac itself, no AI and no picture: volume, music, windows, timers… (desktop.js) and "why is my
@@ -683,6 +715,12 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (mode === 'agent' || mode === 'talk') {
         const qa = await quickAnswer(t, { webAnswer });
         if (qa) { say(qa.say); show({ state: 'done', title: qa.title, text: qa.text, linger: 6000 }); return; }
+        // About your own files, notes and past requests (the local index), with sources; else on as usual.
+        const pm = index && personal.match(t);
+        if (pm) {
+          const r = await personal.run(pm, { index, ask }).catch(() => ({ pass: true }));
+          if (!r.pass) { say(r.say); show({ state: 'done', title: r.title, text: [r.text, ...r.sources.map((x) => `[${x.n}] ${x.title}`)].join('\n').slice(0, 400), linger: 10000 }); addTurn(index, { said: t, answer: r.say }).catch(() => {}); return; }
+        }
       }
       // A saved skill for these words: replayed with no AI (what it can't do, the agent does).
       const skill = mode === 'agent' || SKILL_RUN.test(t) ? matchSkill(listSkills(userData), SKILL_RUN.test(t) ? t.match(SKILL_RUN)[1] : t) : null;
@@ -906,6 +944,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   function stopAll() { const stopped = kill(); state.armed = null; state.saidAt = 0; toMain('everywhere:disarm'); if (!stopped) show({ state: 'idle' }); }
   function kill(all = true) {
     const was = busy();
+    jobs.stopAll();
     const watched = all && (isWatching() || Boolean(state.lesson));
     if (watched) { stopWatch(); state.lesson?.stop(); state.lessonCtrl?.abort(); state.lesson = null; }
     stop();
