@@ -210,6 +210,10 @@ export function mac({ osa, main, inputURL, fs, path, os, crypto, execFile, sleep
     async closeTabsExcept(keep) { const b = await m.browser(); if (!BROWSERS.test(b)) return; await osa(`const b = Application(${JSON.stringify(b)}); const keep = ${JSON.stringify(keep)}; if (b.running()) for (const w of b.windows()) for (const t of w.tabs()) if (!keep.includes(t.id())) t.close()`); },
     openURL: async (u) => { await sh('open', [u]); },
     async music() { return json(`const m = Application('Music'); let track = ''; if (m.running()) { try { const t = m.currentTrack; track = [t.name(), t.artist(), t.album(), t.genre()].join(' | '); } catch (e) {} } JSON.stringify(m.running() ? { state: m.playerState(), track } : { state: 'not running' })`); },
+    /** Every control in the front window (Dixi's own Accessibility walker): [{ role, value, labels, ... }]. */
+    controls: () => main(async (_e, u) => (await import(u)).listControls({ max: 300, ms: 2500 }), inputURL).catch(() => []),
+    /** A key press through Dixi's own input (CGEvent, no Automation grant): 'cmd+w'. */
+    key: (combo) => main(async (_e, [u, c]) => { await (await import(u)).key(c); return true; }, [inputURL, combo]),
     /** Values of the text and search fields in the front window (Dixi's own Accessibility walker). */
     fieldValues: () => main(async (_e, u) => { const i = await import(u); return (await i.listControls({ max: 300, ms: 2500 })).filter((c) => /TextField|SearchField|ComboBox/.test(c.role)).map((c) => c.value).filter(Boolean); }, inputURL).catch(() => []),
     async finderTarget() { const u = await osa("const f = Application('Finder'); f.finderWindows.length ? f.finderWindows[0].target().url() : ''"); try { return decodeURIComponent(new URL(u).pathname); } catch { return ''; } },

@@ -15,7 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { launchMac, QA, APP, QA_CAP, qaSpent, qaRecord } from './app.js';
-import { ROWS, mac } from './mac-suite.js';
+import { ROWS as KNOWN, mac } from './mac-suite.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
 const TIMEOUT = Number(arg('timeout', 30000)), MAX_USD = Number(arg('max-usd', QA_CAP)), KEEP = process.argv.includes('--keep'), MESSAGING = process.argv.includes('--messaging');
@@ -23,6 +23,10 @@ const TIMEOUT = Number(arg('timeout', 30000)), MAX_USD = Number(arg('max-usd', Q
 const ALLOWED = /(^|\.)(apple\.com|youtube\.com|google\.com|wikipedia\.org|safeway\.com|amazon\.com|nytimes\.com|github\.com|ytimg\.com|googlevideo\.com|gstatic\.com)$/;
 // Never let the screen agent type into these: a terminal or editor may hold an agent's prompt.
 const UNSAFE_FRONT = /^(Terminal|iTerm2|Warp|Ghostty|Alacritty|kitty|WezTerm|Cursor|Code|Visual Studio Code|Zed|Electron|Claude)$/;
+// --suite <file>: another row set (the hidden set lives outside the repo); its results are written next to it.
+const SUITE = arg('suite', null);
+const ROWS = SUITE ? (await import(pathToFileURL(path.resolve(SUITE)).href)).ROWS : KNOWN;
+const OUT_DIR = SUITE ? path.dirname(path.resolve(SUITE)) : path.join(QA, 'results');
 const pick = arg('rows', '').split(',').filter(Boolean);
 const rows = process.argv.includes('--baseline') ? ROWS.filter((r) => r.known || ['open-calculator', 'quit-calculator', 'volume-30', 'open-downloads', 'open-youtube'].includes(r.id))
   : pick.length ? ROWS.filter((r) => pick.includes(r.id)) : ROWS;
@@ -52,6 +56,7 @@ await a.main(({ session }) => { globalThis.__navs = []; session.fromPartition('p
 // a terminal). Opened through LaunchServices (`open`), which needs no Automation grant; the row's restore closes it.
 const EMPTY = fs.mkdtempSync(path.join(os.tmpdir(), 'Dixi QA neutral '));
 const sh = (cmd, args) => new Promise((r) => execFile(cmd, args, { timeout: 8000 }, () => r()));
+const pgrep = (n) => new Promise((r) => execFile('pgrep', ['-x', n], (e) => r(!e)));
 const neutral = async () => { await sh('open', [EMPTY]); await sleep(700); };
 const firstFront = await m.front();
 const testLog = () => { try { return fs.readFileSync(path.join(a.profile, 'activity.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
@@ -63,11 +68,12 @@ try {
   for (const r of rows) {
     const block = (why, say = r.say) => { out.rows.push({ id: r.id, kind: r.kind, known: Boolean(r.known), say: typeof say === 'function' ? '(set at run time)' : say, status: 'blocked', why }); log(`blocked  ${r.id}  (${why})`); };
     if (r.blocked) { block(r.blocked); continue; }
-    if (r.messaging && !MESSAGING) { block('messaging rows run only with --messaging'); continue; }
+    if (r.messaging && !MESSAGING) { block('needs a one-time macOS grant (Contacts/Messages Automation); then --messaging'); continue; }
     if (qa0 + (await own()) >= MAX_USD) { log(`spend guard: QA total at $${MAX_USD}, stopping`); out.stoppedForSpend = true; break; }
     // Snapshot what this row may change, so it can be put back.
     const snap = { vol: await m.volume(), muted: await m.muted(), front: await m.front(), tabs: await m.tabIds(), finder: await m.finderWindows(), music: (await m.music()).state,
-      running: Object.fromEntries(await Promise.all(APPS.map(async (n) => [n, await m.running(n)]))) };
+      running: Object.fromEntries(await Promise.all(APPS.map(async (n) => [n, await m.running(n)]))),
+      extra: Object.fromEntries(await Promise.all((r.apps ?? []).map(async (n) => [n, await pgrep(n)]))) };
     await neutral();
     const s = { ...((await r.setup?.(m)) ?? {}) };
     if (s.blocked) { block(s.blocked); try { await r.cleanup?.(m, s); } catch {} continue; }
@@ -117,6 +123,7 @@ try {
       await m.closeFinderExcept(snap.finder);
       if (snap.music !== 'playing' && (await m.music()).state === 'playing') await m.osa("Application('Music').pause()");
       for (const [n, was] of Object.entries(snap.running)) if (!was && n !== 'Finder' && (await m.running(n))) await m.quit(n);
+      for (const [n, was] of Object.entries(snap.extra)) if (!was && (await pgrep(n))) await sh('pkill', ['-x', n]);   // apps the app has no Automation grant for
     } catch (err) { row.restoreError = err.message; }
     await sleep(1000);
   }
@@ -143,10 +150,10 @@ out.summary = {
 out.summary.simpleP95 = pct(simple, 95);
 out.summary.meetsBar = out.summary.passRate >= 0.95 && (out.summary.simpleP95 ?? Infinity) <= 2000 && !out.stoppedForSpend;
 const sameRows = (o) => JSON.stringify(o.rows.map((x) => x.id)) === JSON.stringify(out.rows.map((x) => x.id));
-const prev = fs.readdirSync(path.join(QA, 'results')).filter((f) => /^mac-.*\.json$/.test(f)).sort().map((f) => { try { return JSON.parse(fs.readFileSync(path.join(QA, 'results', f), 'utf8')); } catch { return null; } }).filter((o) => o?.summary && sameRows(o)).at(-1);
+const prev = fs.readdirSync(OUT_DIR).filter((f) => /^mac-.*\.json$/.test(f)).sort().map((f) => { try { return JSON.parse(fs.readFileSync(path.join(OUT_DIR, f), 'utf8')); } catch { return null; } }).filter((o) => o?.summary && sameRows(o)).at(-1);
 out.summary.barTwiceInARow = out.summary.meetsBar && Boolean(prev?.summary?.meetsBar);
-fs.mkdirSync(path.join(QA, 'results'), { recursive: true });
-const file = path.join(QA, 'results', `mac-${out.at.replace(/[:.]/g, '-')}.json`);
+fs.mkdirSync(OUT_DIR, { recursive: true });
+const file = path.join(OUT_DIR, `mac-${out.at.replace(/[:.]/g, '-')}.json`);
 fs.writeFileSync(file, JSON.stringify(out, null, 1));
 log(JSON.stringify(out.summary));
 log(`→ ${file}`);
