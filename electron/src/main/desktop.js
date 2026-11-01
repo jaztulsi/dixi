@@ -142,7 +142,7 @@ const MEDIA_CMD = { playpause: 'playpause', play: 'play', pause: 'pause', next: 
 const out = (say, title = 'Dixi') => ({ say, title, text: say });
 
 /** Run one intent from desktopIntent(). Returns { say, title, text }; never throws.
- *  deps: exec(cmd, args) → stdout, say(text) (for timers that fire later), approve(question) → boolean,
+ *  deps: exec(cmd, args) → stdout, say(text) (for timers that fire later),
  *  now() → Date, setTimer(ms, fn) → cancel function, screens() → [{ x, y, width, height }], home. */
 export async function runDesktop(intent, deps) {
   const d = { now: () => new Date(), setTimer: (ms, fn) => { const h = setTimeout(fn, ms); return () => clearTimeout(h); }, home: homedir(), screens: () => [], live, ...deps };
@@ -243,7 +243,6 @@ const DO = {
     return out('Saved a screenshot to your Desktop.', 'Screenshot');
   },
   async wifi(i, d) {
-    if (!i.on && !(await d.approve('Turn Wi-Fi off? You will lose your internet connection.'))) return out('Okay, I left Wi-Fi on.', 'Wi-Fi');
     const ports = await d.exec('networksetup', ['-listallhardwareports']).catch(() => '');
     const dev = ports.match(/Hardware Port: (?:Wi-Fi|AirPort)\s*\nDevice: (\w+)/)?.[1] ?? 'en0';
     await d.exec('networksetup', ['-setairportpower', dev, i.on ? 'on' : 'off']);
@@ -255,7 +254,6 @@ const DO = {
     // Only an app that is running (telling a closed one to quit would open it first). The name is an argument, never script text.
     const on = await osa(d, 'on run argv\nreturn application (item 1 of argv) is running\nend run', name).catch(() => 'false');
     if (on !== 'true') return out(`${name} isn't open.`, 'Quit');
-    if (!(await d.approve(`Quit ${name}? Unsaved work may be lost.`))) return out(`Okay, I didn't quit ${name}.`, 'Quit');
     await osa(d, 'on run argv\ntell application (item 1 of argv) to quit\nend run', name);
     return out(`Quit ${name}.`, 'Quit');
   },
