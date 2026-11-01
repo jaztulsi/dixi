@@ -76,6 +76,13 @@ export function mac({ osa, main, inputURL, fs, path, os, crypto, execFile, sleep
         : `const b = Application(${JSON.stringify(b)}); b.running() && b.windows.length ? b.windows[0].activeTab.url() : ''`;
       const u = await osa(src); return u.startsWith('ERR') ? '' : u;
     },
+    /** { tabId: url } of every tab in the default browser (Chromium family; Safari by window/tab index). */
+    async tabURLs() {
+      const b = await m.browser();
+      const src = b === 'Safari' ? "const s = Application('Safari'); const o = {}; if (s.running()) s.windows().forEach((w, i) => w.tabs().forEach((t, j) => { o[i + '.' + j] = t.url(); })); JSON.stringify(o)"
+        : `const b = Application(${JSON.stringify(b)}); const o = {}; if (b.running()) for (const w of b.windows()) for (const t of w.tabs()) o[t.id()] = t.url(); JSON.stringify(o)`;
+      const o = await json(src); return o && !o.err ? o : {};
+    },
     async tabIds() { const b = await m.browser(); if (!BROWSERS.test(b)) return []; const o = await json(`const b = Application(${JSON.stringify(b)}); JSON.stringify(b.running() ? b.windows().flatMap((w) => w.tabs().map((t) => t.id())) : [])`); return Array.isArray(o) ? o : []; },
     async closeTabsExcept(keep) { const b = await m.browser(); if (!BROWSERS.test(b)) return; await osa(`const b = Application(${JSON.stringify(b)}); const keep = ${JSON.stringify(keep)}; if (b.running()) for (const w of b.windows()) for (const t of w.tabs()) if (!keep.includes(t.id())) t.close()`); },
     openURL: async (u) => { await sh('open', [u]); },

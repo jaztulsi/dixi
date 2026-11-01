@@ -17,10 +17,15 @@ import { launchMac, QA, APP } from './app.js';
 import { ROWS, mac } from './mac-suite.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
-const TIMEOUT = Number(arg('timeout', 30000)), MAX_USD = Number(arg('max-usd', 3));
+const TIMEOUT = Number(arg('timeout', 30000)), MAX_USD = Number(arg('max-usd', 3)), KEEP = process.argv.includes('--keep');
+// Sites a test may load (orchestrator safety rule). Anything else is flagged in the report.
+const ALLOWED = /(^|\.)(apple\.com|youtube\.com|google\.com|wikipedia\.org|safeway\.com|amazon\.com|nytimes\.com|github\.com|ytimg\.com|googlevideo\.com|gstatic\.com)$/;
+// Never let the screen agent type into these: a terminal or editor may hold an agent's prompt.
+const UNSAFE_FRONT = /^(Terminal|iTerm2|Warp|Ghostty|Alacritty|kitty|WezTerm|Cursor|Code|Visual Studio Code|Zed|Electron|Claude)$/;
 const pick = arg('rows', '').split(',').filter(Boolean);
 const rows = process.argv.includes('--baseline') ? ROWS.filter((r) => r.known || ['open-calculator', 'quit-calculator', 'volume-30', 'open-downloads', 'open-youtube'].includes(r.id))
   : pick.length ? ROWS.filter((r) => pick.includes(r.id)) : ROWS;
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const pct = (xs, p) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.ceil((p / 100) * s.length) - 1)] : null; };
 const LEDGER = path.join(os.homedir(), 'Library/Application Support/Dixi/spend.json');
@@ -33,10 +38,17 @@ const log = (...a) => console.log('[mac]', ...a);
 const a = await launchMac({ DIXI_EVERYWHERE: '1', ELEVENLABS_API_KEY: ' ', DEEPGRAM_API_KEY: ' ' });
 log(`test Dixi up in ${a.startMs} ms (profile ${a.profile})`);
 const m = mac({ osa: a.osa, main: a.main, inputURL: pathToFileURL(path.join(APP, 'src/main/input.js')).href, fs, path, os, crypto, execFile, sleep });
+// The test copy's own hidden browser: every top-level load, for the URL report.
+await a.main(({ session }) => { globalThis.__navs = []; session.fromPartition('persist:dixi-tabs').webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (d, cb) => { if (d.resourceType === 'mainFrame') globalThis.__navs.push({ t: Date.now(), url: d.url }); cb({}); }); return true; });
+// A scratch TextEdit document in front before every row: stray typing lands there, never in a terminal.
+const teDocs0 = JSON.parse((await m.osa("const te = Application('TextEdit'); JSON.stringify(te.running() ? te.documents().map((d) => d.name()) : [])")) || '[]');
+const neutral = async () => { await m.osa("const te = Application('TextEdit'); te.activate(); if (!te.documents().some((d) => { try { return !d.path() && d.text() === ''; } catch (e) { return false; } })) te.documents.push(te.Document({ text: '' })); 'ok'"); await sleep(600); };
+const firstFront = await m.front();
 const testLog = () => { try { return fs.readFileSync(path.join(a.profile, 'activity.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
-const APPS = ['Music', 'Notes', 'Calendar', 'Calculator', 'Messages', await m.browser()];
+const APPS = ['Music', 'Notes', 'Calendar', 'Calculator', 'Messages', 'TextEdit', await m.browser()];
+const teWasRunning = await m.running('TextEdit');
 
-const out = { at: new Date().toISOString(), app: APP, timeout: TIMEOUT, ledgerStart: spent(), rows: [] };
+const out = { at: new Date().toISOString(), app: APP, timeout: TIMEOUT, ledgerStart: spent(), rows: [], urls: [] };
 const tRun0 = Date.now();
 try {
   for (const r of rows) {
@@ -45,7 +57,11 @@ try {
     // Snapshot what this row may change, so it can be put back.
     const snap = { vol: await m.volume(), front: await m.front(), tabs: await m.tabIds(), finder: await m.finderWindows(), music: (await m.music()).state,
       running: Object.fromEntries(await Promise.all(APPS.map(async (n) => [n, await m.running(n)]))) };
+    await neutral();
     const s = { ...((await r.setup?.(m)) ?? {}) };
+    const frontNow = await m.front();
+    if (UNSAFE_FRONT.test(frontNow)) { out.rows.push({ id: r.id, kind: r.kind, known: Boolean(r.known), say: r.say, status: 'blocked', why: `unsafe app in front: ${frontNow}` }); log(`blocked  ${r.say}  (front app ${frontNow})`); continue; }
+    const tabsBefore = await m.tabURLs(), navN = (await a.main(() => globalThis.__navs.length));
     const usd0 = spent(), logN = testLog().length;
     await a.ui(() => { window.__said.length = 0; window.__asked.length = 0; window.__runDone = 0; window.__runErr = ''; return true; });
     const t0 = Date.now(); s.t0 = t0;
@@ -54,7 +70,7 @@ try {
     while (Date.now() - t0 < TIMEOUT) {
       const tc = Date.now();
       try { last = await r.check(m, s); } catch (err) { last = { ok: false, got: `check threw ${err.message}` }; }
-      if (last.ok) { verified = tc - t0; break; }
+      if (last.ok) { verified = Date.now() - t0; break; }   // when the check came back: an upper bound
       if (await a.ui(() => window.__runDone)) { await sleep(1500); try { last = await r.check(m, s); } catch {} if (last.ok) verified = Date.now() - t0; break; }   // run() ended: one last look
       await sleep(400);
     }
@@ -65,12 +81,16 @@ try {
     if (stopped) { await a.ui(() => { window.dixi.everywhere.stop(); return true; }); await sleep(800); }
     const heard = await a.ui(() => ({ said: window.__said.map((x) => x.text), asked: window.__asked.map((x) => x.q), err: window.__runErr }));
     const acts = testLog().slice(logN);
+    // Every URL this row loaded: new or changed browser tabs, and the test copy's own browser.
+    const tabsAfter = await m.tabURLs();
+    const loaded = [...new Set([...Object.entries(tabsAfter).filter(([id, u]) => tabsBefore[id] !== u).map(([, u]) => u), ...(await a.main(() => globalThis.__navs.map((n) => n.url))).slice(navN)])].filter((u) => /^https?:/.test(u));
+    for (const u of loaded) out.urls.push({ row: r.id, url: u, allowed: ALLOWED.test(host(u)) });
     const row = {
       id: r.id, kind: r.kind, known: Boolean(r.known), say: r.say, label: r.label, note: r.note,
       status: verified != null ? 'pass' : 'fail', ms: verified ?? (Date.now() - t0), runMs: runDone ? runDone - t0 : null, hardStopped: stopped,
       got: last.got, said: heard.said, asked: heard.asked, runError: heard.err || undefined,
       steps: acts.filter((e) => e.kind === 'step').map((e) => [e.verb, e.role, e.label, e.model, e.ms].filter((x) => x != null).join(' ')).slice(0, 30),
-      usd: Number((spent() - usd0).toFixed(4)), errs: a.errs.splice(0).slice(0, 8),
+      usd: Number((spent() - usd0).toFixed(4)), errs: a.errs.splice(0).slice(0, 8), loaded,
     };
     out.rows.push(row);
     log(`${row.status.padEnd(7)} ${String(row.ms).padStart(6)} ms  $${row.usd.toFixed(3)}  ${r.say}${row.status === 'pass' ? '' : `  → ${row.got}`}${stopped ? '  [hard stop]' : ''}`);
@@ -82,22 +102,26 @@ try {
       await m.closeFinderExcept(snap.finder);
       if (snap.music !== 'playing' && (await m.music()).state === 'playing') await m.osa("Application('Music').pause()");
       for (const [n, was] of Object.entries(snap.running)) if (!was && n !== 'Finder' && (await m.running(n))) await m.quit(n);
-      if (snap.front && snap.front !== (await m.front())) await m.activate(snap.front).catch(() => {});
     } catch (err) { row.restoreError = err.message; }
     await sleep(1000);
   }
 } finally {
+  await m.osa(`const te = Application('TextEdit'); const keep = ${JSON.stringify(teDocs0)}; if (te.running()) for (const d of te.documents()) { try { if (!keep.includes(d.name()) && !d.path()) d.close({ saving: 'no' }); } catch (e) {} } 'ok'`).catch(() => {});   // only docs this run made
+  if (!teWasRunning) await m.quit('TextEdit').catch(() => {});
+  if (firstFront) await m.activate(firstFront).catch(() => {});   // the user's own front app, as found
   out.ledgerEnd = spent();
   out.founderEvents = founderEvents(tRun0, Date.now());
+  if (KEEP) { a.close = async () => { a.child.kill(); }; log(`kept profile ${a.profile}`); }
   await a.close();
 }
 const ran = out.rows.filter((r) => r.status !== 'blocked');
 const simple = ran.filter((r) => r.kind === 'simple').map((r) => r.ms);
+out.flaggedURLs = out.urls.filter((u) => !u.allowed);
 out.summary = {
   ran: ran.length, blocked: out.rows.length - ran.length, pass: ran.filter((r) => r.status === 'pass').length,
   passRate: ran.length ? ran.filter((r) => r.status === 'pass').length / ran.length : null,
   avgMs: ran.length ? Math.round(ran.reduce((s, r) => s + r.ms, 0) / ran.length) : null, slowest: ran.reduce((b, r) => (r.ms > (b?.ms ?? -1) ? r : b), null)?.id,
-  simpleP50: pct(simple, 50), simpleP90: pct(simple, 90), usd: Number((out.ledgerEnd - out.ledgerStart).toFixed(4)), founderEventsDuringRun: out.founderEvents,
+  flaggedURLs: out.flaggedURLs.length, simpleP50: pct(simple, 50), simpleP90: pct(simple, 90), usd: Number((out.ledgerEnd - out.ledgerStart).toFixed(4)), founderEventsDuringRun: out.founderEvents,
 };
 fs.mkdirSync(path.join(QA, 'results'), { recursive: true });
 const file = path.join(QA, 'results', `mac-${out.at.replace(/[:.]/g, '-')}.json`);
