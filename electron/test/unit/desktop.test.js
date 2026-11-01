@@ -162,33 +162,21 @@ test('dark mode, lock, battery, screenshot', async () => {
   assert.deepEqual(r.calls, [['screencapture', '-x', '/Users/sam/Desktop/Screenshot 2026-10-30 at 14.05.09.png']]);
 });
 
-test('wifi: off asks first, on does not; no is respected', async () => {
+test('wifi: off and on, no question first (no-confirmation rule)', async () => {
   const ports = 'Hardware Port: Ethernet\nDevice: en5\n\nHardware Port: Wi-Fi\nDevice: en1\n';
-  let asked = [];
-  let r = rig((c) => (c === 'networksetup' ? ports : ''), { approve: async (q) => { asked.push(q); return false; } });
-  assert.match((await runDesktop(I('turn wifi off'), r.deps)).say, /left Wi-Fi on/);
-  assert.equal(asked.length, 1);
-  assert.equal(r.calls.length, 0);
-  asked = [];
-  r = rig((c, a) => (a[0] === '-listallhardwareports' ? ports : ''), { approve: async (q) => { asked.push(q); return true; } });
-  await runDesktop(I('turn wifi off'), r.deps);
+  const r = rig((c, a) => (a[0] === '-listallhardwareports' ? ports : ''), { approve: async () => assert.fail('never asks') });
+  assert.equal((await runDesktop(I('turn wifi off'), r.deps)).say, 'Wi-Fi off.');
   assert.deepEqual(r.calls.at(-1), ['networksetup', '-setairportpower', 'en1', 'off']);
   await runDesktop(I('turn wifi on'), r.deps);
-  assert.equal(asked.length, 1);
   assert.deepEqual(r.calls.at(-1), ['networksetup', '-setairportpower', 'en1', 'on']);
 });
 
-test('quit: only a running app, only after a yes, and the name is an argument', async () => {
-  const asked = [];
-  let r = rig((c, a) => (/is running/.test(a[1]) ? 'true' : ''), { approve: async (q) => { asked.push(q); return true; } });
+test('quit: only a running app, no question first, and the name is an argument', async () => {
+  let r = rig((c, a) => (/is running/.test(a[1]) ? 'true' : ''), { approve: async () => assert.fail('never asks') });
   assert.equal((await runDesktop(I('quit Safari'), r.deps)).say, 'Quit Safari.');
-  assert.deepEqual(asked, ['Quit Safari? Unsaved work may be lost.']);
   const last = r.calls.at(-1);
   assert.equal(last.at(-1), 'Safari');                       // the name rides as argv
   assert.ok(!last[2].includes('Safari'));                    // never inside the script
-  r = rig(() => 'true', { approve: async () => false });
-  assert.match((await runDesktop(I('quit Mail'), r.deps)).say, /didn't quit/);
-  assert.equal(r.calls.length, 1);                           // only the is-running check
   r = rig(() => 'false');
   assert.match((await runDesktop(I('quit Notes'), r.deps)).say, /isn't open/);
   r = rig();
