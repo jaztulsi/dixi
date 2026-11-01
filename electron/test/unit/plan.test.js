@@ -125,6 +125,19 @@ test('sites: a word you said is in the host, an installed app owns the scheme, o
   assert.equal(check([S({ do: 'open', clause: 'open Photoshop', app: 'Photoshop' })], 'open Photoshop', { apps }).steps[0].do, 'computer');
 });
 
+test('an unsafe link is refused in words, never opened another way, in an open step or inside a script', () => {
+  const said = 'open my router page';
+  const one = (s) => check([S({ clause: said, ...s })], said, { apps, home: '/Users/me' }).steps[0];
+  for (const url of ['http://192.168.1.1', 'https://router.example@192.168.1.1', 'file:///etc/passwd', 'javascript:alert(1)']) {
+    const st = one({ do: 'open', url });
+    assert.equal(st.do, 'answer', url);
+    assert.match(st.say, /I didn't open it\.$/);
+  }
+  assert.equal(one({ do: 'script', code: 'open location "http://10.0.0.1/admin"' }).do, 'answer');
+  assert.equal(one({ do: 'script', code: 'Application("Safari").openLocation("ftp://files.example/x")', lang: 'jxa' }).do, 'answer');
+  assert.equal(one({ do: 'open', url: 'file:///Users/me/router.pdf' }).do, 'web');   // safe, but not a host you said: the browser finds it
+});
+
 test('if the planner fails, each clause is still done: instantly where it can be, else on screen', async () => {
   const r = await plan('volume down and text mom I am late', {}, deps(async () => { throw new Error('offline'); }));
   assert.equal(r.source, 'code');

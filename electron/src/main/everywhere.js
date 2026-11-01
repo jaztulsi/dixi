@@ -16,6 +16,7 @@ import os from 'node:os';
 import * as input from './input.js';
 import { startBridge } from './bridge.js';
 import * as guardian from './guardian.js';
+import { unsafe } from './safesite.js';
 import { ENDPOINTS, chat } from './providers.js';
 import { makeAsk } from './ask.js';
 import { openIndex } from './index.js';
@@ -908,6 +909,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   async function back() {
     const n = state.notes.length ? state.notes.at(-1) : null;
     if (!n) return recall();
+    const why = /^https?:\/\//i.test(n.url ?? '') && unsafe(n.url);   // a saved page that has since turned up on a list
+    if (why) return say(`${why} I didn't open it.`);
     if (/^https?:\/\//i.test(n.url ?? '')) await shell.openExternal(n.url); else await input.openApp(n.app);
     say(`Back to ${n.title || n.app}.`);
   }
@@ -1050,9 +1053,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     else if (cmd.action === 'website') {
       let u = null;
       try { u = new URL(/^[a-z]+:\/\//i.test(cmd.target) ? cmd.target : `https://${cmd.target}`); } catch {}
-      const warn = u && /^https?:$/.test(u.protocol) ? guardian.checkContext({ url: u.href }) : null;   // look-alike sites are never opened
-      if (!warn) said = "That doesn't look like a web address.";
-      else if (warn.length) said = `${warn[0].say} I didn't open it.`;
+      const web = u && /^https?:$/.test(u.protocol), why = web && unsafe(u.href);   // look-alike, listed and bare-IP sites are never opened
+      if (!web) said = "That doesn't look like a web address.";
+      else if (why) said = `${why} I didn't open it.`;
       else { await shell.openExternal(u.href); said = `Opening ${u.hostname.replace(/^www\./, '')}.`; }
     } else if (cmd.action === 'file') {
       const p = homePath(cmd.target, os.homedir());

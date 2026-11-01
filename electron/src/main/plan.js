@@ -12,6 +12,7 @@ import { desktopIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
 import { fileIntent } from './files.js';
 import { matchCommand } from './commands.js';
+import { unsafe } from './safesite.js';
 
 // ---- 1. split ----
 // Strong breaks always split; "and" or a comma splits only before a verb (so "salt and pepper" stays whole).
@@ -103,7 +104,7 @@ function placeOf(said, part, from) {
  *  (music://…), or it's a plain web search of your own words. */
 export function siteOk(url, heard, apps) {
   let u;
-  try { u = new URL(/^[a-z][\w+.-]*:/i.test(url) ? url : `https://${url}`); } catch { return false; }
+  try { u = new URL(asLink(url)); } catch { return false; }
   const scheme = u.protocol.replace(':', '').toLowerCase();
   if (!/^https?$/.test(scheme)) return apps.some((a) => tokens(a).includes(scheme));
   const host = u.hostname.toLowerCase();
@@ -111,6 +112,8 @@ export function siteOk(url, heard, apps) {
   const q = u.searchParams.get('q') ?? u.searchParams.get('query') ?? u.searchParams.get('search_query') ?? u.searchParams.get('term');
   return Boolean(q) && tokens(q).every((w) => heard.has(w));
 }
+const asLink = (u) => (/^[a-z][\w+.-]*:/i.test(u) ? u : `https://${u}`);
+const LINKS = /\b[a-z][\w+.-]*:\/\/[^\s"'`)\\]+/gi;   // links written inside a script (open location "…", openLocation(…))
 const homeOk = (p, home) => { const x = p.replace(/^~(?=\/|$)/, home); return !x.split('/').includes('..') && (x === home || x.startsWith(`${home}/`)); };
 
 /**
@@ -129,13 +132,15 @@ export function check(raw, text, { apps = [], commands = [], recentFiles = false
     if (pos < 0) return { steps: out, ok: false, why: placeOf(said, part, 0) >= 0 ? `out of order: "${clause}"` : `not said: "${clause}"` };
     at = pos;
     const computer = (why) => ({ do: 'computer', clause, why });
+    const refused = (why) => ({ do: 'answer', clause, say: `${why} I didn't open it.`, why });   // never retried another way
     let step;
     if (s.do === 'instant') {
       const i = instantOf(clause, { apps, commands, filesBefore });
       step = i ? { do: 'instant', clause, ...i } : computer('not instant');
     } else if (s.do === 'open') {
-      const app = installed.get(lower(s.app));
-      if (app && !s.url) step = { do: 'open', clause, app };
+      const app = installed.get(lower(s.app)), bad = s.url && unsafe(asLink(String(s.url)), { appLinks: true, home });
+      if (bad) step = refused(bad);
+      else if (app && !s.url) step = { do: 'open', clause, app };
       else if (s.url && siteOk(String(s.url), heard, apps)) step = { do: 'open', clause, url: String(s.url) };
       else step = s.url ? { do: 'web', clause } : computer('no such app');   // a site Dixi's browser can find
     } else if (s.do === 'script') {
@@ -144,7 +149,9 @@ export function check(raw, text, { apps = [], commands = [], recentFiles = false
       const names = [...all.matchAll(NAMES)].map((m) => m[1] ?? m[2] ?? m[3]);
       const invented = names.find((n) => !/^[~/]/.test(n) && !tokens(n).every((w) => heard.has(w)));   // paths: the home check below
       const outside = [...all.matchAll(PATHS)].map((m) => m[1]).find((x) => !homeOk(x, home));
-      if (!code.trim()) step = computer('empty script');
+      const bad = [...all.matchAll(LINKS)].map((m) => unsafe(m[0], { appLinks: true, home })).find(Boolean);
+      if (bad) step = refused(bad);
+      else if (!code.trim()) step = computer('empty script');
       else if (SHELL.test(all)) step = computer('shell');
       else if (outside) step = computer(`outside home: ${outside}`);
       else if (invented) step = computer(`not said: "${invented}"`);
