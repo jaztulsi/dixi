@@ -39,14 +39,14 @@ const model = async (body) => {
   const j = await res.json();
   const ms = Math.round(performance.now() - t0);
   if (!res.ok) throw new Error(j.error?.message ?? `status ${res.status}`);
-  model.last = { ms, usage: j.usage };
+  model.last = { ms, usage: j.usage, text: j.content?.find((x) => x.type === 'text')?.text, stop: j.stop_reason };
   return j;
 };
 
 for (const said of SAID) {
   model.last = null;
   const r = await plan(said, { app: 'Finder' }, { apps, home: os.homedir(), model });
-  if (model.last) fixtures[said] = { reply: r.raw, ms: model.last.ms, usage: model.last.usage };
+  if (model.last) fixtures[said] = { text: model.last.text, stop: model.last.stop, ms: model.last.ms, usage: model.last.usage };
   console.log(`${r.source.padEnd(5)} ${String(r.ms).padStart(5)} ms  ${model.last ? `call ${model.last.ms} ms, in ${model.last.usage.input_tokens} out ${model.last.usage.output_tokens}` : 'no AI'}  ${said}`);
   for (const s of r.steps) console.log(`        ${s.do.padEnd(8)} ${s.kind ?? s.app ?? s.url ?? ''}  “${s.clause}”${s.why ? `  (${s.why})` : ''}${s.code ? `\n                 ${s.code.replace(/\n/g, ' ⏎ ').slice(0, 160)}` : ''}`);
   if (r.why) console.log(`        fell back: ${r.why}`);
