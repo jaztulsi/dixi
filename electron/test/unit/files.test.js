@@ -147,6 +147,22 @@ test('move and rename ask first, never overwrite, stay inside home', async () =>
   }
 });
 
+test('with the undo log, move and rename happen without a question and can be undone', async () => {
+  const src = '/Users/t/Downloads/Tax 2025.pdf';
+  const moved = []; const said = [];
+  const undo = { group: (label) => ({ id: 'g1', label }), move: async (a, b, g) => { moved.push([a, b, g.label]); return b; } };
+  const deps = { exec: async () => '', say: (s) => said.push(s), approve: async () => assert.fail('never asks'), undo, now: clock, home: HOME, fs: fakeFs({ [src]: T(1) }) };
+  remember([{ path: src, name: 'Tax 2025.pdf', modified: T(1) }]);
+  await fileAction(fileIntent('move it to Documents'), null, deps);
+  await fileAction(fileIntent('rename it to Q4 plan'), null, deps);
+  assert.deepEqual(moved, [[src, '/Users/t/Documents/Tax 2025.pdf', 'Move Tax 2025.pdf'], ['/Users/t/Documents/Tax 2025.pdf', '/Users/t/Documents/Q4 plan.pdf', 'Rename Tax 2025.pdf']]);
+  assert.equal(said[0], 'Moved. Say undo that to put it back.');
+  const c = { ...deps, fs: fakeFs({ [src]: T(1), '/Users/t/Documents/Tax 2025.pdf': 1 }) };
+  remember([{ path: src, name: 'Tax 2025.pdf', modified: T(1) }]); moved.length = 0;
+  await fileAction(fileIntent('move it to Documents'), null, c);
+  assert.deepEqual(moved, [], 'still never over another file');
+});
+
 test('hostile names are cleaned and capped; there is no delete', async () => {
   assert.equal(safeName('a\u0007b\u202Ec\nd'), 'abcd');
   assert.equal(safeName('x'.repeat(200)).length, 60);

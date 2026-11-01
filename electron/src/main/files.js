@@ -179,7 +179,8 @@ async function destFolder(dest, home, fs) {
 const exists = (fs, p) => fs.stat(p).then(() => true, (e) => e?.code !== 'ENOENT');   // unsure counts as "there": never overwrite
 
 /** Do one file action. Returns { title, text, results? } for show(); speaks through say(). */
-export async function fileAction(intent, last, { exec = run, approve, say, now = () => new Date(), home = os.homedir(), fs = fsp } = {}) {
+// With `undo` (undo.js's log) a move or rename happens straight away and "undo that" puts it back; without it, approve() asks first.
+export async function fileAction(intent, last, { exec = run, approve, say, undo, now = () => new Date(), home = os.homedir(), fs = fsp } = {}) {
   const tell = (s, title = 'Files', text = s) => { say(s); return { title, text }; };
   const pick = () => {
     const list = last?.length ? last : lastResults;
@@ -232,9 +233,14 @@ export async function fileAction(intent, last, { exec = run, approve, say, now =
   } else return tell("I can't do that with files.");
 
   if (await exists(fs, to)) return tell('There is already a file with that name there, so I left it alone.');
-  if (!(await approve(ask))) return tell(`Okay, I didn't ${intent.verb} it.`);
-  if (await exists(fs, to)) return tell('There is already a file with that name there, so I left it alone.');   // looked again after the wait
-  try { await fs.rename(f.path, to); } catch { return tell(`I couldn't ${intent.verb} it.`); }
+  if (!undo) {
+    if (!(await approve(ask))) return tell(`Okay, I didn't ${intent.verb} it.`);
+    if (await exists(fs, to)) return tell('There is already a file with that name there, so I left it alone.');   // looked again after the wait
+  }
+  try {
+    if (undo) to = await undo.move(f.path, to, undo.group(`${intent.verb === 'move' ? 'Move' : 'Rename'} ${path.basename(f.path)}`));
+    else await fs.rename(f.path, to);
+  } catch { return tell(`I couldn't ${intent.verb} it.`); }
   remember(lastResults.map((r) => (r.path === f.path ? { ...r, path: to, name: path.basename(to) } : r)));
-  return tell(intent.verb === 'move' ? 'Moved.' : 'Renamed.', 'Done', safeName(path.basename(to)));
+  return tell(`${intent.verb === 'move' ? 'Moved' : 'Renamed'}.${undo ? ' Say undo that to put it back.' : ''}`, 'Done', safeName(path.basename(to)));
 }
