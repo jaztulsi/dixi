@@ -71,7 +71,7 @@ export function plannerBody(text, { app = '', apps = [], instant = [] } = {}) {
   const user = [`Front app: ${app || 'unknown'}`, `Installed apps you named: ${nearApps(text, apps).join(', ') || 'none'}`,
     instant.length ? `Instant (already understood): ${instant.map((c) => `"${c}"`).join(', ')}` : '', `Said: ${text}`].filter(Boolean).join('\n');
   // Thinking off: Haiku 5.5 thinks by default, which made a plan take 5–7 s and ran out of tokens mid-JSON.
-  return { model: 'claude-haiku-5-5', max_tokens: 900, thinking: { type: 'disabled' }, system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+  return { model: 'claude-haiku-5-5', max_tokens: 400, thinking: { type: 'disabled' }, system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: user }], output_config: { format: { type: 'json_schema', schema: SCHEMA } } };
 }
 
