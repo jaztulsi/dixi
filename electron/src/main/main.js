@@ -1,7 +1,7 @@
 // Dixi main process: window, keys, and every call that needs a key or main-process powers.
 // The renderer (UI + agents) never sees an API key; every IPC handler checks it is our own UI calling.
 
-import { app, BrowserWindow, ipcMain, session, shell, systemPreferences, webContents } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, session, shell, systemPreferences, webContents } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,7 @@ import { ElevenLabsBridge } from './stt.js';
 import { Resolver } from './resolve.js';
 import { speakable } from './speakable.js';
 import { setupEverywhere } from './everywhere.js';
+import { guardSession, unsafe } from './safesite.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
@@ -71,10 +72,11 @@ const discovered0 = discoverModels(config, { file: modelsFile }).then((f) => { f
 /** A page fetched with the tabs' own network stack (same cookies, same host rules in evals). Sites that
  *  refuse background fetches (401/403/429, or no real page) are loaded for real in a hidden window. */
 async function fetchPage(url, { probe = false } = {}) {
-  if (!/^https?:\/\//i.test(url)) return null;
+  if (!/^https?:\/\//i.test(url) || unsafe(url)) return null;
   let r = null;
   try {
     const res = await tabsSession().fetch(url, { headers: probe ? { 'x-dixi-probe': '1' } : {}, redirect: 'follow', signal: AbortSignal.timeout(4000) });
+    if (res.url && unsafe(res.url)) return null;   // redirected somewhere unsafe
     r = { ok: res.ok, status: res.status, url: res.url || url, html: (await res.text()).slice(0, 400_000) };
   } catch {}
   if (probe && (!r || [401, 403, 429, 503].includes(r.status) || (r.ok && !/<title/i.test(r.html.slice(0, 50_000))))) return (await loadPage(url)) ?? r;
@@ -85,6 +87,7 @@ async function fetchPage(url, { probe = false } = {}) {
 let loaders = 0;
 const waiting = [];
 async function loadPage(url) {
+  if (unsafe(url)) return null;   // and a redirect to one is stopped by guardSession
   if (loaders >= 2) await new Promise((r) => waiting.push(r));
   loaders++;
   const w = new BrowserWindow({ show: false, webPreferences: { partition: 'persist:dixi-tabs', sandbox: true, contextIsolation: true, images: false, backgroundThrottling: false } });
@@ -155,18 +158,14 @@ app.whenReady().then(() => {
   // some bot walls key on. Reported as a trade-off in docs/DECISIONS.md.
   tabs.setUserAgent(tabs.getUserAgent().replace(/\s(Electron|dixi|Dixi)\/\S+/g, ''));
   // Ads and trackers: a generated public blocklist (npm run refresh-blocklist), never a hand-written one.
-  try {
-    const hosts = fs.readFileSync(path.join(root, 'data/blocklist.generated.txt'), 'utf8').split('\n').map((s) => s.trim()).filter((s) => s && !s.startsWith('#'));
-    const blocked = new Set(hosts);
-    if (hosts.length) {
-      tabs.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (d, cb) => {
-        let h = '';
-        try { h = new URL(d.url).hostname; } catch {}
-        const parts = h.split('.');
-        cb({ cancel: d.resourceType !== 'mainFrame' && parts.some((_, i) => blocked.has(parts.slice(i).join('.'))) });
-      });
-    }
-  } catch {}
+  let ads = new Set();
+  try { ads = new Set(fs.readFileSync(path.join(root, 'data/blocklist.generated.txt'), 'utf8').split('\n').map((s) => s.trim()).filter((s) => s && !s.startsWith('#'))); } catch {}
+  // Malware and phishing sites never load, and programs never download (safesite.js). A stopped page says why in its tab.
+  guardSession(tabs, { ads, trash: (p) => shell.trashItem(p), stopped: ({ why, webContentsId }) => {
+    const wc = webContentsId ? webContents.fromId(webContentsId) : null;
+    if (wc?.getType() === 'webview') wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<title>Dixi stopped this site</title><body style="font:22px -apple-system,sans-serif;padding:48px;max-width:640px"><h1>Dixi stopped this site</h1><p>${why.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))} Dixi didn't open it.</p>`)}`).catch(() => {});
+    else if (!webContentsId) new Notification({ title: 'Dixi stopped a download', body: why }).show();
+  } });
   resolver = new Resolver({ fetchPage, file: path.join(app.getPath('userData'), 'registry.json'), env: config.env, keys: config.keys });
   createWindow();
   handleDeepLink(process.argv.find((a) => a.startsWith('dixi://')));
@@ -412,4 +411,4 @@ handle('trace:shot', async (webContentsId, name) => {
   const file = path.join(dir, `${String(name).replace(/[^\w.-]+/g, '-').slice(0, 80)}.jpg`);
   try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, (await wc.capturePage()).toJPEG(60)); return file; } catch (err) { console.warn('[trace] screenshot not saved:', err.message); return null; }
 });
-handle('shell:open-external', (url) => { if (/^https?:\/\//.test(url)) return shell.openExternal(url); });
+handle('shell:open-external', (url) => { if (/^https?:\/\//.test(url) && !unsafe(url)) return shell.openExternal(url); });
