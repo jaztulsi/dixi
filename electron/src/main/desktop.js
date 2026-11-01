@@ -8,7 +8,7 @@
 import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { checkContext } from './guardian.js';
+import { unsafe } from './safesite.js';
 
 /** The real exec: (cmd, args) → stdout. execFile, never a shell. The tests pass a fake. */
 export const exec = (cmd, args) => new Promise((resolve, reject) => {
@@ -189,8 +189,8 @@ const DO = {
     const u = new URL(i.url);   // checked again: only https and a real host ever reach `open`
     const url = validSite(u.hostname, u.pathname + u.search + u.hash);
     if (!url) return out("That doesn't look like a website.");
-    const warn = checkContext({ url });   // a caller reading out "chase-secure-login.com" is exactly this case
-    if (warn.length) return out(`${warn[0].say} I didn't open it.`, 'Dixi Guardian');
+    const why = unsafe(url);   // a caller reading out "chase-secure-login.com" is exactly this case
+    if (why) return out(`${why} I didn't open it.`, 'Dixi Guardian');
     await d.exec('open', [url]);
     return out(`Opening ${u.hostname.replace(/^www\./, '')}.`, 'Opening');
   },

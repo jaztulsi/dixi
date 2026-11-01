@@ -7,6 +7,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { checkContext, checkText } from './guardian.js';
+import { RUNS } from './safesite.js';
 
 const run = (args, timeout = 8000) => new Promise((resolve, reject) => {
   execFile(args[0], args.slice(1), { timeout, maxBuffer: 8 << 20 }, (err, out) => (err ? reject(err) : resolve(String(out))));
@@ -133,12 +134,11 @@ export const remember = (results) => { lastResults = Array.isArray(results) ? re
 /** A name that is safe to show or say: no control or direction characters, at most 60 long. */
 // A name on disk is anyone's words ("Call Apple 1-800… virus alert.pdf"): Dixi never says a scammy one aloud.
 export const safeName = (s) => { const n = String(s ?? '').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 60); return checkText(n).length ? 'a file' : n; };
-// Opening one of these runs code or installs something: the main step of a "tech support" call.
-const RUNS = /\.(app|pkg|mpkg|dmg|iso|command|tool|sh|terminal|workflow|action|scpt|scptd|applescript|jar|prefpane|mobileconfig|webloc|inetloc|fileloc|url|shortcut|osax|kext|plugin|bundle|exe|msi)$/i;
-async function openFile(f, { exec, approve, tell }) {
+async function openFile(f, { exec, tell }) {
   const name = safeName(f.name);
   if (/\.mobileconfig$/i.test(f.path) || checkContext({ name: f.name }).some((x) => x.rule === 'remote-access')) return tell("I won't open that one: it can change settings or let someone control your Mac. If someone on the phone asked you to, hang up first.");
-  if (RUNS.test(f.path.replace(/\/+$/, '')) && !(await approve?.(`“${name}” is a program or installer. Open it?`))) return tell("Okay, I didn't open it.");
+  // Running a program or installer is the main step of a "tech support" call: Dixi never does it.
+  if (RUNS.test(f.path.replace(/\/+$/, ''))) return tell(`“${name}” is a program or installer, and I don't open those. If you trust it, open it yourself in Finder.`);
   await exec(['open', f.path]);
   return tell(`Opening ${name}.`, 'Opening', name);
 }
@@ -184,7 +184,7 @@ export async function fileAction(intent, last, { exec = run, approve, say, now =
     remember(list);
     if (!list.length) return tell("I didn't find anything like that.", 'No files found');
     if (intent.verb === 'open') {
-      return { ...(await openFile(list[0], { exec, approve, tell })), results: list };
+      return { ...(await openFile(list[0], { exec, tell })), results: list };
     }
     const n = list.length;
     const when = dateWords(list[0].modified, now());
@@ -197,7 +197,7 @@ export async function fileAction(intent, last, { exec = run, approve, say, now =
   const f = pick();
   if (!f) return tell("I don't have a file in mind. Ask me to find it first.");
   const name = safeName(f.name);
-  if (intent.verb === 'open') return openFile(f, { exec, approve, tell });
+  if (intent.verb === 'open') return openFile(f, { exec, tell });
   if (intent.verb === 'reveal') { await exec(['open', '-R', f.path]); return tell('Here it is in Finder.', 'In Finder', name); }
 
   let to, ask;
