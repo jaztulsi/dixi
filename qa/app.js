@@ -7,6 +7,14 @@ import { fileURLToPath } from 'node:url';
 
 export const QA = path.dirname(fileURLToPath(import.meta.url));
 export const APP = path.resolve(process.env.QA_APP ?? path.join(QA, '../electron'));
+// The QA lane's own spend ledger: only what QA runs cost, capped across all of them (orchestrator: $1.50).
+export const QA_LEDGER = path.join(QA, 'results', 'qa-spend.json'), QA_CAP = 1.5;
+const readLedger = () => { try { return JSON.parse(fs.readFileSync(QA_LEDGER, 'utf8')); } catch { return { totalUSD: 0, runs: [] }; } };
+export const qaSpent = () => readLedger().totalUSD;
+export function qaRecord(what, usd) {
+  const d = readLedger(); d.totalUSD = Number((d.totalUSD + usd).toFixed(4)); d.runs.push({ at: new Date().toISOString(), what, usd: Number(usd.toFixed(4)) });
+  fs.mkdirSync(path.dirname(QA_LEDGER), { recursive: true }); fs.writeFileSync(QA_LEDGER, JSON.stringify(d, null, 1)); return d.totalUSD;
+}
 
 /**
  * Dixi Everywhere for the Mac suite: spawned plainly (no automation), control port + token, its own profile,

@@ -5,7 +5,8 @@
 // TTFT = first streamed content; total = last byte. Writes qa/results/b2-<stamp>.json.  node qa/b2-planner.js [--runs 10]
 import fs from 'node:fs';
 import path from 'node:path';
-import { QA, APP } from './app.js';
+import { QA, APP, QA_CAP, qaSpent, qaRecord } from './app.js';
+if (qaSpent() >= QA_CAP) { console.log(`QA spend at the $${QA_CAP} cap`); process.exit(1); }
 
 const { loadConfig } = await import(path.join(APP, 'src/main/config.js'));
 const { chat, Spend, ENDPOINTS } = await import(path.join(APP, 'src/main/providers.js'));
@@ -92,5 +93,5 @@ for (const [name, fn] of [['haiku', haiku], ['haiku-noschema', haikuFree], ['gro
   }
 }
 out.usd = Number(spend.total.toFixed(4)); fs.rmSync(ledger, { force: true });
-console.log('usd', out.usd);
+console.log('usd', out.usd, 'qa total', qaRecord('b2', out.usd));
 fs.writeFileSync(path.join(QA, 'results', `b2-${out.at.replace(/[:.]/g, '-')}.json`), JSON.stringify(out, null, 1));

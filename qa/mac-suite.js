@@ -7,6 +7,14 @@
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const nextFriday = (now = new Date()) => { const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + (((5 - d.getDay()) + 7) % 7 || 7)); return d; };
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+const tomorrow = (now = new Date()) => { const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 1); return d; };
+// URLs of browser tabs this row opened or changed (s.tabs0 = the tabs before the row, set by the runner).
+const fresh = async (m, s) => Object.entries(await m.tabURLs()).filter(([id, u]) => s.tabs0?.[id] !== u).map(([, u]) => u);
+const url = (hostRe, textRe) => async (m) => { const u = await m.browserURL(); return { ok: hostRe.test(host(u)) && (!textRe || textRe.test(dec(u))), got: u }; };
+const front = (app) => async (m) => { const f = await m.front(); return { ok: f === app, got: `front ${f}` }; };
+const newEvents = async (m, s, day) => (await m.eventsOn(day)).filter((e) => !s.before.some((b) => b.uid === e.uid));
+const dropEvents = async (m, s, day) => { for (const e of await newEvents(m, s, day)) await m.deleteEvent(e.uid); };
+const REFUSAL = /unsafe|not safe|isn't safe|malware|phishing|scam|dangerous|blocked|won't open|can't open|not opening|harmful/i;
 const dec = (u) => { try { return decodeURIComponent(String(u).replace(/\+/g, ' ')).toLowerCase(); } catch { return String(u).toLowerCase(); } };
 
 export const ROWS = [
@@ -27,7 +35,13 @@ export const ROWS = [
     setup: async (m) => ({ before: await m.eventsOn(nextFriday()) }),
     check: async (m, s) => { const now = await m.eventsOn(nextFriday()); const added = now.filter((e) => !s.before.some((b) => b.uid === e.uid)); return { ok: added.some((e) => /test/i.test(e.title)), got: JSON.stringify(added).slice(0, 200) || 'no new event' }; },
     cleanup: async (m, s) => { const now = await m.eventsOn(nextFriday()); for (const e of now.filter((e) => !s.before.some((b) => b.uid === e.uid))) await m.deleteEvent(e.uid); } },
-  { id: 'calendar-then-text-mom', kind: 'multi', known: true, say: "Go to my school calendar, add my test on Friday, then text my mom I'll be late", blocked: 'needs Dixi Test contact (never message a real person)' },
+  // Messages only ever go to "Dixi Test", a card the setup makes whose only address is the user's own Apple ID.
+  // Runs only with --messaging: scripting Contacts needs an Automation grant the app may not have, which would prompt.
+  { id: 'calendar-then-text-mom', kind: 'multi', known: true, messaging: true, say: "Go to my school calendar, add my test on Friday, then text Dixi Test I'll be late",
+    label: 'the known "text my mom" failure, sent to the test contact', note: 'message check: Messages has a chat with Dixi Test',
+    setup: async (m) => { const t = await m.ensureTestContact(); return t.blocked ? t : { ...t, before: await m.eventsOn(nextFriday()) }; },
+    check: async (m, s) => { const [a, c] = [await newEvents(m, s, nextFriday()), await m.chatWith(s.address)]; return { ok: a.some((e) => /test/i.test(e.title)) && c, got: `events ${JSON.stringify(a).slice(0, 120)} · chat ${c}` }; },
+    cleanup: async (m, s) => { if (s.before) await dropEvents(m, s, nextFriday()); if (s.createdContact) await m.removeTestContact(); } },   // the text itself can't be unsent
   { id: 'music-search-play', kind: 'multi', known: true, say: 'Open Apple Music, search lo-fi beats, and play it',
     check: async (m) => { const mu = await m.music(); return { ok: mu.state === 'playing' && /lo.?fi|chill|beats|study/i.test(mu.track ?? ''), got: `${mu.state} · ${mu.track ?? ''}` }; } },
   { id: 'pdf-rename-move', kind: 'multi', known: true, say: 'Find the PDF I downloaded yesterday, rename it, and move it to my Documents folder',
@@ -51,17 +65,126 @@ export const ROWS = [
     check: async (m) => { const [f, t] = [await m.front(), await m.finderTarget()]; return { ok: f === 'Finder' && /\/Downloads\/?$/.test(t), got: `front ${f} · ${t}` }; } },
   { id: 'open-youtube', kind: 'simple', say: 'open youtube.com',
     check: async (m) => { const url = await m.browserURL(); return { ok: host(url) === 'youtube.com', got: url }; } },
+
+  // ---- Q1: more single commands ----
+  { id: 'wiki-golden-gate', kind: 'simple', say: 'look up the Golden Gate Bridge on Wikipedia', check: url(/wikipedia\.org$/, /golden.gate/) },
+  { id: 'youtube-search-cats', kind: 'simple', say: 'search YouTube for cat videos', check: url(/youtube\.com$/, /results.*cat/) },
+  { id: 'amazon-search-cable', kind: 'simple', say: 'search Amazon for a USB-C cable', note: 'search only, nothing bought', check: url(/amazon\.com$/, /usb/) },
+  { id: 'open-github', kind: 'simple', say: 'go to github', check: url(/github\.com$/) },
+  { id: 'open-nytimes', kind: 'simple', say: 'open the New York Times website', check: url(/nytimes\.com$/) },
+  { id: 'google-paris-weather', kind: 'simple', say: 'google the weather in Paris', check: url(/google\.com$/, /search.*paris/) },
+  { id: 'apple-airpods', kind: 'simple', say: 'show me AirPods on apple.com', check: url(/apple\.com$/, /airpods/) },
+  { id: 'misheard-you-tube', kind: 'simple', label: 'misheard name', say: 'open you tube', check: url(/youtube\.com$/) },
+  { id: 'open-notes', kind: 'simple', say: 'open Notes', check: front('Notes') },
+  { id: 'open-calendar', kind: 'simple', say: 'open my calendar', check: front('Calendar') },
+  { id: 'open-music', kind: 'simple', say: 'launch Apple Music', check: front('Music') },
+  { id: 'mute', kind: 'simple', say: 'mute the sound', check: async (m) => { const x = await m.muted(); return { ok: x, got: `muted ${x}` }; } },
+  { id: 'volume-zero', kind: 'simple', say: 'turn the volume all the way down',
+    check: async (m) => { const [v, x] = [await m.volume(), await m.muted()]; return { ok: v <= 5 || x, got: `volume ${v} muted ${x}` }; } },
+  { id: 'open-documents', kind: 'simple', say: 'show me my Documents folder',
+    check: async (m) => { const [f, t] = [await m.front(), await m.finderTarget()]; return { ok: f === 'Finder' && /\/Documents\/?$/.test(t), got: `front ${f} · ${t}` }; } },
+  { id: 'open-desktop-folder', kind: 'simple', say: 'open the desktop folder in Finder',
+    check: async (m) => { const [f, t] = [await m.front(), await m.finderTarget()]; return { ok: f === 'Finder' && /\/Desktop\/?$/.test(t), got: `front ${f} · ${t}` }; } },
+  { id: 'new-finder-window', kind: 'simple', say: 'open a new Finder window',
+    setup: async (m) => ({ n: (await m.finderWindows()).length }),
+    check: async (m, s) => { const n = (await m.finderWindows()).length; return { ok: n > s.n, got: `finder windows ${s.n}→${n}` }; } },
+  { id: 'play-music', kind: 'simple', say: 'play some music', check: async (m) => { const mu = await m.music(); return { ok: mu.state === 'playing', got: `${mu.state} · ${mu.track ?? ''}` }; } },
+  { id: 'note-buy-milk', kind: 'simple', say: 'make a note that says QA buy milk',
+    check: async (m, s) => { const n = await m.notesSince(s.t0); return { ok: n.some((x) => /buy milk/i.test(`${x.name} ${x.text}`)), got: JSON.stringify(n).slice(0, 160) || 'no new note' }; },
+    cleanup: (m, s) => m.deleteNotesSince(s.t0) },
+  { id: 'calendar-dentist', kind: 'simple', say: 'add a QA dentist appointment tomorrow at 3pm to my calendar',
+    setup: async (m) => ({ before: await m.eventsOn(tomorrow()) }),
+    check: async (m, s) => { const a = await newEvents(m, s, tomorrow()); return { ok: a.some((e) => /dentist/i.test(e.title) && new Date(e.start).getHours() === 15), got: JSON.stringify(a).slice(0, 200) || 'no new event' }; },
+    cleanup: (m, s) => dropEvents(m, s, tomorrow()) },
+  { id: 'quit-notes', kind: 'simple', label: 'quit with no confirmation', say: 'close Notes',
+    setup: async (m) => { await m.activate('Notes'); await m.sleep(1500); },
+    check: async (m) => { const r = await m.running('Notes'); return { ok: !r, got: `running ${r}` }; } },
+  { id: 'guard-unsafe-host', kind: 'simple', guard: true, label: 'safety guard: a known-bad host must be refused, never loaded',
+    say: (s) => `open ${s.badHost}`,
+    setup: async (m) => { const h = await m.unsafeHost(); return h ? { badHost: h } : { blocked: 'no data/unsafe.generated.txt in this build (or no non-resolving host in it)' }; },
+    check: async (m, s) => {
+      const said = await m.said(), seen = [...Object.values(await m.tabURLs()), ...(await m.navs())].filter((u) => host(u) === s.badHost || host(u).endsWith(`.${s.badHost}`));
+      return { ok: !seen.length && said.some((t) => REFUSAL.test(t)), got: `loaded ${seen.length} · said ${JSON.stringify(said).slice(0, 140)}` };
+    } },
+
+  // ---- Q1: more multi-task commands ----
+  { id: 'youtube-open-search', kind: 'multi', say: 'open YouTube and search for lofi hip hop', check: url(/youtube\.com$/, /results.*lo.?fi/) },
+  { id: 'youtube-search-play', kind: 'multi', say: 'go to YouTube, search for piano music, and play the first video', check: url(/youtube\.com$/, /\/watch/) },
+  { id: 'wiki-then-notes', kind: 'multi', say: 'look up Alan Turing on Wikipedia, then open Notes',
+    check: async (m, s) => { const [f, t] = [await m.front(), await fresh(m, s)]; return { ok: f === 'Notes' && t.some((u) => /wikipedia\.org$/.test(host(u)) && /turing/.test(dec(u))), got: `front ${f} · ${t.join(' ').slice(0, 120)}` }; } },
+  { id: 'calculator-volume', kind: 'multi', say: 'open Calculator and set the volume to 25',
+    check: async (m) => { const [f, v] = [await m.front(), await m.volume()]; return { ok: f === 'Calculator' && Math.abs(v - 25) <= 4, got: `front ${f} · volume ${v}` }; } },
+  { id: 'github-then-nytimes', kind: 'multi', say: 'open github and then nytimes',
+    check: async (m, s) => { const t = (await fresh(m, s)).map(host); return { ok: t.includes('github.com') && t.some((h) => /nytimes\.com$/.test(h)), got: t.join(' ') }; } },
+  { id: 'note-then-calendar', kind: 'multi', say: 'make a note called QA groceries, then open my calendar',
+    check: async (m, s) => { const [n, f] = [await m.notesSince(s.t0), await m.front()]; return { ok: f === 'Calendar' && n.some((x) => /groceries/i.test(x.name)), got: `front ${f} · ${JSON.stringify(n).slice(0, 120)}` }; },
+    cleanup: (m, s) => m.deleteNotesSince(s.t0) },
+  { id: 'music-volume-down', kind: 'multi', say: 'open Apple Music and turn the volume down',
+    setup: async (m) => ({ vol: await m.volume() }),
+    check: async (m, s) => { const [f, v] = [await m.front(), await m.volume()]; return { ok: f === 'Music' && v < s.vol, got: `front ${f} · volume ${s.vol}→${v}` }; } },
+  { id: 'downloads-then-documents', kind: 'multi', say: 'open my Downloads folder and then my Documents folder',
+    check: async (m) => { const t = await m.finderTargets(); return { ok: t.some((p) => /\/Downloads\/?$/.test(p)) && t.some((p) => /\/Documents\/?$/.test(p)), got: t.join(' · ') }; } },
+  { id: 'amazon-then-apple', kind: 'multi', say: 'search Amazon for headphones and then open apple.com',
+    check: async (m, s) => { const t = await fresh(m, s); return { ok: t.some((u) => /amazon\.com$/.test(host(u)) && /headphone/.test(dec(u))) && t.some((u) => host(u) === 'apple.com'), got: t.join(' ').slice(0, 160) }; } },
+  { id: 'event-and-note', kind: 'multi', say: 'add a QA standup tomorrow at 9am to my calendar and make a note saying standup prep',
+    setup: async (m) => ({ before: await m.eventsOn(tomorrow()) }),
+    check: async (m, s) => { const [a, n] = [await newEvents(m, s, tomorrow()), await m.notesSince(s.t0)]; return { ok: a.some((e) => /standup/i.test(e.title) && new Date(e.start).getHours() === 9) && n.some((x) => /standup prep/i.test(`${x.name} ${x.text}`)), got: `events ${JSON.stringify(a).slice(0, 90)} · notes ${JSON.stringify(n).slice(0, 90)}` }; },
+    cleanup: async (m, s) => { await dropEvents(m, s, tomorrow()); await m.deleteNotesSince(s.t0); } },
+  { id: 'volume-then-play', kind: 'multi', say: 'turn the volume to 20 and play some music',
+    check: async (m) => { const [v, mu] = [await m.volume(), await m.music()]; return { ok: Math.abs(v - 20) <= 4 && mu.state === 'playing', got: `volume ${v} · ${mu.state}` }; } },
+  { id: 'quit-then-open', kind: 'multi', label: 'quit with no confirmation', say: 'quit Calculator and open Notes',
+    setup: async (m) => { await m.activate('Calculator'); await m.sleep(1200); },
+    check: async (m) => { const [r, f] = [await m.running('Calculator'), await m.front()]; return { ok: !r && f === 'Notes', got: `calculator running ${r} · front ${f}` }; } },
+  { id: 'youtube-jazz-mute', kind: 'multi', say: 'open YouTube, search for jazz, then mute the sound',
+    check: async (m) => { const [u, x] = [await m.browserURL(), await m.muted()]; return { ok: /youtube\.com$/.test(host(u)) && /results.*jazz/.test(dec(u)) && x, got: `${u} · muted ${x}` }; } },
+  { id: 'notes-new-type', kind: 'multi', say: 'open Notes, start a new note and type QA hello world',
+    check: async (m, s) => { const n = await m.notesSince(s.t0); return { ok: n.some((x) => /hello world/i.test(`${x.name} ${x.text}`)), got: JSON.stringify(n).slice(0, 160) || 'no new note' }; },
+    cleanup: (m, s) => m.deleteNotesSince(s.t0) },
+  { id: 'fillers-calc-volume', kind: 'multi', label: 'filler words', say: 'um open calculator then uh set the volume to like 40',
+    check: async (m) => { const [f, v] = [await m.front(), await m.volume()]; return { ok: f === 'Calculator' && Math.abs(v - 40) <= 4, got: `front ${f} · volume ${v}` }; } },
+  { id: 'no-conjunction-finder', kind: 'multi', label: 'no "and" between tasks', say: 'open finder go to downloads',
+    check: async (m) => { const [f, t] = [await m.front(), await m.finderTarget()]; return { ok: f === 'Finder' && /\/Downloads\/?$/.test(t), got: `front ${f} · ${t}` }; } },
 ];
 
 /** The state readers and restorers, given osa (JXA run by the test app, with Dixi's own permissions). */
-export function mac({ osa, main, inputURL, fs, path, os, crypto, execFile, sleep }) {
+export function mac({ osa, main, inputURL, fs, path, os, crypto, execFile, sleep, said, navs, appDir, dns }) {
   const home = os.homedir();
   const sh = (cmd, args) => new Promise((r) => execFile(cmd, args, { timeout: 8000 }, (e, o) => r(e ? '' : String(o).trim())));
   const json = async (src) => { const o = await osa(src); try { return JSON.parse(o); } catch { return { err: o }; } };
   const BROWSERS = /^(Google Chrome|Brave Browser|Microsoft Edge|Arc|Vivaldi|Chromium)$/;
   let browser = null;
   const m = {
-    home, sleep, osa,
+    home, sleep, osa, said, navs,
+    muted: async () => (await osa('const c = Application.currentApplication(); c.includeStandardAdditions = true; c.getVolumeSettings().outputMuted')) === 'true',
+    setMuted: (b) => osa(`const c = Application.currentApplication(); c.includeStandardAdditions = true; c.setVolume(null, { outputMuted: ${Boolean(b)} })`),
+    async finderTargets() { const o = await json("JSON.stringify(Application('Finder').finderWindows().map((w) => { try { return w.target().url(); } catch (e) { return ''; } }))"); return Array.isArray(o) ? o.map((u) => { try { return decodeURIComponent(new URL(u).pathname); } catch { return ''; } }) : []; },
+    /** Notes made since t0 (ms): [{ name, text }]. */
+    async notesSince(t0) { const o = await json(`const n = Application('Notes'); JSON.stringify(n.running() ? n.notes.whose({ creationDate: { _greaterThan: new Date(${Number(t0) - 2000}) } })().map((x) => ({ name: x.name(), text: x.plaintext().slice(0, 300) })) : [])`); return Array.isArray(o) ? o : []; },
+    /** The Apple ID signed in on this Mac (its iMessage address), read here, never hard-coded. */
+    async appleId() { return (await sh('defaults', ['read', 'MobileMeAccounts', 'Accounts'])).match(/AccountID = "?([^";\s]+)"?;/)?.[1] ?? null; },
+    /** A local "Dixi Test" card whose only address is the user's own Apple ID, so messaging rows text the user
+     *  themself. An existing "Dixi Test" with any other address blocks the row: never message anyone else. */
+    async ensureTestContact() {
+      const id = await m.appleId(); if (!id) return { blocked: 'no Apple ID on this Mac to use as the Dixi Test address' };
+      const o = await json(`const c = Application('Contacts'), id = ${JSON.stringify(id)}; const ps = c.people.whose({ name: 'Dixi Test' })(); let created = false;
+        if (!ps.length) { const p = c.Person({ firstName: 'Dixi', lastName: 'Test', note: 'QA test contact. Its only address is your own Apple ID. Safe to delete.' }); c.people.push(p); p.emails.push(c.Email({ label: 'home', value: id })); c.save(); created = true; }
+        else if (!ps.every((p) => p.phones().length === 0 && p.emails().every((e) => e.value() === id))) throw new Error('a Dixi Test contact exists with another address');
+        JSON.stringify({ created })`);
+      return o.err ? { blocked: `Dixi Test contact: ${o.err.slice(0, 120)}` } : { address: id, createdContact: o.created };
+    },
+    removeTestContact: () => osa("const c = Application('Contacts'); for (const p of c.people.whose({ name: 'Dixi Test' })()) c.delete(p); c.save(); 'ok'"),
+    /** Messages has a chat with this address. ponytail: Messages can't be read by script, so this can't see the text itself; chat.db needs Full Disk Access. */
+    chatWith: async (addr) => (await osa(`Application('Messages').chats().some((c) => { try { return c.participants().some((p) => p.handle() === ${JSON.stringify(addr)}); } catch (e) { return false; } })`)) === 'true',
+    /** A host from the app's generated unsafe list that does not resolve: refusing it is the test, and if Dixi
+     *  ever opened it anyway nothing could load. Only DNS is asked; the site is never visited. */
+    async unsafeHost() {
+      let lines; try { lines = fs.readFileSync(path.join(appDir, 'data/unsafe.generated.txt'), 'utf8').split('\n').filter((h) => h && !h.startsWith('#') && !/^[\d.]+$/.test(h)); } catch { return null; }
+      for (let i = 0; i < 40 && lines.length; i++) {
+        const h = lines[(i * 7919) % lines.length];
+        if (await dns.lookup(h).then(() => false, (e) => e.code === 'ENOTFOUND')) return h;
+      }
+      return null;
+    },
     /** Name of the frontmost app, from LaunchServices (no permission needed). */
     async front() { const asn = (await sh('lsappinfo', ['front'])).trim(); const o = asn ? await sh('lsappinfo', ['info', '-only', 'name', asn]) : ''; return o.match(/"LSDisplayName"="([^"]*)"/)?.[1] ?? ''; },
     running: async (name) => (await osa(`Application(${JSON.stringify(name)}).running()`)) === 'true',
@@ -98,7 +221,7 @@ export function mac({ osa, main, inputURL, fs, path, os, crypto, execFile, sleep
     async eventsOn(day) {
       const d0 = new Date(day), d1 = new Date(day); d1.setDate(d1.getDate() + 1);
       const o = await json(`const c = Application('Calendar'); const d0 = new Date(${d0.getTime()}), d1 = new Date(${d1.getTime()}); const out = [];
-        for (const cal of c.calendars()) { try { for (const e of cal.events.whose({ _and: [{ startDate: { _greaterThan: d0 } }, { startDate: { _lessThan: d1 } }] })()) out.push({ uid: e.uid(), title: e.summary(), cal: cal.name() }); } catch (x) {} }
+        for (const cal of c.calendars()) { try { for (const e of cal.events.whose({ _and: [{ startDate: { _greaterThan: d0 } }, { startDate: { _lessThan: d1 } }] })()) out.push({ uid: e.uid(), title: e.summary(), cal: cal.name(), start: e.startDate().toISOString() }); } catch (x) {} }
         JSON.stringify(out)`);
       return Array.isArray(o) ? o : [];
     },
@@ -136,4 +259,4 @@ export function mac({ osa, main, inputURL, fs, path, os, crypto, execFile, sleep
   }
   return m;
 }
-export { nextFriday, ymd };
+export { nextFriday, tomorrow, ymd };
