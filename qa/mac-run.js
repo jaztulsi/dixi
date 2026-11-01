@@ -38,6 +38,7 @@ const log = (...a) => console.log('[mac]', ...a);
 
 const a = await launchMac({ DIXI_EVERYWHERE: '1', ELEVENLABS_API_KEY: ' ', DEEPGRAM_API_KEY: ' ' });
 log(`test Dixi up in ${a.startMs} ms (profile ${a.profile})`);
+process.on('exit', () => { try { a.child.kill(); } catch {} });   // a crash before the finally still takes the test copy down
 // Own spend: every Spend.add in the test copy (the app's own pricing) is also counted here, so the shared
 // ledger's other spenders (the founder's Dixi, other agents) never land in QA's numbers.
 await a.main(async (_e, u) => { const { Spend } = await import(u); globalThis.__qaUSD = 0; const add = Spend.prototype.add; Spend.prototype.add = function (...x) { const usd = add.apply(this, x); globalThis.__qaUSD += usd; return usd; }; return true; }, pathToFileURL(path.join(APP, 'src/main/providers.js')).href);
@@ -47,13 +48,14 @@ const m = mac({ osa: a.osa, main: a.main, inputURL: pathToFileURL(path.join(APP,
   said: () => a.ui(() => window.__said.map((x) => x.text)), navs: () => a.main(() => globalThis.__navs.map((n) => n.url)) });
 // The test copy's own hidden browser: every top-level load, for the URL report.
 await a.main(({ session }) => { globalThis.__navs = []; session.fromPartition('persist:dixi-tabs').webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (d, cb) => { if (d.resourceType === 'mainFrame') globalThis.__navs.push({ t: Date.now(), url: d.url }); cb({}); }); return true; });
-// A scratch TextEdit document in front before every row: stray typing lands there, never in a terminal.
-const teDocs0 = JSON.parse((await m.osa("const te = Application('TextEdit'); JSON.stringify(te.running() ? te.documents().map((d) => d.name()) : [])")) || '[]');
-const neutral = async () => { await m.osa("const te = Application('TextEdit'); te.activate(); if (!te.documents().some((d) => { try { return !d.path() && d.text() === ''; } catch (e) { return false; } })) te.documents.push(te.Document({ text: '' })); 'ok'"); await sleep(600); };
+// A neutral front before every row: a Finder window on an empty folder, so stray typing lands nowhere (never in
+// a terminal). Opened through LaunchServices (`open`), which needs no Automation grant; the row's restore closes it.
+const EMPTY = fs.mkdtempSync(path.join(os.tmpdir(), 'Dixi QA neutral '));
+const sh = (cmd, args) => new Promise((r) => execFile(cmd, args, { timeout: 8000 }, () => r()));
+const neutral = async () => { await sh('open', [EMPTY]); await sleep(700); };
 const firstFront = await m.front();
 const testLog = () => { try { return fs.readFileSync(path.join(a.profile, 'activity.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
 const APPS = ['Music', 'Notes', 'Calendar', 'Calculator', 'Messages', 'Contacts', 'TextEdit', await m.browser()];
-const teWasRunning = await m.running('TextEdit');
 
 const out = { at: new Date().toISOString(), app: APP, timeout: TIMEOUT, ledgerStart: spent(), rows: [], urls: [] };
 const tRun0 = Date.now();
@@ -119,9 +121,8 @@ try {
     await sleep(1000);
   }
 } finally {
-  await m.osa(`const te = Application('TextEdit'); const keep = ${JSON.stringify(teDocs0)}; if (te.running()) for (const d of te.documents()) { try { if (!keep.includes(d.name()) && !d.path()) d.close({ saving: 'no' }); } catch (e) {} } 'ok'`).catch(() => {});   // only docs this run made
-  if (!teWasRunning) await m.quit('TextEdit').catch(() => {});
-  if (firstFront) await m.activate(firstFront).catch(() => {});   // the user's own front app, as found
+  fs.rmSync(EMPTY, { recursive: true, force: true });
+  if (firstFront) await sh('open', ['-a', firstFront]);   // the user's own front app, as found (LaunchServices, no Automation)
   out.ledgerEnd = spent();
   out.usd = await own().catch(() => 0);
   out.qaTotalUSD = qaRecord(`mac-run ${out.at}`, out.usd);
