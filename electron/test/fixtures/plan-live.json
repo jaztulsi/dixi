@@ -1,0 +1,401 @@
+{
+  "apps": [
+    "Anaconda-Navigator",
+    "Antigravity IDE",
+    "Antigravity",
+    "CapCut",
+    "Claude Science",
+    "Claude",
+    "Cloudflare WARP",
+    "Cluely (New)",
+    "Cursor",
+    "DB Browser for SQLite",
+    "Discord",
+    "FlashPrint 5",
+    "GarageBand",
+    "Google Chrome",
+    "Granola",
+    "Holmes",
+    "Keynote Creator Studio",
+    "Keynote",
+    "Numbers Creator Studio",
+    "Numbers",
+    "Obsidian",
+    "Ollama",
+    "Pages Creator Studio",
+    "Pages",
+    "Probe0",
+    "Razer Synapse",
+    "Roblox",
+    "Safari",
+    "Skype",
+    "Superhuman Go",
+    "UltiMaker Cura",
+    "WakaTime",
+    "Warp",
+    "Wispr Flow",
+    "Xcode",
+    "YoungWonksCast",
+    "iMovie",
+    "zoom.us",
+    "App Store",
+    "Apps",
+    "Automator",
+    "Books",
+    "Calculator",
+    "Calendar",
+    "Chess",
+    "Clock",
+    "Contacts",
+    "Dictionary",
+    "FaceTime",
+    "FindMy",
+    "Font Book",
+    "Freeform",
+    "Games",
+    "Home",
+    "Image Capture",
+    "Image Playground",
+    "Journal",
+    "Mail",
+    "Maps",
+    "Messages",
+    "Mission Control",
+    "Music",
+    "News",
+    "Notes",
+    "Passwords",
+    "Phone",
+    "Photo Booth",
+    "Photos",
+    "Podcasts",
+    "Preview",
+    "QuickTime Player",
+    "Reminders",
+    "Shortcuts",
+    "Siri",
+    "Stickies",
+    "Stocks",
+    "System Settings",
+    "TV",
+    "TextEdit",
+    "Time Machine",
+    "Tips",
+    "VoiceMemos",
+    "Weather",
+    "iPhone Mirroring",
+    "Activity Monitor",
+    "AirPort Utility",
+    "Audio MIDI Setup",
+    "Bluetooth File Exchange",
+    "Boot Camp Assistant",
+    "ColorSync Utility",
+    "Console",
+    "Digital Color Meter",
+    "Disk Utility",
+    "Grapher",
+    "Magnifier",
+    "Migration Assistant",
+    "Print Center",
+    "Screen Sharing",
+    "Screenshot",
+    "Script Editor",
+    "System Information",
+    "Terminal",
+    "VoiceOver Utility",
+    "Claude Code URL Handler",
+    "Runic"
+  ],
+  "fixtures": {
+    "Open Apple Music, search lo-fi beats, and play it": {
+      "ms": 6753,
+      "usage": {
+        "input_tokens": 66,
+        "cache_creation_input_tokens": 831,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 831,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 900,
+        "output_tokens_details": {
+          "thinking_tokens": 794
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "Go to my school calendar, add my test on Friday, then text my mom I'll be late": {
+      "ms": 5540,
+      "usage": {
+        "input_tokens": 63,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 900,
+        "output_tokens_details": {
+          "thinking_tokens": 900
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "Turn the volume down, open my notes, and start a new note": {
+      "reply": [
+        {
+          "do": "instant",
+          "clause": "Turn the volume down",
+          "app": "",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Turning the volume down."
+        },
+        {
+          "do": "instant",
+          "clause": "open my notes",
+          "app": "",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Opening your notes."
+        },
+        {
+          "do": "script",
+          "clause": "start a new note",
+          "app": "Notes",
+          "url": "",
+          "lang": "applescript",
+          "code": "tell application \"Notes\" to make new note",
+          "check": "tell application \"Notes\" to return (count of notes) > 0",
+          "say": "Starting a new note."
+        }
+      ],
+      "ms": 3483,
+      "usage": {
+        "input_tokens": 71,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 651,
+        "output_tokens_details": {
+          "thinking_tokens": 450
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "search lo-fi beats on Apple Music": {
+      "reply": [
+        {
+          "do": "open",
+          "clause": "search lo-fi beats on Apple Music",
+          "app": "Music",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Opening Apple Music"
+        },
+        {
+          "do": "computer",
+          "clause": "search lo-fi beats on Apple Music",
+          "app": "Music",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Searching for lo-fi beats"
+        }
+      ],
+      "ms": 2619,
+      "usage": {
+        "input_tokens": 46,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 342,
+        "output_tokens_details": {
+          "thinking_tokens": 204
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "buy a bagel from Safeway": {
+      "reply": [
+        {
+          "do": "web",
+          "clause": "buy a bagel from Safeway",
+          "app": "",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Searching Safeway for a bagel"
+        }
+      ],
+      "ms": 1216,
+      "usage": {
+        "input_tokens": 38,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 71,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "remind me to call the dentist tomorrow at 9": {
+      "ms": 4982,
+      "usage": {
+        "input_tokens": 47,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 900,
+        "output_tokens_details": {
+          "thinking_tokens": 861
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "open Safari and go to the New York Times website": {
+      "reply": [
+        {
+          "do": "instant",
+          "clause": "open Safari",
+          "app": "Safari",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Opening Safari."
+        },
+        {
+          "do": "open",
+          "clause": "go to the New York Times website",
+          "app": "",
+          "url": "https://www.nytimes.com",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Going to the New York Times."
+        }
+      ],
+      "ms": 2058,
+      "usage": {
+        "input_tokens": 63,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 274,
+        "output_tokens_details": {
+          "thinking_tokens": 148
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "make a new folder on my desktop called homework": {
+      "reply": [
+        {
+          "do": "script",
+          "clause": "make a new folder on my desktop called homework",
+          "app": "Finder",
+          "url": "",
+          "lang": "applescript",
+          "code": "tell application \"Finder\" to make new folder at desktop with properties {name:\"homework\"}",
+          "check": "tell application \"Finder\" to exists folder \"homework\" of desktop",
+          "say": "Making a homework folder on your desktop"
+        }
+      ],
+      "ms": 1237,
+      "usage": {
+        "input_tokens": 41,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 136,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "what's on my calendar tomorrow, then text Sam I'm running late": {
+      "ms": 5914,
+      "usage": {
+        "input_tokens": 59,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 900,
+        "output_tokens_details": {
+          "thinking_tokens": 900
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    },
+    "turn on dark mode, open Messages and start a new message to Alex": {
+      "ms": 4659,
+      "usage": {
+        "input_tokens": 74,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 831,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 900,
+        "output_tokens_details": {
+          "thinking_tokens": 678
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      }
+    }
+  }
+}
