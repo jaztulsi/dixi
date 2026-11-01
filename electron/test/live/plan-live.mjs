@@ -7,13 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../../src/main/config.js';
 import { ENDPOINTS } from '../../src/main/providers.js';
 import { plan } from '../../src/main/plan.js';
+import { installedApps } from '../../src/main/mac.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(here, '../fixtures/plan-live.json');
+const old = fs.existsSync(out) ? JSON.parse(fs.readFileSync(out, 'utf8')).fixtures : {};
 const config = loadConfig();
-// ponytail: a plain folder listing until Lane C's mac.js installedApps() lands
-const apps = ['/Applications', '/System/Applications', '/System/Applications/Utilities', path.join(os.homedir(), 'Applications')]
-  .flatMap((d) => { try { return fs.readdirSync(d); } catch { return []; } }).filter((n) => n.endsWith('.app')).map((n) => n.slice(0, -4));
+const apps = await installedApps();
 
 const SAID = [
   'Open Apple Music, search lo-fi beats, and play it',
@@ -52,5 +52,7 @@ for (const said of SAID) {
   if (r.why) console.log(`        fell back: ${r.why}`);
 }
 fs.mkdirSync(path.dirname(out), { recursive: true });
-fs.writeFileSync(out, JSON.stringify({ apps: apps.slice(0, 400), fixtures }, null, 2));
+fs.writeFileSync(out, JSON.stringify({ apps: apps.slice(0, 400), fixtures: { ...old, ...fixtures } }, null, 2));
+const ms = Object.values(fixtures).map((f) => f.ms).sort((a, b) => a - b);
+if (ms.length) console.log(`planner call ms: p50 ${ms[Math.floor((ms.length - 1) / 2)]}, p90 ${ms[Math.min(ms.length - 1, Math.ceil(ms.length * 0.9) - 1)]}, max ${ms.at(-1)}`);
 console.log(`\n${calls} model calls; fixtures in ${out}`);

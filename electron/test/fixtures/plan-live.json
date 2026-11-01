@@ -1,125 +1,250 @@
 {
   "apps": [
+    "Activity Monitor",
+    "AirPort Utility",
+    "Anaconda Navigator",
     "Anaconda-Navigator",
-    "Antigravity IDE",
     "Antigravity",
-    "CapCut",
-    "Claude Science",
-    "Claude",
-    "Cloudflare WARP",
-    "Cluely (New)",
-    "Cursor",
-    "DB Browser for SQLite",
-    "Discord",
-    "FlashPrint 5",
-    "GarageBand",
-    "Google Chrome",
-    "Granola",
-    "Holmes",
-    "Keynote Creator Studio",
-    "Keynote",
-    "Numbers Creator Studio",
-    "Numbers",
-    "Obsidian",
-    "Ollama",
-    "Pages Creator Studio",
-    "Pages",
-    "Probe0",
-    "Razer Synapse",
-    "Roblox",
-    "Safari",
-    "Skype",
-    "Superhuman Go",
-    "UltiMaker Cura",
-    "WakaTime",
-    "Warp",
-    "Wispr Flow",
-    "Xcode",
-    "YoungWonksCast",
-    "iMovie",
-    "zoom.us",
+    "Antigravity IDE",
     "App Store",
+    "Apple Activity Monitor",
+    "Apple AirPort Utility",
+    "Apple App Store",
+    "Apple Apps",
+    "Apple Audio MIDI Setup",
+    "Apple Automator",
+    "Apple Bluetooth File Exchange",
+    "Apple Books",
+    "Apple Boot Camp Assistant",
+    "Apple Calculator",
+    "Apple Calendar",
+    "Apple Chess",
+    "Apple Clock",
+    "Apple ColorSync Utility",
+    "Apple Console",
+    "Apple Contacts",
+    "Apple Dictionary",
+    "Apple Digital Color Meter",
+    "Apple Disk Utility",
+    "Apple FaceTime",
+    "Apple FindMy",
+    "Apple Font Book",
+    "Apple Freeform",
+    "Apple Games",
+    "Apple GarageBand",
+    "Apple Grapher",
+    "Apple Home",
+    "Apple Image Capture",
+    "Apple Image Playground",
+    "Apple Journal",
+    "Apple Keynote",
+    "Apple Keynote Creator Studio",
+    "Apple Magnifier",
+    "Apple Mail",
+    "Apple Maps",
+    "Apple Messages",
+    "Apple Migration Assistant",
+    "Apple Mission Control",
+    "Apple Music",
+    "Apple News",
+    "Apple Notes",
+    "Apple Numbers",
+    "Apple Numbers Creator Studio",
+    "Apple Pages",
+    "Apple Pages Creator Studio",
+    "Apple Passwords",
+    "Apple Phone",
+    "Apple Photo Booth",
+    "Apple Photos",
+    "Apple Podcasts",
+    "Apple Preview",
+    "Apple Print Center",
+    "Apple QuickTime Player",
+    "Apple Reminders",
+    "Apple Safari",
+    "Apple Screen Sharing",
+    "Apple Screenshot",
+    "Apple Script Editor",
+    "Apple Shortcuts",
+    "Apple Siri",
+    "Apple Stickies",
+    "Apple Stocks",
+    "Apple System Information",
+    "Apple System Settings",
+    "Apple TV",
+    "Apple Terminal",
+    "Apple TextEdit",
+    "Apple Time Machine",
+    "Apple Tips",
+    "Apple VoiceMemos",
+    "Apple VoiceOver Utility",
+    "Apple Weather",
+    "Apple Xcode",
+    "Apple iMovie",
+    "Apple iPhone Mirroring",
     "Apps",
+    "Audio MIDI Setup",
     "Automator",
+    "Bluetooth File Exchange",
     "Books",
+    "Boot Camp Assistant",
     "Calculator",
     "Calendar",
+    "CapCut",
     "Chess",
+    "Chrome",
+    "Claude",
+    "Claude Code URL Handler",
+    "Claude Science",
     "Clock",
+    "Cloudflare WARP",
+    "Cluely (New)",
+    "ColorSync Utility",
+    "Console",
     "Contacts",
+    "Cursor",
+    "DB Browser for SQLite",
     "Dictionary",
+    "Digital Color Meter",
+    "Discord",
+    "Disk Utility",
     "FaceTime",
     "FindMy",
+    "FlashPrint 5",
     "Font Book",
     "Freeform",
     "Games",
+    "GarageBand",
+    "Google Chrome",
+    "Granola",
+    "Grapher",
+    "Holmes",
+    "Holmes Local",
     "Home",
+    "IDLE",
     "Image Capture",
     "Image Playground",
     "Journal",
+    "Keynote",
+    "Keynote Creator Studio",
+    "Learning Ally Audiobooks 2",
+    "Learning Ally Audiobooks 3",
+    "Magnifier",
     "Mail",
     "Maps",
     "Messages",
+    "Migration Assistant",
     "Mission Control",
     "Music",
     "News",
     "Notes",
+    "Numbers",
+    "Numbers Creator Studio",
+    "Obsidian",
+    "Ollama",
+    "Pages",
+    "Pages Creator Studio",
     "Passwords",
     "Phone",
     "Photo Booth",
     "Photos",
     "Podcasts",
     "Preview",
-    "QuickTime Player",
-    "Reminders",
-    "Shortcuts",
-    "Siri",
-    "Stickies",
-    "Stocks",
-    "System Settings",
-    "TV",
-    "TextEdit",
-    "Time Machine",
-    "Tips",
-    "VoiceMemos",
-    "Weather",
-    "iPhone Mirroring",
-    "Activity Monitor",
-    "AirPort Utility",
-    "Audio MIDI Setup",
-    "Bluetooth File Exchange",
-    "Boot Camp Assistant",
-    "ColorSync Utility",
-    "Console",
-    "Digital Color Meter",
-    "Disk Utility",
-    "Grapher",
-    "Magnifier",
-    "Migration Assistant",
     "Print Center",
+    "Probe0",
+    "Python Launcher",
+    "QuickTime Player",
+    "Razer Synapse",
+    "Reminders",
+    "Riverside DataManager",
+    "Riverside DataManager 1",
+    "Riverside DataManager 2",
+    "Riverside DataManager 3",
+    "Roblox",
+    "Runic",
+    "Safari",
     "Screen Sharing",
     "Screenshot",
     "Script Editor",
+    "Shortcuts",
+    "Siri",
+    "Skype",
+    "Sora, by OverDrive",
+    "Sora, by OverDrive 1",
+    "Stickies",
+    "Stocks",
+    "Superhuman Go",
     "System Information",
+    "System Settings",
+    "TV",
     "Terminal",
+    "TextEdit",
+    "Time Machine",
+    "Tips",
+    "UltiMaker Cura",
+    "VoiceMemos",
     "VoiceOver Utility",
-    "Claude Code URL Handler",
-    "Runic"
+    "WakaTime",
+    "Warp",
+    "Weather",
+    "WhatsApp",
+    "Wispr Flow",
+    "Xcode",
+    "YoungWonksCast",
+    "Zoom",
+    "holmes",
+    "https:::earth.google.com:web:",
+    "iMovie",
+    "iPhone Mirroring",
+    "zoom.us",
+    "‎WhatsApp"
   ],
   "fixtures": {
     "Open Apple Music, search lo-fi beats, and play it": {
-      "ms": 6753,
+      "reply": [
+        {
+          "do": "instant",
+          "clause": "Open Apple Music",
+          "app": "Music",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Opening Apple Music"
+        },
+        {
+          "do": "script",
+          "clause": "search lo-fi beats",
+          "app": "Music",
+          "url": "",
+          "lang": "applescript",
+          "code": "tell application \"Music\" to search playlist \"Library\" for \"lo-fi beats\"",
+          "check": "tell application \"Music\" to return (name of current track is not missing value)",
+          "say": "Searching for lo-fi beats"
+        },
+        {
+          "do": "script",
+          "clause": "play it",
+          "app": "Music",
+          "url": "",
+          "lang": "applescript",
+          "code": "tell application \"Music\" to play",
+          "check": "tell application \"Music\" to return (player state is playing)",
+          "say": "Playing lo-fi beats"
+        }
+      ],
+      "ms": 3220,
       "usage": {
-        "input_tokens": 66,
-        "cache_creation_input_tokens": 831,
+        "input_tokens": 175,
+        "cache_creation_input_tokens": 838,
         "cache_read_input_tokens": 0,
         "cache_creation": {
-          "ephemeral_5m_input_tokens": 831,
+          "ephemeral_5m_input_tokens": 838,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 900,
+        "output_tokens": 265,
         "output_tokens_details": {
-          "thinking_tokens": 794
+          "thinking_tokens": 0
         },
         "service_tier": "standard",
         "inference_geo": "global",
@@ -127,18 +252,50 @@
       }
     },
     "Go to my school calendar, add my test on Friday, then text my mom I'll be late": {
-      "ms": 5540,
+      "reply": [
+        {
+          "do": "open",
+          "clause": "Go to my school calendar",
+          "app": "Calendar",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Opening your school calendar"
+        },
+        {
+          "do": "script",
+          "clause": "add my test on Friday",
+          "app": "Calendar",
+          "url": "",
+          "lang": "applescript",
+          "code": "tell application \"Calendar\"\n    tell calendar 1\n        make new event with properties {summary:\"Test\", start date:(current date) + (((7 - (weekday of (current date) as integer) + 6) mod 7) + 1) * days, end date:(current date) + (((7 - (weekday of (current date) as integer) + 6) mod 7) + 1) * days + 1 * hours}\n    end tell\nend tell",
+          "check": "tell application \"Calendar\" to return true",
+          "say": "Adding your test Friday"
+        },
+        {
+          "do": "script",
+          "clause": "text my mom I'll be late",
+          "app": "Messages",
+          "url": "",
+          "lang": "applescript",
+          "code": "",
+          "check": "",
+          "say": "Texting your mom"
+        }
+      ],
+      "ms": 2354,
       "usage": {
-        "input_tokens": 63,
+        "input_tokens": 80,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 900,
+        "output_tokens": 342,
         "output_tokens_details": {
-          "thinking_tokens": 900
+          "thinking_tokens": 0
         },
         "service_tier": "standard",
         "inference_geo": "global",
@@ -155,17 +312,17 @@
           "lang": "",
           "code": "",
           "check": "",
-          "say": "Turning the volume down."
+          "say": "Turning the volume down"
         },
         {
           "do": "instant",
           "clause": "open my notes",
-          "app": "",
+          "app": "Notes",
           "url": "",
           "lang": "",
           "code": "",
           "check": "",
-          "say": "Opening your notes."
+          "say": "Opening your notes"
         },
         {
           "do": "script",
@@ -174,22 +331,22 @@
           "url": "",
           "lang": "applescript",
           "code": "tell application \"Notes\" to make new note",
-          "check": "tell application \"Notes\" to return (count of notes) > 0",
-          "say": "Starting a new note."
+          "check": "tell application \"Notes\" to return true",
+          "say": "Starting a new note"
         }
       ],
-      "ms": 3483,
+      "ms": 1406,
       "usage": {
-        "input_tokens": 71,
+        "input_tokens": 78,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 651,
+        "output_tokens": 195,
         "output_tokens_details": {
-          "thinking_tokens": 450
+          "thinking_tokens": 0
         },
         "service_tier": "standard",
         "inference_geo": "global",
@@ -199,38 +356,28 @@
     "search lo-fi beats on Apple Music": {
       "reply": [
         {
-          "do": "open",
+          "do": "script",
           "clause": "search lo-fi beats on Apple Music",
           "app": "Music",
           "url": "",
-          "lang": "",
-          "code": "",
+          "lang": "applescript",
+          "code": "tell application \"Music\" to search playlist \"Library\" for \"lo-fi beats\"",
           "check": "",
-          "say": "Opening Apple Music"
-        },
-        {
-          "do": "computer",
-          "clause": "search lo-fi beats on Apple Music",
-          "app": "Music",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Searching for lo-fi beats"
+          "say": "Searching lo-fi beats in Music"
         }
       ],
-      "ms": 2619,
+      "ms": 1580,
       "usage": {
-        "input_tokens": 46,
+        "input_tokens": 151,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 342,
+        "output_tokens": 111,
         "output_tokens_details": {
-          "thinking_tokens": 204
+          "thinking_tokens": 0
         },
         "service_tier": "standard",
         "inference_geo": "global",
@@ -247,14 +394,14 @@
           "lang": "",
           "code": "",
           "check": "",
-          "say": "Searching Safeway for a bagel"
+          "say": "Ordering a bagel from Safeway"
         }
       ],
-      "ms": 1216,
+      "ms": 1275,
       "usage": {
         "input_tokens": 38,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
@@ -269,18 +416,30 @@
       }
     },
     "remind me to call the dentist tomorrow at 9": {
-      "ms": 4982,
+      "reply": [
+        {
+          "do": "script",
+          "clause": "remind me to call the dentist tomorrow at 9",
+          "app": "Reminders",
+          "url": "",
+          "lang": "applescript",
+          "code": "tell application \"Reminders\"\n set dueDate to (current date) + (1 * days)\n set time of dueDate to (9 * hours)\n make new reminder with properties {name:\"Call the dentist\", remind me date:dueDate}\nend tell",
+          "check": "tell application \"Reminders\" to return exists reminder \"Call the dentist\" of default list",
+          "say": "Setting your dentist reminder."
+        }
+      ],
+      "ms": 1790,
       "usage": {
-        "input_tokens": 47,
+        "input_tokens": 55,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 900,
+        "output_tokens": 197,
         "output_tokens_details": {
-          "thinking_tokens": 861
+          "thinking_tokens": 0
         },
         "service_tier": "standard",
         "inference_geo": "global",
@@ -297,7 +456,7 @@
           "lang": "",
           "code": "",
           "check": "",
-          "say": "Opening Safari."
+          "say": "Opening Safari"
         },
         {
           "do": "open",
@@ -307,21 +466,21 @@
           "lang": "",
           "code": "",
           "check": "",
-          "say": "Going to the New York Times."
+          "say": "Opening the New York Times"
         }
       ],
-      "ms": 2058,
+      "ms": 921,
       "usage": {
-        "input_tokens": 63,
+        "input_tokens": 92,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 274,
+        "output_tokens": 125,
         "output_tokens_details": {
-          "thinking_tokens": 148
+          "thinking_tokens": 0
         },
         "service_tier": "standard",
         "inference_geo": "global",
@@ -338,19 +497,19 @@
           "lang": "applescript",
           "code": "tell application \"Finder\" to make new folder at desktop with properties {name:\"homework\"}",
           "check": "tell application \"Finder\" to exists folder \"homework\" of desktop",
-          "say": "Making a homework folder on your desktop"
+          "say": "Making homework folder on your desktop"
         }
       ],
-      "ms": 1237,
+      "ms": 1289,
       "usage": {
-        "input_tokens": 41,
+        "input_tokens": 47,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 136,
+        "output_tokens": 134,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -360,18 +519,18 @@
       }
     },
     "what's on my calendar tomorrow, then text Sam I'm running late": {
-      "ms": 5914,
+      "ms": 2264,
       "usage": {
-        "input_tokens": 59,
+        "input_tokens": 93,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 900,
+        "output_tokens": 400,
         "output_tokens_details": {
-          "thinking_tokens": 900
+          "thinking_tokens": 0
         },
         "service_tier": "standard",
         "inference_geo": "global",
@@ -379,18 +538,50 @@
       }
     },
     "turn on dark mode, open Messages and start a new message to Alex": {
-      "ms": 4659,
+      "reply": [
+        {
+          "do": "instant",
+          "clause": "turn on dark mode",
+          "app": "",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Turning on dark mode"
+        },
+        {
+          "do": "open",
+          "clause": "open Messages",
+          "app": "Messages",
+          "url": "",
+          "lang": "",
+          "code": "",
+          "check": "",
+          "say": "Opening Messages"
+        },
+        {
+          "do": "script",
+          "clause": "start a new message to Alex",
+          "app": "Messages",
+          "url": "",
+          "lang": "applescript",
+          "code": "tell application \"Messages\" to activate\ntell application \"System Events\" to keystroke \"n\" using command down",
+          "check": "tell application \"System Events\" to (name of first process whose frontmost is true) is \"Messages\"",
+          "say": "Starting a new message"
+        }
+      ],
+      "ms": 1485,
       "usage": {
-        "input_tokens": 74,
+        "input_tokens": 81,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 831,
+        "cache_read_input_tokens": 838,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 900,
+        "output_tokens": 243,
         "output_tokens_details": {
-          "thinking_tokens": 678
+          "thinking_tokens": 0
         },
         "service_tier": "standard",
         "inference_geo": "global",
