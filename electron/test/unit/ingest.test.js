@@ -32,21 +32,42 @@ test('a folder: text, Word and PDF are read; hidden folders and node_modules are
 });
 
 test('the watch: a new or changed file is in the index a moment later; a deleted one leaves it', async () => {
+  // The file events are handed in by the test, so nothing here waits on macOS's timing.
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-watch-'));
   const idx = idxIn(d);
-  const w = watchFolder(idx, d, { settleMs: 50 });
+  let event = null;
+  const w = watchFolder(idx, d, { settleMs: 1e9, watch: (_dir, _opts, fn) => { event = fn; return { close() {} }; } });
   try {
     fs.writeFileSync(path.join(d, 'trip.md'), '# Trip\nFlight to Lisbon on December 3, TAP 203.');
     fs.writeFileSync(path.join(d, 'index.db-x.bin'), 'ignored');
-    await sleep(400);
+    event('rename', 'trip.md'); event('rename', 'index.db-x.bin'); event('change', path.join('node_modules', 'x.md'));
+    await w.flush();
     assert.equal((await idx.search('Lisbon flight'))[0]?.title, 'trip.md');
+    assert.deepEqual(idx.stats(), { file: 1 }, 'only the Markdown file');
     fs.writeFileSync(path.join(d, 'trip.md'), '# Trip\nFlight to Porto instead.');
-    await sleep(400);
+    fs.utimesSync(path.join(d, 'trip.md'), new Date(), new Date(Date.now() + 5000));   // a new mtime, even within the same millisecond
+    event('change', 'trip.md');
+    await w.flush();
     assert.equal((await idx.search('Lisbon')).length, 0);
     assert.equal((await idx.search('Porto'))[0]?.title, 'trip.md');
     fs.rmSync(path.join(d, 'trip.md'));
-    await sleep(400);
+    event('rename', 'trip.md');
+    await w.flush();
     assert.deepEqual(idx.stats(), {});
+  } finally { w.close(); }
+});
+
+test('the watch on real macOS file events (waits for the result, up to 5 s)', async () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-watch-real-'));
+  const idx = idxIn(d);
+  const w = watchFolder(idx, d, { settleMs: 50 });
+  const until = async (ok) => { for (const end = Date.now() + 5000; Date.now() < end; await sleep(50)) if (await ok()) return true; return false; };
+  try {
+    await sleep(100);   // the watch is live before the first write
+    fs.writeFileSync(path.join(d, 'trip.md'), '# Trip\nFlight to Lisbon on December 3, TAP 203.');
+    assert.ok(await until(async () => (await idx.search('Lisbon'))[0]?.title === 'trip.md'), 'a new file is indexed');
+    fs.rmSync(path.join(d, 'trip.md'));
+    assert.ok(await until(() => !Object.keys(idx.stats()).length), 'a deleted file leaves the index');
   } finally { w.close(); }
 });
 
