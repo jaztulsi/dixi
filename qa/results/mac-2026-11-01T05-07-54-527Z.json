@@ -1,0 +1,40 @@
+{
+ "at": "2026-11-01T05:07:54.527Z",
+ "app": "/Users/jaz/dixi-lane-qa/electron",
+ "timeout": 30000,
+ "ledgerStart": 2.7682539249999962,
+ "rows": [
+  {
+   "id": "volume-30",
+   "kind": "simple",
+   "known": false,
+   "say": "set the volume to 30 percent",
+   "status": "pass",
+   "ms": 567,
+   "runMs": 211,
+   "hardStopped": false,
+   "got": "volume 30",
+   "said": [
+    "Volume 30 percent."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  }
+ ],
+ "ledgerEnd": 2.7682539249999962,
+ "founderEvents": 0,
+ "summary": {
+  "ran": 1,
+  "blocked": 0,
+  "pass": 1,
+  "passRate": 1,
+  "avgMs": 567,
+  "slowest": "volume-30",
+  "simpleP50": 567,
+  "simpleP90": 567,
+  "usd": 0,
+  "founderEventsDuringRun": 0
+ }
+}
