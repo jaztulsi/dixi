@@ -36,12 +36,19 @@ const indexOf = (ref) => {
 const LEAD = /^(?:please\s+)?(?:(?:can|could|would) you\s+)?(?:(find|search for|look for|locate|pull up|get me|open|show me|show)\b|(what (?:files? )?did i (?:download|save))\b)/i;
 const NOISE = /\b(?:my|the|a|an|me|newest|latest|last|recent|most recent|newly|file|files|from|in|of|called|named|for|on|all|any|some|that|i|did|what|please|up|saved|downloads?|downloaded|folders?|screenshots?|pdfs?|images?|photos?|pictures?|pics?)\b/gi;
 const clean1 = (s) => s.replace(/\s+/g, ' ').trim();
+// A second command after the first ("…, search lo-fi beats", "…and move it to Documents"): the planner splits those, not us.
+const MORE = /(?:[,;]|\b(?:and|then)\b)\s+(?:(?:and|then|also)\s+)?(?:(?:open|find|search|look|play|rename|move|put|show|send|email|share|copy|print|close|quit|go|click|type|tell|read|make|create|add|set|turn|start|save|upload|attach|delete|trash)\b|\w+\s+(?:it|them)\b)/i;
+// Words that only ever mean files. "music", "photos", "slides" alone can be an app ("open Apple Music"), so they need more.
+const FILE_WORD = /\b(?:files?|folders?|director(?:y|ies)|pdfs?|docx?|xlsx?|csv|pptx?|jpe?gs?|pngs?|heic|mp3s?|mp4s?|movs?|zips?|spreadsheets?)\b/i;
+// "open my Downloads folder" → ~/Downloads itself. Music, Pictures and Movies need the word "folder" (they're apps too).
+const HOME_DIR = /^(?:my\s+|the\s+)?(?:(downloads|documents|desktop)(?:\s+folder)?|(downloads|documents|desktop|pictures|music|movies)\s+folder)$/i;
 
 /** What was asked about files, or null. A search needs a kind of file, "download", "screenshot" or the word "file", so screen tasks ("find the buy button", "what is this file") never match. */
 export function fileIntent(text) {
   const t = clean1(String(text ?? '').replace(/[.!?]+$/, ''));
   let m;
   const none = { kind: null, when: null, index: 0, dest: null, name: null, query: '' };
+  if (MORE.test(t)) return null;
   if ((m = t.match(new RegExp(`^(?:please\\s+)?(?:show|reveal)\\s+(${REF})\\s+in finder$`, 'i')))) return { ...none, verb: 'reveal', index: indexOf(m[1]) };
   if ((m = t.match(new RegExp(`^(?:please\\s+)?open\\s+(?:up\\s+)?(${REF})$`, 'i')))) return { ...none, verb: 'open', index: indexOf(m[1]) };
   if ((m = t.match(new RegExp(`^(?:please\\s+)?(?:move|put)\\s+(${REF})\\s+(?:to|into|in)\\s+(?:my\\s+|the\\s+)?(.+?)(?:\\s+folder)?$`, 'i')))) return { ...none, verb: 'move', index: indexOf(m[1]), dest: m[2] };
@@ -51,13 +58,14 @@ export function fileIntent(text) {
   if (!lead) return null;
   let rest = t.slice(lead[0].length);
   if (/^\s*(?:this|that|these|those|here)\b/i.test(rest)) return null;   // about the screen, not a search
+  if ((m = rest.trim().match(HOME_DIR))) { const f = (m[1] ?? m[2]).toLowerCase(); return { ...none, verb: 'open', kind: 'folder', folder: f[0].toUpperCase() + f.slice(1) }; }
   const w = rest.match(WHEN);
   const when = !w ? null : w[2] ? w[2].toLowerCase() : w[1].toLowerCase();
   if (w) rest = rest.replace(WHEN, ' ');
   const kind = KINDS.find(([, re]) => re.test(rest))?.[0] ?? null;
   const shot = /\bscreenshots?\b|\bscreen shots?\b/i.test(rest);
   const src = shot ? 'screenshot' : kind !== 'folder' && (lead[2] || /\bdownload(?:s|ed)?\b/i.test(rest)) ? 'downloads' : null;
-  if (!kind && !src && !/\bfiles?\b/i.test(rest)) return null;
+  if (!src && !FILE_WORD.test(rest) && !(kind && (w || (/\b(?:my|the)\b/i.test(rest) && !/\bapps?\b/i.test(rest))))) return null;
   const newest = /\b(?:newest|latest|last|most recent|recent)\b/i.test(rest);
   const verb = lead[1]?.toLowerCase() === 'open' || (newest && /^show/i.test(lead[1] ?? '')) ? 'open' : 'find';
   const query = clean1(rest.replace(/\bscreen shots?\b/gi, ' ').replace(NOISE, ' ')).replace(/[^\p{L}\p{N}\s._'-]/gu, ' ').replace(/\s+/g, ' ').trim();
@@ -105,7 +113,9 @@ export function spotlight({ query, kind, when, src }, now = new Date()) {
   if (kind && TYPES[kind]) p.push(`(${TYPES[kind].map((t) => `kMDItemContentTypeTree == ${lit(t)}`).join(' || ')})`);
   for (const w of String(query ?? '').split(/\s+/).filter(Boolean).slice(0, 8)) p.push(`kMDItemDisplayName == ${lit(`*${w}*`)}cd`);
   const r = range(when, now);
-  if (r) p.push(`kMDItemContentModificationDate >= $time.iso(${iso(r[0])})`, `kMDItemContentModificationDate < $time.iso(${iso(r[1])})`);
+  // "Downloaded yesterday" is when it arrived, not when its maker last saved it.
+  const at = src === 'downloads' ? 'kMDItemDateAdded' : 'kMDItemContentModificationDate';
+  if (r) p.push(`${at} >= $time.iso(${iso(r[0])})`, `${at} < $time.iso(${iso(r[1])})`);
   return p.length ? p.join(' && ') : 'kMDItemFSName == "*"';
 }
 
@@ -169,7 +179,8 @@ async function destFolder(dest, home, fs) {
 const exists = (fs, p) => fs.stat(p).then(() => true, (e) => e?.code !== 'ENOENT');   // unsure counts as "there": never overwrite
 
 /** Do one file action. Returns { title, text, results? } for show(); speaks through say(). */
-export async function fileAction(intent, last, { exec = run, approve, say, now = () => new Date(), home = os.homedir(), fs = fsp } = {}) {
+// With `undo` (undo.js's log) a move or rename happens straight away and "undo that" puts it back; without it, approve() asks first.
+export async function fileAction(intent, last, { exec = run, approve, say, undo, now = () => new Date(), home = os.homedir(), fs = fsp } = {}) {
   const tell = (s, title = 'Files', text = s) => { say(s); return { title, text }; };
   const pick = () => {
     const list = last?.length ? last : lastResults;
@@ -177,6 +188,12 @@ export async function fileAction(intent, last, { exec = run, approve, say, now =
     return f && allowed(f.path, home) ? f : null;
   };
 
+  if (intent.folder) {
+    const dir = path.join(home, path.basename(String(intent.folder)));
+    if (!(await fs.stat(dir).then((x) => x.isDirectory(), () => false))) return tell(`I couldn't find your ${safeName(intent.folder)} folder.`);
+    await exec(['open', dir]);
+    return tell(`Opening your ${safeName(intent.folder)} folder.`, 'Opening', safeName(intent.folder));
+  }
   if (intent.verb === 'find' || (intent.verb === 'open' && (intent.query || intent.kind || intent.src))) {
     let list;
     try { list = await findFiles(intent, { exec, now, home, fs }); } catch { return tell("I couldn't search your files just now."); }
@@ -216,9 +233,14 @@ export async function fileAction(intent, last, { exec = run, approve, say, now =
   } else return tell("I can't do that with files.");
 
   if (await exists(fs, to)) return tell('There is already a file with that name there, so I left it alone.');
-  if (!(await approve(ask))) return tell(`Okay, I didn't ${intent.verb} it.`);
-  if (await exists(fs, to)) return tell('There is already a file with that name there, so I left it alone.');   // looked again after the wait
-  try { await fs.rename(f.path, to); } catch { return tell(`I couldn't ${intent.verb} it.`); }
+  if (!undo) {
+    if (!(await approve(ask))) return tell(`Okay, I didn't ${intent.verb} it.`);
+    if (await exists(fs, to)) return tell('There is already a file with that name there, so I left it alone.');   // looked again after the wait
+  }
+  try {
+    if (undo) to = await undo.move(f.path, to, undo.group(`${intent.verb === 'move' ? 'Move' : 'Rename'} ${path.basename(f.path)}`));
+    else await fs.rename(f.path, to);
+  } catch { return tell(`I couldn't ${intent.verb} it.`); }
   remember(lastResults.map((r) => (r.path === f.path ? { ...r, path: to, name: path.basename(to) } : r)));
-  return tell(intent.verb === 'move' ? 'Moved.' : 'Renamed.', 'Done', safeName(path.basename(to)));
+  return tell(`${intent.verb === 'move' ? 'Moved' : 'Renamed'}.${undo ? ' Say undo that to put it back.' : ''}`, 'Done', safeName(path.basename(to)));
 }

@@ -48,12 +48,29 @@ test('screen questions and plain app or button asks do not match', () => {
   assert.ok(FILES.test('find my tax return') && !FILES.test('click the button'));
 });
 
+test('compound and app commands are not file searches; home folders open themselves', async () => {
+  for (const t of ['Open Apple Music, search lo-fi beats, and play the first one', 'Open Apple Music', 'open the Music app', 'open Photos', 'open Keynote',
+    'find the PDF I downloaded yesterday, rename it to Receipt and move it to Documents', 'rename it to Q4 plan and move it to Documents', 'find my tax pdf then open it'])
+    assert.equal(fileIntent(t), null, t);
+  assert.equal(fileIntent('rename it to Tom and Jerry').name, 'Tom and Jerry', 'an "and" inside a name is not a second command');
+  assert.equal(fileIntent('find my vacation photos').kind, 'image');
+  for (const [t, f] of [['open my Downloads folder', 'Downloads'], ['open downloads', 'Downloads'], ['open the documents folder', 'Documents'], ['open my music folder', 'Music'], ['show me my pictures folder', 'Pictures']])
+    assert.deepEqual([fileIntent(t).folder, fileIntent(t).kind], [f, 'folder'], t);
+  assert.equal(fileIntent('open the qa folder').folder, undefined, 'any other folder is still a search');
+  const calls = []; const said = [];
+  const r = await fileAction(fileIntent('open my Downloads folder'), null, { exec: async (a) => { calls.push(a); return ''; }, say: (x) => said.push(x), home: HOME, now: clock, fs: fakeFs({}, ['/Users/t/Downloads']) });
+  assert.deepEqual(calls, [['open', '/Users/t/Downloads']], 'no Spotlight search, straight to the folder');
+  assert.equal(said[0], 'Opening your Downloads folder.');
+  assert.equal(r.results, undefined);
+});
+
 test('the Spotlight query is escaped and typed', () => {
   const q = spotlight({ query: 'a"b\\c', kind: 'pdf' }, NOW);
   assert.ok(q.includes('"*a\\"b\\\\c*"cd'));
   assert.ok(q.includes('kMDItemContentTypeTree == "com.adobe.pdf"'));
   assert.ok(spotlight({ src: 'screenshot' }, NOW).includes('kMDItemIsScreenCapture == 1'));
   assert.ok(spotlight({ when: 'today' }, NOW).includes('kMDItemContentModificationDate >='));
+  assert.ok(spotlight({ when: 'yesterday', src: 'downloads' }, NOW).includes('kMDItemDateAdded >='), 'downloaded yesterday = arrived yesterday');
 });
 
 test('when ranges', () => {
@@ -128,6 +145,22 @@ test('move and rename ask first, never overwrite, stay inside home', async () =>
     await fileAction(fileIntent(t), null, c.deps);
     assert.deepEqual([t, c.asked.length, c.fs.renamed.length], [t, 0, 0]);
   }
+});
+
+test('with the undo log, move and rename happen without a question and can be undone', async () => {
+  const src = '/Users/t/Downloads/Tax 2025.pdf';
+  const moved = []; const said = [];
+  const undo = { group: (label) => ({ id: 'g1', label }), move: async (a, b, g) => { moved.push([a, b, g.label]); return b; } };
+  const deps = { exec: async () => '', say: (s) => said.push(s), approve: async () => assert.fail('never asks'), undo, now: clock, home: HOME, fs: fakeFs({ [src]: T(1) }) };
+  remember([{ path: src, name: 'Tax 2025.pdf', modified: T(1) }]);
+  await fileAction(fileIntent('move it to Documents'), null, deps);
+  await fileAction(fileIntent('rename it to Q4 plan'), null, deps);
+  assert.deepEqual(moved, [[src, '/Users/t/Documents/Tax 2025.pdf', 'Move Tax 2025.pdf'], ['/Users/t/Documents/Tax 2025.pdf', '/Users/t/Documents/Q4 plan.pdf', 'Rename Tax 2025.pdf']]);
+  assert.equal(said[0], 'Moved. Say undo that to put it back.');
+  const c = { ...deps, fs: fakeFs({ [src]: T(1), '/Users/t/Documents/Tax 2025.pdf': 1 }) };
+  remember([{ path: src, name: 'Tax 2025.pdf', modified: T(1) }]); moved.length = 0;
+  await fileAction(fileIntent('move it to Documents'), null, c);
+  assert.deepEqual(moved, [], 'still never over another file');
 });
 
 test('hostile names are cleaned and capped; there is no delete', async () => {
