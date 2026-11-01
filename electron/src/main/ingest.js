@@ -79,7 +79,7 @@ export function watchFolder(idx, dir, { extract = extractText, settleMs = 1500, 
   const due = new Set();
   let timer = null;
   const flush = async () => {
-    timer = null;
+    clearTimeout(timer); timer = null;   // also when called directly: no timer left behind
     for (const f of [...due]) { due.delete(f); await addFile(idx, f, extract).catch(() => {}); }
   };
   const w = watch(dir, { recursive: true }, (_ev, name) => {
