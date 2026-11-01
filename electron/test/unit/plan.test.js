@@ -136,3 +136,21 @@ test('page or screen text never reaches the planner; only your words, the front 
   assert.equal(b.output_config.format.type, 'json_schema');
   assert.deepEqual(nearApps('open apple music and my notes', apps), ['Music', 'Notes']);
 });
+
+// Real Haiku replies, recorded once by test/live/plan-live.mjs, replayed here for $0.
+test('recorded planner replies pass the checks and keep their meaning', async () => {
+  const { createRequire } = await import('node:module');
+  const { apps: live, fixtures } = createRequire(import.meta.url)('../fixtures/plan-live.json');
+  const want = {
+    'Turn the volume down, open my notes, and start a new note': ['instant', 'instant', 'script'],
+    'buy a bagel from Safeway': ['web'],
+    'open Safari and go to the New York Times website': ['instant', 'open'],
+    'make a new folder on my desktop called homework': ['script'],
+  };
+  for (const [said, f] of Object.entries(fixtures)) {
+    if (!f.reply) continue;
+    const r = check(f.reply, said, { apps: live, home: '/Users/me' });
+    assert.equal(r.ok, true, said);
+    if (want[said]) assert.deepEqual(r.steps.map((s) => s.do), want[said], said);
+  }
+});
