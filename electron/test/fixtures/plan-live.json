@@ -201,48 +201,18 @@
   ],
   "fixtures": {
     "Open Apple Music, search lo-fi beats, and play it": {
-      "reply": [
-        {
-          "do": "instant",
-          "clause": "Open Apple Music",
-          "app": "Music",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Opening Apple Music"
-        },
-        {
-          "do": "script",
-          "clause": "search lo-fi beats",
-          "app": "Music",
-          "url": "",
-          "lang": "applescript",
-          "code": "tell application \"Music\" to search playlist \"Library\" for \"lo-fi beats\"",
-          "check": "tell application \"Music\" to return (name of current track is not missing value)",
-          "say": "Searching for lo-fi beats"
-        },
-        {
-          "do": "script",
-          "clause": "play it",
-          "app": "Music",
-          "url": "",
-          "lang": "applescript",
-          "code": "tell application \"Music\" to play",
-          "check": "tell application \"Music\" to return (player state is playing)",
-          "say": "Playing lo-fi beats"
-        }
-      ],
-      "ms": 3220,
+      "text": "{\"steps\":[{\"do\":\"open\",\"clause\":\"Open Apple Music\",\"app\":\"Music\"},{\"do\":\"script\",\"clause\":\"search lo-fi beats\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Music\\\" to search playlist \\\"Library\\\" for \\\"lo-fi beats\\\"\",\"check\":\"tell application \\\"Music\\\" to return (count of (search playlist \\\"Library\\\" for \\\"lo-fi beats\\\")) > 0\"},{\"do\":\"script\",\"clause\":\"play it\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Music\\\" to play (first track of (search playlist \\\"Library\\\" for \\\"lo-fi beats\\\"))\",\"check\":\"tell application \\\"Music\\\" to return player state is playing\"}]}",
+      "stop": "end_turn",
+      "ms": 2839,
       "usage": {
-        "input_tokens": 175,
-        "cache_creation_input_tokens": 838,
+        "input_tokens": 176,
+        "cache_creation_input_tokens": 856,
         "cache_read_input_tokens": 0,
         "cache_creation": {
-          "ephemeral_5m_input_tokens": 838,
+          "ephemeral_5m_input_tokens": 856,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 265,
+        "output_tokens": 231,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -252,48 +222,18 @@
       }
     },
     "Go to my school calendar, add my test on Friday, then text my mom I'll be late": {
-      "reply": [
-        {
-          "do": "open",
-          "clause": "Go to my school calendar",
-          "app": "Calendar",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Opening your school calendar"
-        },
-        {
-          "do": "script",
-          "clause": "add my test on Friday",
-          "app": "Calendar",
-          "url": "",
-          "lang": "applescript",
-          "code": "tell application \"Calendar\"\n    tell calendar 1\n        make new event with properties {summary:\"Test\", start date:(current date) + (((7 - (weekday of (current date) as integer) + 6) mod 7) + 1) * days, end date:(current date) + (((7 - (weekday of (current date) as integer) + 6) mod 7) + 1) * days + 1 * hours}\n    end tell\nend tell",
-          "check": "tell application \"Calendar\" to return true",
-          "say": "Adding your test Friday"
-        },
-        {
-          "do": "script",
-          "clause": "text my mom I'll be late",
-          "app": "Messages",
-          "url": "",
-          "lang": "applescript",
-          "code": "",
-          "check": "",
-          "say": "Texting your mom"
-        }
-      ],
-      "ms": 2354,
+      "text": "{\"steps\":[{\"do\":\"open\",\"clause\":\"Go to my school calendar\",\"app\":\"Calendar\"},{\"do\":\"script\",\"clause\":\"add my test on Friday\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Calendar\\\" to make new event at end of events of calendar \\\"school\\\" with properties {summary:\\\"Test\\\", start date:(current date)}\",\"check\":\"tell application \\\"Calendar\\\" to return exists (events of calendar \\\"school\\\" whose summary is \\\"Test\\\")\"},{\"do\":\"script\",\"clause\":\"text my mom I'll be late\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Messages\\\" to send \\\"I'll be late\\\" to buddy \\\"mom\\\"\",\"check\":\"tell application \\\"Messages\\\" to return true\"}]}",
+      "stop": "end_turn",
+      "ms": 2061,
       "usage": {
-        "input_tokens": 80,
+        "input_tokens": 88,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 342,
+        "output_tokens": 242,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -303,48 +243,18 @@
       }
     },
     "Turn the volume down, open my notes, and start a new note": {
-      "reply": [
-        {
-          "do": "instant",
-          "clause": "Turn the volume down",
-          "app": "",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Turning the volume down"
-        },
-        {
-          "do": "instant",
-          "clause": "open my notes",
-          "app": "Notes",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Opening your notes"
-        },
-        {
-          "do": "script",
-          "clause": "start a new note",
-          "app": "Notes",
-          "url": "",
-          "lang": "applescript",
-          "code": "tell application \"Notes\" to make new note",
-          "check": "tell application \"Notes\" to return true",
-          "say": "Starting a new note"
-        }
-      ],
-      "ms": 1406,
+      "text": "{\"steps\":[{\"do\":\"script\",\"clause\":\"Turn the volume down\",\"lang\":\"applescript\",\"code\":\"set volume output volume ((output volume of (get volume settings)) - 10)\",\"check\":\"output volume of (get volume settings) is less than 100\"},{\"do\":\"open\",\"clause\":\"open my notes\",\"app\":\"Notes\"},{\"do\":\"script\",\"clause\":\"start a new note\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Notes\\\" to make new note\",\"check\":\"tell application \\\"Notes\\\" to count of notes is greater than 0\"}]}",
+      "stop": "end_turn",
+      "ms": 1325,
       "usage": {
-        "input_tokens": 78,
+        "input_tokens": 65,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 195,
+        "output_tokens": 177,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -354,28 +264,18 @@
       }
     },
     "search lo-fi beats on Apple Music": {
-      "reply": [
-        {
-          "do": "script",
-          "clause": "search lo-fi beats on Apple Music",
-          "app": "Music",
-          "url": "",
-          "lang": "applescript",
-          "code": "tell application \"Music\" to search playlist \"Library\" for \"lo-fi beats\"",
-          "check": "",
-          "say": "Searching lo-fi beats in Music"
-        }
-      ],
-      "ms": 1580,
+      "text": "{\"steps\":[{\"do\":\"open\",\"clause\":\"search lo-fi beats on Apple Music\",\"url\":\"music://music.apple.com/search?term=lo-fi%20beats\"}]}",
+      "stop": "end_turn",
+      "ms": 876,
       "usage": {
-        "input_tokens": 151,
+        "input_tokens": 159,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 111,
+        "output_tokens": 62,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -385,28 +285,18 @@
       }
     },
     "buy a bagel from Safeway": {
-      "reply": [
-        {
-          "do": "web",
-          "clause": "buy a bagel from Safeway",
-          "app": "",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Ordering a bagel from Safeway"
-        }
-      ],
-      "ms": 1275,
+      "text": "{\"steps\":[{\"do\":\"web\",\"clause\":\"buy a bagel from Safeway\",\"url\":\"https://www.safeway.com\",\"check\":\"Safeway site opened for shopping\"}]}",
+      "stop": "end_turn",
+      "ms": 1560,
       "usage": {
-        "input_tokens": 38,
+        "input_tokens": 46,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 71,
+        "output_tokens": 61,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -416,28 +306,18 @@
       }
     },
     "remind me to call the dentist tomorrow at 9": {
-      "reply": [
-        {
-          "do": "script",
-          "clause": "remind me to call the dentist tomorrow at 9",
-          "app": "Reminders",
-          "url": "",
-          "lang": "applescript",
-          "code": "tell application \"Reminders\"\n set dueDate to (current date) + (1 * days)\n set time of dueDate to (9 * hours)\n make new reminder with properties {name:\"Call the dentist\", remind me date:dueDate}\nend tell",
-          "check": "tell application \"Reminders\" to return exists reminder \"Call the dentist\" of default list",
-          "say": "Setting your dentist reminder."
-        }
-      ],
-      "ms": 1790,
+      "text": "{\"steps\":[{\"do\":\"script\",\"clause\":\"remind me to call the dentist tomorrow at 9\",\"app\":\"Reminders\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Reminders\\\"\\nset dueDate to (current date) + 1 * days\\nset time of dueDate to 9 * hours\\nmake new reminder with properties {name:\\\"Call the dentist\\\", remind me date:dueDate}\\nend tell\",\"check\":\"tell application \\\"Reminders\\\" to return exists (reminder \\\"Call the dentist\\\" whose completed is false)\"}]}",
+      "stop": "end_turn",
+      "ms": 1409,
       "usage": {
-        "input_tokens": 55,
+        "input_tokens": 63,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 197,
+        "output_tokens": 183,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -447,38 +327,18 @@
       }
     },
     "open Safari and go to the New York Times website": {
-      "reply": [
-        {
-          "do": "instant",
-          "clause": "open Safari",
-          "app": "Safari",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Opening Safari"
-        },
-        {
-          "do": "open",
-          "clause": "go to the New York Times website",
-          "app": "",
-          "url": "https://www.nytimes.com",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Opening the New York Times"
-        }
-      ],
-      "ms": 921,
+      "text": "{\"steps\":[{\"do\":\"open\",\"clause\":\"open Safari\",\"app\":\"Safari\"},{\"do\":\"open\",\"clause\":\"go to the New York Times website\",\"url\":\"https://www.nytimes.com\"}]}",
+      "stop": "end_turn",
+      "ms": 1241,
       "usage": {
         "input_tokens": 92,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 125,
+        "output_tokens": 68,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -488,28 +348,18 @@
       }
     },
     "make a new folder on my desktop called homework": {
-      "reply": [
-        {
-          "do": "script",
-          "clause": "make a new folder on my desktop called homework",
-          "app": "Finder",
-          "url": "",
-          "lang": "applescript",
-          "code": "tell application \"Finder\" to make new folder at desktop with properties {name:\"homework\"}",
-          "check": "tell application \"Finder\" to exists folder \"homework\" of desktop",
-          "say": "Making homework folder on your desktop"
-        }
-      ],
-      "ms": 1289,
+      "text": "{\"steps\":[{\"do\":\"script\",\"clause\":\"make a new folder on my desktop called homework\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Finder\\\" to make new folder at desktop with properties {name:\\\"homework\\\"}\",\"check\":\"tell application \\\"Finder\\\" to exists folder \\\"homework\\\" of desktop\"}]}",
+      "stop": "end_turn",
+      "ms": 1241,
       "usage": {
-        "input_tokens": 47,
+        "input_tokens": 55,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 134,
+        "output_tokens": 108,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -519,16 +369,18 @@
       }
     },
     "what's on my calendar tomorrow, then text Sam I'm running late": {
-      "ms": 2264,
+      "text": "{\"steps\":[{\"do\":\"answer\",\"clause\":\"what's on my calendar tomorrow\"},{\"do\":\"script\",\"clause\":\"text Sam I'm running late\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Messages\\\" to send \\\"I'm running late\\\" to buddy \\\"Sam\\\" of (1st account whose service type = iMessage)\",\"check\":\"tell application \\\"Messages\\\" to return true\"}]}",
+      "stop": "end_turn",
+      "ms": 1327,
       "usage": {
-        "input_tokens": 93,
+        "input_tokens": 101,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 400,
+        "output_tokens": 133,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
@@ -538,48 +390,18 @@
       }
     },
     "turn on dark mode, open Messages and start a new message to Alex": {
-      "reply": [
-        {
-          "do": "instant",
-          "clause": "turn on dark mode",
-          "app": "",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Turning on dark mode"
-        },
-        {
-          "do": "open",
-          "clause": "open Messages",
-          "app": "Messages",
-          "url": "",
-          "lang": "",
-          "code": "",
-          "check": "",
-          "say": "Opening Messages"
-        },
-        {
-          "do": "script",
-          "clause": "start a new message to Alex",
-          "app": "Messages",
-          "url": "",
-          "lang": "applescript",
-          "code": "tell application \"Messages\" to activate\ntell application \"System Events\" to keystroke \"n\" using command down",
-          "check": "tell application \"System Events\" to (name of first process whose frontmost is true) is \"Messages\"",
-          "say": "Starting a new message"
-        }
-      ],
-      "ms": 1485,
+      "text": "{\"steps\":[{\"do\":\"script\",\"clause\":\"turn on dark mode\",\"lang\":\"applescript\",\"code\":\"tell application \\\"System Events\\\" to tell appearance preferences to set dark mode to true\",\"check\":\"tell application \\\"System Events\\\" to tell appearance preferences to return dark mode\"},{\"do\":\"open\",\"clause\":\"open Messages\",\"app\":\"Messages\"},{\"do\":\"script\",\"clause\":\"start a new message to Alex\",\"lang\":\"applescript\",\"code\":\"tell application \\\"Messages\\\" to activate\\ntell application \\\"System Events\\\" to keystroke \\\"n\\\" using command down\",\"check\":\"tell application \\\"System Events\\\" to return exists process \\\"Messages\\\"\"}]}",
+      "stop": "end_turn",
+      "ms": 1704,
       "usage": {
-        "input_tokens": 81,
+        "input_tokens": 72,
         "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 838,
+        "cache_read_input_tokens": 856,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 243,
+        "output_tokens": 217,
         "output_tokens_details": {
           "thinking_tokens": 0
         },
