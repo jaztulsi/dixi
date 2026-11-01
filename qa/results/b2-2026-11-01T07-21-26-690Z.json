@@ -1,0 +1,145 @@
+{
+ "at": "2026-11-01T07:21:26.690Z",
+ "systemBytes": 1712,
+ "user": "Open Apple Music, search lo-fi beats, and play it, then turn the volume down and add my math test on Friday to my school calendar",
+ "runs": 10,
+ "results": {
+  "haiku/cold": {
+   "ttftP50": 1993,
+   "ttftP90": 2425,
+   "totalP50": 2731,
+   "totalP90": 3261,
+   "ok": 0,
+   "usageFirst": {
+    "input_tokens": 49,
+    "cache_creation_input_tokens": 1104,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 1104,
+     "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 400,
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard",
+    "output_tokens_details": {
+     "thinking_tokens": 400
+    }
+   },
+   "usageLast": {
+    "input_tokens": 49,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 1104,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 400,
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard",
+    "output_tokens_details": {
+     "thinking_tokens": 400
+    }
+   }
+  },
+  "haiku/warm": {
+   "ttftP50": 2206,
+   "ttftP90": 2705,
+   "totalP50": 2483,
+   "totalP90": 2697,
+   "ok": 0,
+   "usageFirst": {
+    "input_tokens": 49,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 1104,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 400,
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard",
+    "output_tokens_details": {
+     "thinking_tokens": 192
+    }
+   },
+   "usageLast": {
+    "input_tokens": 49,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 1104,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 400,
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard",
+    "output_tokens_details": {
+     "thinking_tokens": 400
+    }
+   }
+  },
+  "groq-stream/cold": {
+   "ttftP50": 1036,
+   "ttftP90": 1070,
+   "totalP50": 1040,
+   "totalP90": 1070,
+   "ok": 10,
+   "usageFirst": {
+    "queue_time": 0.174065084,
+    "prompt_tokens": 550,
+    "prompt_time": 0.02309404,
+    "completion_tokens": 360,
+    "completion_time": 0.75249891,
+    "total_tokens": 910,
+    "total_time": 0.77559295,
+    "completion_tokens_details": {
+     "reasoning_tokens": 239
+    }
+   },
+   "usageLast": {
+    "queue_time": 0.176047494,
+    "prompt_tokens": 550,
+    "prompt_time": 0.023959121,
+    "completion_tokens": 360,
+    "completion_time": 0.747021975,
+    "total_tokens": 910,
+    "total_time": 0.770981096,
+    "completion_tokens_details": {
+     "reasoning_tokens": 239
+    }
+   }
+  },
+  "groq-stream/warm": {
+   "ttftP50": null,
+   "ttftP90": null,
+   "totalP50": 58,
+   "totalP90": 82,
+   "ok": 0,
+   "usageFirst": {},
+   "usageLast": {}
+  },
+  "groq-chat/cold": {
+   "ttftP50": null,
+   "ttftP90": null,
+   "totalP50": 94,
+   "totalP90": 102,
+   "ok": 0,
+   "usageFirst": {},
+   "usageLast": {}
+  },
+  "groq-chat/warm": {
+   "ttftP50": null,
+   "ttftP90": null,
+   "totalP50": 56,
+   "totalP90": 59,
+   "ok": 0,
+   "usageFirst": {},
+   "usageLast": {}
+  }
+ },
+ "usd": 0.0075
+}

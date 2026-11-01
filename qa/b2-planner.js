@@ -35,6 +35,7 @@ async function streamed(url, headers, body, cold) {
   const t0 = performance.now();
   const res = await fetch(url, { method: 'POST', headers: { ...headers, 'content-type': 'application/json', ...(cold ? { connection: 'close' } : {}) }, body: JSON.stringify(body) });
   let ttft = null, text = '', buf = '', usage = {};
+  if (res.status !== 200) return { ttft, total: performance.now() - t0, status: res.status, text, usage, error: (await res.text()).slice(0, 200), retryAfter: Number(res.headers.get('retry-after')) || null };
   const dec = new TextDecoder();
   for await (const chunk of res.body) {
     buf += dec.decode(chunk, { stream: true });
@@ -52,37 +53,42 @@ async function streamed(url, headers, body, cold) {
   }
   return { ttft, total: performance.now() - t0, status: res.status, text, usage };
 }
-const haiku = (cold) => streamed(ENDPOINTS.anthropic.url, { 'x-api-key': config.keys.anthropic, 'anthropic-version': '2023-06-01' }, {
-  model: 'claude-haiku-5-5', max_tokens: 400, stream: true,
+const haikuWith = (schema) => (cold) => streamed(ENDPOINTS.anthropic.url, { 'x-api-key': config.keys.anthropic, 'anthropic-version': '2023-06-01' }, {
+  model: 'claude-haiku-5-5', max_tokens: 1024, stream: true,
   system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }], messages: [{ role: 'user', content: USER }],
-  output_config: { format: { type: 'json_schema', schema: SCHEMA } },
+  ...(schema ? { output_config: { format: { type: 'json_schema', schema: SCHEMA } } } : {}),
 }, cold);
+const haiku = haikuWith(true), haikuFree = haikuWith(false);
 const groq = (cold) => streamed(ENDPOINTS.groq.url, { authorization: `Bearer ${config.keys.groq}` }, {
-  model: 'openai/gpt-oss-120b', stream: true, max_tokens: 600, temperature: 0, reasoning_effort: 'low',
+  model: 'openai/gpt-oss-120b', stream: true, max_tokens: 1024, temperature: 0, reasoning_effort: 'low',
   messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: USER }], response_format: { type: 'json_object' },
 }, cold);
 // The app's own path (ask.js → providers.js chat()), not streamed: total only.
 const groqChat = async (cold) => {
   const t0 = performance.now();
   const f = cold ? (u, o) => fetch(u, { ...o, headers: { ...o.headers, connection: 'close' } }) : fetch;
-  const r = await chat(config, spend, { model: 'groq:openai/gpt-oss-120b', body: { messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: USER }], max_tokens: 600, temperature: 0, reasoning_effort: 'low', response_format: { type: 'json_object' } } }, f);
-  return { ttft: null, total: performance.now() - t0, status: r.status, text: r.json?.choices?.[0]?.message?.content ?? '', usage: r.json?.usage ?? {} };
+  const r = await chat(config, spend, { model: 'groq:openai/gpt-oss-120b', body: { messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: USER }], max_tokens: 1024, temperature: 0, reasoning_effort: 'low', response_format: { type: 'json_object' } } }, f);
+  return { ttft: null, total: performance.now() - t0, status: r.status, text: r.json?.choices?.[0]?.message?.content ?? '', usage: r.json?.usage ?? {}, error: r.status === 200 ? undefined : JSON.stringify(r.json ?? r.error ?? '').slice(0, 200) };
 };
 
 const out = { at: new Date().toISOString(), systemBytes: Buffer.byteLength(SYSTEM), user: USER, runs: RUNS, results: {} };
-for (const [name, fn] of [['haiku', haiku], ['groq-stream', groq], ['groq-chat', groqChat]]) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// A 429 waits out retry-after and tries once more; the count is reported, since the app would hit it too.
+const once = async (fn, cold, rl) => { let r = await fn(cold); if (r.status === 429) { rl.n++; await sleep((r.retryAfter ?? 10) * 1000); r = await fn(cold); } return r; };
+for (const [name, fn] of [['haiku', haiku], ['haiku-noschema', haikuFree], ['groq-stream', groq], ['groq-chat', groqChat]]) {
   for (const mode of ['cold', 'warm']) {
     if (mode === 'warm') await fn(false).catch(() => {});   // open the connection first
-    const rs = [];
+    const rs = [], rl = { n: 0 };
     for (let i = 0; i < RUNS; i++) {
-      const r = await fn(mode === 'cold').catch((err) => ({ status: 0, total: null, ttft: null, text: '', error: err.message }));
-      if (name === 'haiku') spend.add('anthropic:claude-haiku-5-5', r.usage); else if (name === 'groq-stream') spend.add('groq:openai/gpt-oss-120b', r.usage);   // groq-chat: chat() adds it
+      const r = await once(fn, mode === 'cold', rl).catch((err) => ({ status: 0, total: null, ttft: null, text: '', error: err.message }));
+      if (name.startsWith('haiku')) spend.add('anthropic:claude-haiku-5-5', r.usage); else if (name === 'groq-stream') spend.add('groq:openai/gpt-oss-120b', r.usage);   // groq-chat: chat() adds it
       let valid = false; try { valid = Array.isArray(JSON.parse(r.text).steps); } catch {}
       rs.push({ ttft: r.ttft && Math.round(r.ttft), total: r.total && Math.round(r.total), status: r.status, valid, usage: r.usage, error: r.error });
     }
     out.results[`${name}/${mode}`] = { ttftP50: pct(rs.map((r) => r.ttft), 50), ttftP90: pct(rs.map((r) => r.ttft), 90), totalP50: pct(rs.map((r) => r.total), 50), totalP90: pct(rs.map((r) => r.total), 90),
-      ok: rs.filter((r) => r.status === 200 && r.valid).length, usageFirst: rs[0]?.usage, usageLast: rs.at(-1)?.usage, sample: rs[0]?.error ?? undefined };
-    console.log(name.padEnd(12), mode, JSON.stringify(out.results[`${name}/${mode}`]).slice(0, 300));
+      ok: rs.filter((r) => r.status === 200 && r.valid).length, rateLimited: rl.n, statuses: rs.map((r) => r.status), outTokensP50: pct(rs.map((r) => r.usage?.output_tokens ?? r.usage?.completion_tokens), 50),
+      usageFirst: rs[0]?.usage, error: rs.find((r) => r.error)?.error, runs: rs };
+    { const { usageFirst, runs, ...o } = out.results[`${name}/${mode}`]; console.log(name.padEnd(15), mode, JSON.stringify(o)); }
   }
 }
 out.usd = Number(spend.total.toFixed(4)); fs.rmSync(ledger, { force: true });
