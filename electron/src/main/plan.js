@@ -196,8 +196,10 @@ export async function plan(text, ctx = {}, deps = {}) {
     if (i?.kind === 'file' && i.intent.verb === 'find') filesBefore = true;
     return i && { do: 'instant', clause, ...i };
   });
-  if (clauses.length && instant.every(Boolean)) return { steps: instant, source: 'code', ms: Math.round(now() - t0) };
-  const fallback = (why) => ({ steps: clauses.map((c, k) => instant[k] ?? { do: 'computer', clause: c }), source: 'code', ms: Math.round(now() - t0), why });
+  let sent = 0;   // steps already handed to onStep (every step goes there once, in order, whichever path planned it)
+  const finish = (r) => { if (deps.onStep) for (; sent < r.steps.length; sent++) deps.onStep(r.steps[sent], sent); return r; };
+  if (clauses.length && instant.every(Boolean)) return finish({ steps: instant, source: 'code', ms: Math.round(now() - t0) });
+  const fallback = (why) => finish({ steps: clauses.map((c, k) => instant[k] ?? { do: 'computer', clause: c }), source: 'code', ms: Math.round(now() - t0), why });
   if (!deps.model) return fallback('no planner');
   // The model plans only the clauses code couldn't; their order comes from where they sit in what was said.
   const todo = instant.some(Boolean) ? clauses.filter((_, k) => !instant[k]) : [];
@@ -214,7 +216,7 @@ export async function plan(text, ctx = {}, deps = {}) {
     return [...clauses.map((_, k) => instant[k] && { step: instant[k], span: spans[k] }), ...missed].filter(Boolean).concat(mine).sort((x, y) => x.span[0] - y.span[0]);
   };
   // Streamed: everything up to the newest checked step is final (later steps can only sit later), so it starts now.
-  let sent = 0, seen = 0, t = '';
+  let seen = 0, t = '';
   const emit = (list, upto) => { for (; sent < upto; sent++) deps.onStep(list[sent].step, sent); };
   const partial = deps.onStep && ((sofar) => {
     t = sofar;
@@ -237,8 +239,6 @@ export async function plan(text, ctx = {}, deps = {}) {
   try { raw = JSON.parse(t).steps; } catch { raw = salvage(t); }   // cut off: keep the steps that finished
   const r = check(raw, text, opts);
   if (!r.steps.length) return { ...fallback(r.why ?? (cut ? 'cut off' : 'empty plan')), raw };
-  const list = merge(r);
-  if (deps.onStep) emit(list, list.length);
   const why = lost ?? (cut ? 'cut off' : r.ok ? null : r.why);
-  return { steps: list.map((x) => x.step), source: 'model', ms: Math.round(now() - t0), raw, ...(why && { why }) };   // raw: the model's own steps, for fixtures
+  return finish({ steps: merge(r).map((x) => x.step), source: 'model', ms: Math.round(now() - t0), raw, ...(why && { why }) });   // raw: the model's own steps, for fixtures
 }
