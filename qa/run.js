@@ -16,6 +16,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMMANDS, FAILURES, DOCS, QUESTIONS, FEATURE_OF_FILE } from './suite.js';
+import { launch as launchApp } from './app.js';
+
+const launch = (env) => launchApp(env, { onCrash: (text) => { run.crashes++; run.errors.push({ type: 'crash', text }); } });
 
 const QA = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(QA, '..');
@@ -216,30 +219,6 @@ async function retrieval() {
 }
 
 // ---------------------------------------------------------------- the real app, driven the way Deepgram Flux delivers speech
-async function launch(env = {}) {
-  const { launchApp } = await import(path.join(APP, 'eval/harness.js'));
-  const t0 = Date.now();
-  const { app, page, profile } = await launchApp({ real: true, env: { DIXI_EVERYWHERE: '0', ...env } });
-  const child = app.process();
-  const errs = [];
-  child.stderr?.on('data', (d) => { for (const l of String(d).split('\n')) if (/error|uncaught|unhandled|exception|fatal/i.test(l) && !/DevTools|ERROR:.*(gpu|ssl_client|registration|cert)|Autofill/i.test(l)) errs.push(l.slice(0, 240)); });
-  child.on('exit', (code, sig) => { if (!app.closing && (code || sig)) { run.crashes++; run.errors.push({ type: 'crash', text: `app exited code=${code} signal=${sig}` }); } });
-  await page.evaluate((audible) => {
-    window.__qaAudio = []; window.__qaErr = [];
-    window.addEventListener('error', (e) => window.__qaErr.push(String(e.message)));
-    window.addEventListener('unhandledrejection', (e) => window.__qaErr.push(String(e.reason?.message ?? e.reason)));
-    const ce = console.error; console.error = (...a) => { window.__qaErr.push(a.map(String).join(' ').slice(0, 240)); ce(...a); };
-    const sp = window.__dixi.voice.speaker;
-    if (sp) { const prev = sp.onSpeaking; sp.onSpeaking = (on) => { if (on) window.__qaAudio.push(Date.now()); prev?.call(sp, on); }; }
-    if (!audible) {   // muted, so the founder's listening Dixi never hears the test app
-      const play = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { this.muted = true; return play.call(this); };
-      if (window.speechSynthesis) { const s = speechSynthesis.speak.bind(speechSynthesis); speechSynthesis.speak = (u) => { u.volume = 0; s(u); }; }
-    }
-    return true;
-  }, Boolean(process.env.QA_AUDIBLE));
-  return { app, page, profile, errs, startMs: Date.now() - t0, close: async () => { app.closing = true; await app.close(); fs.rmSync(profile, { recursive: true, force: true }); } };
-}
-
 /** One command → its check result, latency split, and errors. */
 async function said(a, c, memo) {
   const { say, inPage, pageText } = await import(path.join(APP, 'eval/harness.js'));
