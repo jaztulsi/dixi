@@ -9,6 +9,7 @@
 //   check({ lang, code })     a script that answers true/false: did the step work?
 import { execFile } from 'node:child_process';
 import os from 'node:os';
+import { unsafe } from './safesite.js';
 
 const HOME = os.homedir();
 const APP_DIRS = ['/Applications', '/System/Applications', '/System/Applications/Utilities', `${HOME}/Applications`];
@@ -93,8 +94,8 @@ export async function openTarget({ app, url } = {}, { run = exec, waitMs = 4000 
     if (url) {
       let u;
       try { u = new URL(String(url)); } catch { return result(t0, { ok: false, error: `"${url}" isn't a link` }); }
-      if (u.protocol === 'file:' && !decodeURIComponent(u.pathname).startsWith(HOME + '/')) return result(t0, { ok: false, error: 'Only files in your home folder can be opened by link' });
-      if (/^(?:javascript|data|vbscript):$/i.test(u.protocol)) return result(t0, { ok: false, error: `${u.protocol} links aren't opened` });
+      const why = unsafe(u.href, { appLinks: true, home: HOME });
+      if (why) return result(t0, { ok: false, error: `${why} I didn't open it.`, unsafe: true });
       const handler = (await run('osascript', ['-l', 'JavaScript', '-e', HANDLER_JXA, u.href])).stdout.trim();
       if (!handler) return result(t0, { ok: false, error: `No app on this Mac opens ${u.protocol.replace(':', '')}: links` });
       await run('open', [u.href]);
