@@ -20,7 +20,7 @@ export const BUILTIN_TOOLS = [
       when: { type: 'string', description: 'today, yesterday, this week, last week, this month, last year, or a month name' } } },
     run: async (a, d) => {
       const intent = a.verb ? a : { verb: 'find', query: a.query ?? '', kind: a.kind ?? null, when: a.when ?? null, index: 0, src: null };
-      const r = await fileAction(intent, null, { approve: d.approve, say: d.say ?? (() => {}) });
+      const r = await fileAction(intent, null, { approve: d.approve, say: d.say ?? (() => {}), undo: d.undo });
       return { title: r.title, text: r.text, data: r.results, filesFound: Boolean(r.results) };
     },
   },

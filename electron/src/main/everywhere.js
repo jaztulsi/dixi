@@ -679,8 +679,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // Your own files (files.js): Spotlight, no picture. "Open it" counts only right after a list.
       const fi = fileIntent(t);
       if (fi && (fi.verb === 'find' || fi.query || fi.kind || fi.src || Date.now() - (state.filesAt ?? 0) < 300000)) {
-        const r = await fileAction(fi, null, { approve, say });
+        const r = await fileAction(fi, null, { approve, say, undo });   // undo: move and rename just happen; "undo that" puts them back
         if (r.results) state.filesAt = Date.now();
+        if (fi.verb === 'move' || fi.verb === 'rename') state.fileChangeAt = Date.now();   // so "undo that" means this, not ⌘Z
         show({ state: 'done', title: r.title, text: String(r.text).slice(0, 260), linger: 8000 });
         return;
       }
