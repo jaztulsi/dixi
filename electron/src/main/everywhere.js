@@ -951,7 +951,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         if (await input.openApp(name)) { say(`Opening ${name}.`); show({ state: 'done', text: `Opening ${name}`, linger: 2500 }); return; }
       }
       // One task for another app: a script or a link when the planner has one; the screen agent only when it doesn't.
-      if (mode === 'agent' && !doIt && !ri && !HERE.test(t) && !SCAM_CHECK.test(t) && !CAL_ADD.test(t) && !REMEMBER.test(t)) {
+      // ("Open the New York Times website", "open you tube": no app by that name, so the planner finds the link.)
+      if ((mode === 'agent' || mode === 'open') && !doIt && !ri && !HERE.test(t) && !SCAM_CHECK.test(t) && !CAL_ADD.test(t) && !REMEMBER.test(t)) {
         const q = await newPlan();
         const r = await planInto(q, t, signal, runId, false);
         if (signal.aborted) return;
