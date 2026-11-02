@@ -18,7 +18,7 @@ import { launchMac, syncInteg, QA, APP, QA_CAP, qaSpent, qaRecord } from './app.
 import { ROWS as KNOWN, mac } from './mac-suite.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
-const TIMEOUT = Number(arg('timeout', 30000)), MAX_USD = Number(arg('max-usd', QA_CAP)), KEEP = process.argv.includes('--keep'), MESSAGING = process.argv.includes('--messaging');
+const TIMEOUT = Number(arg('timeout', 30000)), MAX_USD = Number(arg('max-usd', QA_CAP)), RUN_USD = Number(arg('run-usd', 0.7)), KEEP = process.argv.includes('--keep'), MESSAGING = process.argv.includes('--messaging');
 // Sites a test may load (orchestrator safety rule). Anything else is flagged in the report.
 const ALLOWED = /(^|\.)(apple\.com|youtube\.com|google\.com|wikipedia\.org|safeway\.com|amazon\.com|nytimes\.com|github\.com|ytimg\.com|googlevideo\.com|gstatic\.com)$/;
 // Never let the screen agent type into these: a terminal or editor may hold an agent's prompt.
@@ -87,7 +87,7 @@ try {
     const block = (why, say = r.say) => { out.rows.push({ id: r.id, kind: r.kind, known: Boolean(r.known), say: typeof say === 'function' ? '(set at run time)' : say, status: 'blocked', why }); log(`blocked  ${r.id}  (${why})`); };
     if (r.blocked) { block(r.blocked); continue; }
     if (r.messaging && !MESSAGING) { block('SKIP-TCC: needs a one-time macOS grant (Contacts/Messages Automation); then --messaging'); continue; }
-    if (qa0 + (await own()) >= MAX_USD) { log(`spend guard: QA total at $${MAX_USD}, stopping`); out.stoppedForSpend = true; break; }
+    { const u = await own(); if (qa0 + u >= MAX_USD || u >= RUN_USD) { log(`spend guard: ${u >= RUN_USD ? `this run at $${RUN_USD}` : `QA total at $${MAX_USD}`}, stopping`); out.stoppedForSpend = true; break; } }
     // Snapshot what this row may change, so it can be put back.
     const snap = { vol: await m.volume(), muted: await m.muted(), front: await m.front(), finder: await m.finderWindows(), music: (await m.music()).state,
       running: Object.fromEntries(await Promise.all(APPS.map(async (n) => [n, await m.running(n)]))),

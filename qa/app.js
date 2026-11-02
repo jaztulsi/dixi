@@ -27,7 +27,7 @@ export function syncInteg(ref = 'orch/integration') {
   return { commit, ref, installed };
 }
 // The QA lane's own spend ledger: only what QA runs cost, capped across all of them (orchestrator: $1.50).
-export const QA_LEDGER = path.join(QA, 'results', 'qa-spend.json'), QA_CAP = 1.5;
+export const QA_LEDGER = path.join(QA, 'results', 'qa-spend.json'), QA_CAP = 3.0;   // orchestrator: raised from $1.50
 const readLedger = () => { try { return JSON.parse(fs.readFileSync(QA_LEDGER, 'utf8')); } catch { return { totalUSD: 0, runs: [] }; } };
 export const qaSpent = () => readLedger().totalUSD;
 export function qaRecord(what, usd) {
