@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { register } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { VoiceAgent } from '../../src/renderer/core/voice.js';
 import { Speaker } from '../../src/renderer/ui/speaker.js';
 
@@ -17,10 +17,14 @@ const main = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../s
 // ---- stand-ins: everywhere.js gets a fake 'electron' and a fake './input.js' (same exports, driven from here) ----
 const names = [...fs.readFileSync(path.join(main, 'input.js'), 'utf8').matchAll(/^export (?:async )?(?:function|const) (\w+)/gm)].map((m) => m[1]);
 const fakeInput = 'data:text/javascript,' + encodeURIComponent(names.map((n) => `export const ${n} = (...a) => globalThis.__input.${n}(...a);`).join('\n'));
+// mac.js for real, but openTarget never opens anything here (a test that opens a link would open the real browser).
+const fakeMacJs = 'data:text/javascript,' + encodeURIComponent(`export * from ${JSON.stringify(pathToFileURL(path.join(main, 'mac.js')).href)};
+export const openTarget = (...a) => (globalThis.__opened ??= []).push(a) && { ok: false, error: 'tests open nothing' };`);
 register('data:text/javascript,' + encodeURIComponent(`
   export async function resolve(spec, ctx, next) {
     if (spec === 'electron') return { url: 'data:text/javascript,export default globalThis.__electron;', shortCircuit: true };
     if (spec === './input.js' && ctx.parentURL?.endsWith('/src/main/everywhere.js')) return { url: ${JSON.stringify(fakeInput)}, shortCircuit: true };
+    if (spec === './mac.js' && ctx.parentURL?.endsWith('/src/main/everywhere.js')) return { url: ${JSON.stringify(fakeMacJs)}, shortCircuit: true };
     return next(spec, ctx);
   }`));
 
@@ -58,6 +62,10 @@ globalThis.fetch = async (_url, { body }) => {
   const b = JSON.parse(body);
   requests.push(b);
   const content = b.tools ? script.shift() ?? [{ type: 'text', text: 'Done.' }] : [{ type: 'text', text: planned && b.output_config?.format?.schema?.properties?.steps ? JSON.stringify(planned) : '{"tasks":[]}' }];
+  if (b.stream) {   // the planner streams (server-sent events): the same reply as one text delta
+    const ev = [{ type: 'message_start', message: { usage: { input_tokens: 1 } } }, { type: 'content_block_delta', delta: { type: 'text_delta', text: content[0].text } }, { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }];
+    return { ok: true, status: 200, body: [new TextEncoder().encode(ev.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''))] };
+  }
   return { ok: true, status: 200, json: async () => ({ content, usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: 'end_turn' }) };
 };
 const result = (id) => requests.flatMap((r) => r.messages ?? []).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).find((c) => c.type === 'tool_result' && c.tool_use_id === id)?.content;
@@ -146,6 +154,28 @@ test('QA open-nytimes / misheard-you-tube: a single "open …" that names no app
   assert.deepEqual(events, ['browse open you tube', 'done open you tube']);
   assert.ok(!requests.some((b) => b.tools), 'the screen agent never ran');
   assert.ok(!done.some(([w]) => /click|press|type|key/.test(w)), 'nothing was clicked or typed on the screen');
+});
+
+test('QA item 3: a link opened before a step Dixi\'s browser does opens there too (one browser per chain)', mac, async () => {
+  const run = await harness;
+  fakeMac();
+  events = []; asked = []; globalThis.__opened = [];
+  planned = { steps: [{ do: 'open', clause: 'search the web for jazz records', url: 'https://www.google.com/search?q=jazz+records' }, { do: 'web', clause: 'add the first one to the cart' }] };
+  try { await run('search the web for jazz records, then add the first one to the cart'); } finally { planned = null; }
+  assert.deepEqual(events, ['browse search the web for jazz records', 'done search the web for jazz records', 'browse add the first one to the cart', 'done add the first one to the cart']);
+  assert.equal(globalThis.__opened.length, 0, 'nothing opened in another browser');
+});
+
+test('QA item 3: a screen step that runs out of turns is not "Done.": the plan stops there and says so', mac, async () => {
+  const run = await harness;
+  fakeMac();
+  events = []; spoken = []; requests = [];
+  script = Array.from({ length: 40 }, (_, k) => [{ type: 'tool_use', id: `s${k}`, name: 'screenshot', input: {} }]);
+  planned = { steps: [{ do: 'computer', clause: 'tidy my desktop' }, { do: 'web', clause: 'search the web for jazz records' }] };
+  try { await run('tidy my desktop, then search the web for jazz records'); } finally { planned = null; script = []; }
+  assert.ok(spoken.includes("I didn't finish that."), spoken.join(' | '));
+  assert.ok(!spoken.some((x) => /^Done\b/.test(x)), 'never "Done."');
+  assert.deepEqual(events, [], 'the next step never ran');
 });
 
 // ---- the wake word, with a question open ----

@@ -205,3 +205,10 @@ test('QA amazon-then-apple: an opened link waits until the browser tab is on tha
   assert.equal(await pageStarted('music://play', { tab: async () => { asked = true; return null; }, wait }), true);
   assert.equal(asked, false);
 });
+
+test('pageStarted: a tab read that hangs (a permission prompt) counts as unreadable at once, never a 4 s block', async () => {
+  const t0 = Date.now();
+  assert.equal(await pageStarted('https://apple.com', { tab: () => new Promise(() => {}), read: 30, wait: async () => {} }), true);
+  assert.ok(Date.now() - t0 < 300);
+  assert.equal(await pageStarted('https://apple.com', { tab: async () => { throw new Error('not allowed'); }, wait: async () => {} }), true);
+});
