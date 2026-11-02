@@ -203,9 +203,13 @@ test('recorded planner replies pass the checks and keep their meaning', async ()
   for (const [said, f] of Object.entries(fixtures)) {
     const text = f.text ?? (f.reply && JSON.stringify({ steps: f.reply }));   // older fixtures kept only the parsed steps
     if (!text) continue;
-    const r = await plan(said, {}, { apps: live, home: '/Users/me', model: async () => ({ stop_reason: f.stop, content: [{ type: 'text', text }] }) });
+    let called = false;
+    const r = await plan(said, {}, { apps: live, home: '/Users/me', model: async () => { called = true; return { stop_reason: f.stop, content: [{ type: 'text', text }] }; } });
     assert.ok(r.steps.length >= split(said).length, said);   // every clause is done
-    if (!f.stop || f.stop === 'end_turn') assert.equal(r.source, 'model', `${said}: ${r.why}`);
+    // When code answers the whole command now (no planner call), the recorded reply isn't used; when the planner
+    // was called and finished, its reply must hold up (a fallback to code is a failure).
+    if (called && (!f.stop || f.stop === 'end_turn')) assert.equal(r.source, 'model', `${said}: ${r.why}`);
+    if (!called) assert.equal(r.source, 'code', said);
     if (want[said]) assert.deepEqual(r.steps.map((s) => s.do), want[said], said);
   }
 });
