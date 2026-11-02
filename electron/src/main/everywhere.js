@@ -52,8 +52,24 @@ export { ABOUT_SCREEN };
 // ---- the code-level gate (pure, unit-tested) ----
 // The browser gate's lists (one control's name each: they're anchored), plus what only a desktop has or
 // what the browser gates by other means (form submits).
-const DESKTOP_RISKY = /\b(submit|post|publish|share|tweet|reply all|move to (the )?trash|empty (the )?trash|trash|airdrop|erase|format disk|install|uninstall|always allow|allow|grant access|open anyway|send)\b/i;
-export const riskyLabel = (s) => Boolean(s) && (IRREVERSIBLE.test(s.trim()) || RECURRING.test(s) || DESKTOP_RISKY.test(s));
+const DESKTOP_RISKY = /\b(submit|post|publish|share|tweet|reply all|move to (the )?trash|empty (the )?trash|trash|airdrop|erase|format disk|install|uninstall|always allow|allow|grant access|open anyway|send|join|sign ?up|upgrade|download|start (?:my |your |a |the )?(?:free )?trial|free trial|try (?:it |now |\d+ \w+ )?(?:for )?free|\d+ (?:days?|weeks?|months?) free)\b/i;   // money and commitments: sign-ups, trials, upgrades, app downloads
+const GET = /^\s*get\s*$/i;   // the App Store's install button is just "Get" ("Get Info" is not)
+export const riskyLabel = (s) => Boolean(s) && (IRREVERSIBLE.test(s.trim()) || RECURRING.test(s) || DESKTOP_RISKY.test(s) || GET.test(s));
+// Dixi asks no questions. A step that would have asked goes ahead only when the user's own words ask for it: they said
+// "send" and the button is Send. Otherwise it is refused (and a plan stops there): "Open anyway", "Always allow",
+// "Install", "Buy now", "Empty Trash" the user didn't say are never pressed. Careful mode (the user's own setting) still asks.
+const RISKY_ALL = new RegExp(`${IRREVERSIBLE.source}|${RECURRING.source}|${DESKTOP_RISKY.source}`, 'gi');
+const FILLER = new Set(['the', 'a', 'an', 'now', 'this', 'it', 'to', 'my', 'your', 'of', 'in', 'on', 'and', 'or']);
+const stems = (s) => (String(s ?? '').toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => !FILLER.has(w)).map((w) => w.replace(/(ing|ed|es|s|e)$/, ''));
+/** The question Dixi would have asked (“Label” or a reason like "It may send or submit") → did the user's words ask for it? */
+export function userAsked(question, said) {
+  const mine = new Set(stems(said));
+  if (/\b(?:send|text|message|reply|email|post|submit)\b/i.test(said)) mine.add('send').add('submit');   // "text Alex…", "reply…": they mean send
+  const q = String(question ?? ''), label = q.match(/“([^”]+)”/)?.[1];
+  const risky = [...(label ?? '').matchAll(RISKY_ALL)].map((m) => m[0]);
+  const need = label ? (GET.test(label) ? ['get', 'install', 'download'] : risky.length ? risky : [label]) : (q.match(/\b(send|submit|quit|delete)/gi) ?? []);   // no label: the reason's verbs
+  return need.some((p) => { const w = stems(p); return w.length > 0 && w.every((x) => mine.has(x)); });
+}
 const CONTROL = /^AX(Button|Link|MenuItem|MenuButton|PopUpButton|MenuBarItem|CheckBox|RadioButton|DisclosureTriangle)$/;
 /** Why a click must be approved first, or null. A risky name always asks. Something unreadable or
  *  unnamed asks when `strict` (mail, chat, money, system apps, or the agent said it's sending/paying…). */
@@ -396,6 +412,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
 
   // ---- Agent: Claude's computer-use toolset drives the Mac ----
   async function agent(task, shot, ctx, signal, found = [], said = task, target = '') {
+    state.refusal = null; state.words = said;   // the user's own words for this clause: what a risky press is checked against
     if (!systemPreferences.isTrustedAccessibilityClient(false)) {
       systemPreferences.isTrustedAccessibilityClient(true);   // macOS shows its own prompt
       say('To click and type for you, Dixi needs Accessibility permission. Turn Dixi on in the setting that just opened, then ask again.');
@@ -437,7 +454,12 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (!calls.length) break;
       const results = [];
       state.said = said;   // what it says it's doing: "sending it" makes an unreadable button ask
-      for (const c of calls) results.push(await perform(c, shot, ctx, sensitive, signal, rec, controls).catch((err) => ({ type: 'tool_result', tool_use_id: c.id, ...(c.name === 'press' ? {} : { toolset_name: 'computer' }), is_error: true, content: String(err.message ?? err).slice(0, 200) })));
+      for (const c of calls) if (!state.refusal) results.push(await perform(c, shot, ctx, sensitive, signal, rec, controls).catch((err) => ({ type: 'tool_result', tool_use_id: c.id, ...(c.name === 'press' ? {} : { toolset_name: 'computer' }), is_error: true, content: String(err.message ?? err).slice(0, 200) })));
+      if (state.refusal) {   // refused: said here, in code, and the run stops (no second try, no model call)
+        say(`I stopped there: ${state.refusal}.`);
+        show({ state: 'error', title: task.slice(0, 80), text: `Stopped: ${state.refusal}.`, linger: 12000 });
+        return;
+      }
       // After acting, it looks again (a fresh picture and list), so the next step isn't aimed at an old screen.
       const look = [];
       if (calls.some((c) => !/^(screenshot|zoom|cursor_position|wait)$/.test(c.name)) && !signal.aborted) {
@@ -457,7 +479,12 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   async function perform(c, shot, ctx, sensitive, signal, rec = null, controls = []) {
     const tag = c.name === 'press' ? {} : { toolset_name: 'computer' };   // press is Dixi's own tool, not the toolset's
     const ok = (content = 'OK') => ({ type: 'tool_result', tool_use_id: c.id, ...tag, content });
-    const no = (why) => ({ type: 'tool_result', tool_use_id: c.id, ...tag, content: `The user did not approve this (${why}). Stop and tell them what's left to do.` });
+    const no = (q) => {
+      // "Press “Open Anyway”?" → "you didn't ask me to press “Open Anyway”"; "I can't tell what that button does. Press it?" → its first sentence.
+      const mask = String(q).replace(/“[^”]*”/g, (m) => '_'.repeat(m.length));   // a label's own "." or "?" ends nothing
+      const end = mask.indexOf('?'), cut = mask.slice(0, end).search(/[.!]\s+\S[^.!]*$/);
+      const why = end < 0 ? q : cut >= 0 ? q.slice(0, cut) : `you didn't ask me to ${q.slice(0, end).replace(/^\w/, (ch) => ch.toLowerCase())}`;
+      state.refusal = why; return { type: 'tool_result', tool_use_id: c.id, ...tag, content: `Refused: ${why}. Don't try another way. Stop and tell the user in one short sentence.` }; };
     const fail = (why) => ({ type: 'tool_result', tool_use_id: c.id, ...tag, is_error: true, content: why });
     // Unreadable or unnamed controls ask only where a wrong press costs something.
     const strict = { strict: sensitive || isGuarded(ctx) || DESKTOP_RISKY.test(state.said ?? '') };
@@ -467,7 +494,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const n = c.name;
     const acted = (r, el) => { state.lastSynthetic = Date.now(); rec?.add(stepOf(c, at, el)); act.log(stepEvent(c, ctx, el)); return r; };   // (lastSynthetic: for the approve buttons)
     // Asked and approved, but stopped meanwhile: nothing happens.
-    const yes = async (q) => (await approve(q)) && !signal.aborted;
+    // No questions (see userAsked): only careful mode, the user's own setting, still asks.
+    const yes = async (q) => !signal.aborted && (prefs.careful ? await approve(q) : userAsked(q, state.words ?? ''));
     // Careful mode ("ask me before every step"), or an app where one switch hands over the Mac (System
     // Settings, Terminal, Installer…): every click, key and bit of typing waits for a yes.
     let asked = false;
@@ -475,10 +503,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (ctx.pid === process.pid && /click|drag|mouse_(down|up)|^type$|key$|^press$/.test(n)) return fail("That's Dixi's own window: Dixi doesn't change its own settings.");
     const ctl = n === 'press' ? controls[Number(c.input?.ref) - 1] : null;
     if (n === 'press' && !ctl) return fail('No control has that number: use the latest list.');
-    if ((prefs.careful || isGuarded(ctx)) && /click|drag|mouse_(down|up)|^type$|key$|^press$/.test(n)) {
+    if (prefs.careful && /click|drag|mouse_(down|up)|^type$|key$|^press$/.test(n)) {
       const el = ctl ?? (/click|drag|mouse/.test(n) ? await input.elementAt(at) : null);
       const what = n === 'type' ? `Type “${String(c.input?.text ?? '').slice(0, 60)}”?` : /key$/.test(n) ? `Press ${c.input?.text}?` : `Click ${el?.labels?.[0] ? `“${quoteLabel(el.labels[0])}”` : 'here'}${isGuarded(ctx) ? ` in ${ctx.name}` : ''}?`;
-      if (!(await yes(what))) return no(prefs.careful ? 'careful mode' : ctx.name);
+      if (!(await yes(what))) return no('you said no');
       asked = true;
     }
     const moneyButton = (el) => isMoney(ctx) && (!el || CONTROL.test(el.role)) && `Press “${quoteLabel(el?.labels?.[0] ?? 'this')}” on a money page?`;
@@ -708,7 +736,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (s.kind === 'command') { await runCommand(s.command); return { ok: true, said: true }; }   // it says what it did
       if (s.kind === 'open') return (await input.openApp(s.app)) ? { ok: true } : { ok: false, error: `I couldn't open ${s.app}` };
       if (s.kind === 'quick') { const qa = await quickAnswer(s.clause, { webAnswer }); return qa ? { ok: true, say: qa.say, out: qa.say } : { ok: false, error: "I couldn't work that out" }; }
-      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return { ok: r.ok !== false, say: r.say }; }
+      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return { ok: r.ok !== false, say: r.say }; }
       if (s.kind === 'file') {
         const r = await fileAction(s.intent, null, { approve, say, undo });
         if (r?.results) state.filesAt = Date.now();
@@ -749,7 +777,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     state.guard = guardian.track(state.guard, [...guardian.checkContext(ctx), ...guardian.checkText(`${ctx.title ?? ''}\n${s.clause}`)], ctx);
     const task = prior.length ? `${s.clause}\n(Earlier steps found: ${prior.join('; ').slice(0, 500)})` : s.clause;
     await agent(task, shot, ctx, signal, state.guard.open, s.clause, s.app ?? '');
-    return { ok: true, said: true };
+    return state.refusal ? { ok: false, error: state.refusal, said: true } : { ok: true, said: true };
   }
   async function runPlan(q, text, signal) {
     state.plan = q;
@@ -766,7 +794,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
           if (signal.aborted) return;
           if (!r.ok) {
             const why = `Step ${i}, “${label(s)}”, didn't work${r.error ? `: ${String(r.error).replace(/[.\s]+$/, '')}` : ''}.`;
-            show({ state: 'error', title: text.slice(0, 80), text: why, linger: 12000 }); say(why); return;
+            show({ state: 'error', title: text.slice(0, 80), text: why, linger: 12000 }); if (!r.said) say(why); return;   // a refused screen step already said why
           }
           if (r.say) say(r.say);
           spoke ||= Boolean(r.say || r.said);
@@ -870,7 +898,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       const dk = !forced && desktopIntent(t);
       const doc = !forced && !dk && doctorIntent(t);
       if (dk || doc) {
-        const r = dk ? await runDesktop(dk, { exec: desktopExec, say, approve, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }) : await diagnose(doc, {});
+        const r = dk ? await runDesktop(dk, { exec: desktopExec, say, approve: async () => true, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }) : await diagnose(doc, {});
         say(r.say); show({ state: 'done', title: r.title, text: r.text, linger: doc ? 12000 : 3000 });
         return;
       }
@@ -1026,7 +1054,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     state.lesson?.stop(); state.lessonCtrl?.abort();
     const ctrl = new AbortController();
     const lesson = startTutor(goal, { snapshot, context, listControls: () => input.listControls(), claude, image, say, show, marks: (m) => ui('ew:marks', m),
-      doStep: async (task, signal) => { const [shot, ctx] = await Promise.all([snapshot(), context()]); if (shot) await agent(task, shot, ctx, signal); }, signal: ctrl.signal });
+      doStep: async (task, signal) => { const [shot, ctx] = await Promise.all([snapshot(), context()]); if (shot) await agent(task, shot, ctx, signal, [], goal); }, signal: ctrl.signal });   // checked against your words, not the lesson's
     Object.assign(state, { lesson, lessonCtrl: ctrl });
     Promise.resolve(lesson.done).finally(() => { if (state.lesson === lesson) state.lesson = null; });
   }
@@ -1133,6 +1161,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   function kill(all = true) {
     const was = busy();
     jobs.stopAll();
+    input.stopAll?.();   // Lane C: kills a held osascript, posts key-up and mouse-up
     const watched = all && (isWatching() || Boolean(state.lesson));
     if (watched) { stopWatch(); state.lesson?.stop(); state.lessonCtrl?.abort(); state.lesson = null; }
     stop();

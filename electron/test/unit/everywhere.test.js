@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clickRisk, keyRisk, riskyLabel, isSensitive, isGuarded, isMoney, quoteLabel, pressTarget, controlsText, modeOf, contextLine, toScreen, ABOUT_SCREEN, keysRefused, readStream } from '../../src/main/everywhere.js';
+import { clickRisk, keyRisk, riskyLabel, isSensitive, isGuarded, isMoney, quoteLabel, pressTarget, controlsText, modeOf, contextLine, toScreen, ABOUT_SCREEN, keysRefused, readStream, userAsked } from '../../src/main/everywhere.js';
 import { parseKey } from '../../src/main/input.js';
 import { HIVE } from '../../src/renderer/core/everywhere-words.js';
 
@@ -157,4 +157,34 @@ test('a streamed reply reads the same as a whole one, even when events split acr
   assert.equal(j.stop_reason, 'end_turn');
   assert.deepEqual(j.usage, { input_tokens: 9, output_tokens: 4 });
   await assert.rejects(readStream([new TextEncoder().encode(ev({ type: 'error', error: { message: 'overloaded' } }))], () => {}), /overloaded/);
+});
+
+test('no questions: a risky step goes ahead only when the user asked for it, else it is refused', () => {
+  const said = 'send an email to Alex saying thanks';
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Send'])), said), true);
+  assert.equal(userAsked(keyRisk('cmd+return', el('AXTextArea', ['Message body'])), said), true);   // ⌘-Enter "usually sends"
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Buy now'])), 'buy the blue one now'), true);
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Move to Trash'])), 'move it to the trash'), true);
+  for (const [label, words] of [['Open Anyway', 'open Safari'], ['Always Allow', 'allow notifications'], ['Install', 'open the app'], ['Buy now', 'show me the price'],
+    ['Empty Trash', 'open the trash'], ['Delete', 'rename the file'], ['Allow', 'turn on the camera'], ['Grant Access', 'open Photos']])
+    assert.equal(userAsked(clickRisk(el('AXButton', [label])), words), false, label);
+  assert.equal(userAsked(keyRisk('return', el('AXTextArea', ['Message'])), 'text Alex I am on my way'), true);
+  assert.equal(userAsked(keyRisk('return', el('AXTextArea', ['Message'])), 'what does Alex say'), false);
+  assert.equal(userAsked(clickRisk(null), said), false);   // can't tell what it does: refused, never guessed
+  assert.equal(userAsked(clickRisk(el('AXButton', [])), said), false);
+});
+
+test('sign-ups, trials, upgrades and app downloads count as risky; look-alikes do not; the user saying it lets it through', () => {
+  for (const l of ['Join Apple Music', 'Try It Free', 'Try 1 Month Free', 'Start Free Trial', 'Start your free trial', '1 month free', 'Sign Up', 'Signup', 'Upgrade to Pro', 'Download', 'Install', 'Get', 'Subscribe'])
+    assert.ok(riskyLabel(l), l);
+  for (const l of ['Get Info', 'Getting Started', 'Sign In', 'Downloads', 'Upgrades', 'Free shipping', 'Trial Balance', 'Joined', 'Open'])
+    assert.ok(!riskyLabel(l), l);
+  const btn = (l) => clickRisk({ role: 'AXButton', labels: [l] });
+  assert.equal(userAsked(btn('Try It Free'), 'play my jazz playlist'), false);   // the Apple Music sheet, mid-task
+  assert.equal(userAsked(btn('Join Apple Music'), 'play my jazz playlist'), false);
+  assert.equal(userAsked(btn('Join Apple Music'), 'join apple music'), true);
+  assert.equal(userAsked(btn('Start Free Trial'), 'start a free trial of the app'), true);
+  assert.equal(userAsked(btn('Get'), 'install Slack from the App Store'), true);
+  assert.equal(userAsked(btn('Get'), 'open the App Store'), false);
+  assert.equal(userAsked(btn('Upgrade to Pro'), 'upgrade to pro'), true);
 });
