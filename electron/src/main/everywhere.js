@@ -52,8 +52,9 @@ export { ABOUT_SCREEN };
 // ---- the code-level gate (pure, unit-tested) ----
 // The browser gate's lists (one control's name each: they're anchored), plus what only a desktop has or
 // what the browser gates by other means (form submits).
-const DESKTOP_RISKY = /\b(submit|post|publish|share|tweet|reply all|move to (the )?trash|empty (the )?trash|trash|airdrop|erase|format disk|install|uninstall|always allow|allow|grant access|open anyway|send)\b/i;
-export const riskyLabel = (s) => Boolean(s) && (IRREVERSIBLE.test(s.trim()) || RECURRING.test(s) || DESKTOP_RISKY.test(s));
+const DESKTOP_RISKY = /\b(submit|post|publish|share|tweet|reply all|move to (the )?trash|empty (the )?trash|trash|airdrop|erase|format disk|install|uninstall|always allow|allow|grant access|open anyway|send|join|sign ?up|upgrade|download|start (?:my |your |a |the )?(?:free )?trial|free trial|try (?:it |now |\d+ \w+ )?(?:for )?free|\d+ (?:days?|weeks?|months?) free)\b/i;   // money and commitments: sign-ups, trials, upgrades, app downloads
+const GET = /^\s*get\s*$/i;   // the App Store's install button is just "Get" ("Get Info" is not)
+export const riskyLabel = (s) => Boolean(s) && (IRREVERSIBLE.test(s.trim()) || RECURRING.test(s) || DESKTOP_RISKY.test(s) || GET.test(s));
 // Dixi asks no questions. A step that would have asked goes ahead only when the user's own words ask for it: they said
 // "send" and the button is Send. Otherwise it is refused (and a plan stops there): "Open anyway", "Always allow",
 // "Install", "Buy now", "Empty Trash" the user didn't say are never pressed. Careful mode (the user's own setting) still asks.
@@ -66,7 +67,7 @@ export function userAsked(question, said) {
   if (/\b(?:send|text|message|reply|email|post|submit)\b/i.test(said)) mine.add('send').add('submit');   // "text Alex…", "reply…": they mean send
   const q = String(question ?? ''), label = q.match(/“([^”]+)”/)?.[1];
   const risky = [...(label ?? '').matchAll(RISKY_ALL)].map((m) => m[0]);
-  const need = label ? (risky.length ? risky : [label]) : (q.match(/\b(send|submit|quit|delete)/gi) ?? []);   // no label: the reason's verbs
+  const need = label ? (GET.test(label) ? ['get', 'install', 'download'] : risky.length ? risky : [label]) : (q.match(/\b(send|submit|quit|delete)/gi) ?? []);   // no label: the reason's verbs
   return need.some((p) => { const w = stems(p); return w.length > 0 && w.every((x) => mine.has(x)); });
 }
 const CONTROL = /^AX(Button|Link|MenuItem|MenuButton|PopUpButton|MenuBarItem|CheckBox|RadioButton|DisclosureTriangle)$/;

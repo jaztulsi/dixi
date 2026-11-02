@@ -173,3 +173,18 @@ test('no questions: a risky step goes ahead only when the user asked for it, els
   assert.equal(userAsked(clickRisk(null), said), false);   // can't tell what it does: refused, never guessed
   assert.equal(userAsked(clickRisk(el('AXButton', [])), said), false);
 });
+
+test('sign-ups, trials, upgrades and app downloads count as risky; look-alikes do not; the user saying it lets it through', () => {
+  for (const l of ['Join Apple Music', 'Try It Free', 'Try 1 Month Free', 'Start Free Trial', 'Start your free trial', '1 month free', 'Sign Up', 'Signup', 'Upgrade to Pro', 'Download', 'Install', 'Get', 'Subscribe'])
+    assert.ok(riskyLabel(l), l);
+  for (const l of ['Get Info', 'Getting Started', 'Sign In', 'Downloads', 'Upgrades', 'Free shipping', 'Trial Balance', 'Joined', 'Open'])
+    assert.ok(!riskyLabel(l), l);
+  const btn = (l) => clickRisk({ role: 'AXButton', labels: [l] });
+  assert.equal(userAsked(btn('Try It Free'), 'play my jazz playlist'), false);   // the Apple Music sheet, mid-task
+  assert.equal(userAsked(btn('Join Apple Music'), 'play my jazz playlist'), false);
+  assert.equal(userAsked(btn('Join Apple Music'), 'join apple music'), true);
+  assert.equal(userAsked(btn('Start Free Trial'), 'start a free trial of the app'), true);
+  assert.equal(userAsked(btn('Get'), 'install Slack from the App Store'), true);
+  assert.equal(userAsked(btn('Get'), 'open the App Store'), false);
+  assert.equal(userAsked(btn('Upgrade to Pro'), 'upgrade to pro'), true);
+});
