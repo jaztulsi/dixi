@@ -85,7 +85,7 @@ try {
   for (const r of rows) {
     const block = (why, say = r.say) => { out.rows.push({ id: r.id, kind: r.kind, known: Boolean(r.known), say: typeof say === 'function' ? '(set at run time)' : say, status: 'blocked', why }); log(`blocked  ${r.id}  (${why})`); };
     if (r.blocked) { block(r.blocked); continue; }
-    if (r.messaging && !MESSAGING) { block('needs a one-time macOS grant (Contacts/Messages Automation); then --messaging'); continue; }
+    if (r.messaging && !MESSAGING) { block('SKIP-TCC: needs a one-time macOS grant (Contacts/Messages Automation); then --messaging'); continue; }
     if (qa0 + (await own()) >= MAX_USD) { log(`spend guard: QA total at $${MAX_USD}, stopping`); out.stoppedForSpend = true; break; }
     // Snapshot what this row may change, so it can be put back.
     const snap = { vol: await m.volume(), muted: await m.muted(), front: await m.front(), tabs: await m.tabIds(), finder: await m.finderWindows(), music: (await m.music()).state,
