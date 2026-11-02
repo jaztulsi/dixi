@@ -7,7 +7,8 @@
 //    invented (no names, text or sites you didn't say), no shell. A step that fails a check becomes a
 //    `computer` step for its own words only.
 // The model brings the app knowledge ("text Mom" is Messages); this file names no apps, sites or phrases.
-import { splitClauses, tokens } from '../renderer/core/interpret.js';
+import { tokens } from '../renderer/core/interpret.js';
+import { split } from '../renderer/core/everywhere-words.js';
 import { desktopIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
 import { fileIntent } from './files.js';
@@ -15,16 +16,8 @@ import { matchCommand } from './commands.js';
 import { unsafe } from './safesite.js';
 
 // ---- 1. split ----
-// Strong breaks always split; "and" or a comma splits only before a verb (so "salt and pepper" stays whole).
-const STRONG = /\s*(?:;|[,.!?]?\s+(?:and then|and after that|after that|afterwards|then)\s+|[.!?]\s+then\s+)\s*/i;
-const MORE_VERBS = '(?:rename|move|text|message|send|email|mail|call|create|write|save|copy|delete|quit|lock|empty|remind|schedule|reply|share|print|translate|summari[sz]e|draft)';
-const MORE = new RegExp(`\\s*(?:,\\s*(?:and\\s+)?|\\s+and\\s+)(?=${MORE_VERBS}\\b)`, 'i');
-const tidy = (s) => s.trim().replace(/^(?:and|then|also|please)\s+/i, '').replace(/^[,.;!?\s]+|[,.;!?\s]+$/g, '');
-
-/** "Open Music, search lo-fi and play it; then text Mom I'll be late" → ["Open Music", "search lo-fi", "play it", "text Mom I'll be late"] */
-export function split(text) {
-  return String(text ?? '').split(STRONG).flatMap((part) => splitClauses(part)).flatMap((c) => c.split(MORE)).map(tidy).filter((c) => c.length > 1);
-}
+// (split lives in everywhere-words.js, so the voice loop can tell a many-part command too.)
+export { split };
 
 // ---- the instant paths (no AI, no picture) ----
 const OPEN_APP = /^(?:please\s+)?(?:open|launch|start)\s+(?:up\s+)?(?:the\s+|my\s+)?(.+?)(?:\s+app)?[.!]?$/i;

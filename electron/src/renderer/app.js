@@ -13,7 +13,7 @@ import { ParseCache } from './core/learn.js';
 import { normName } from './core/interpret.js';
 import { makeCatalog } from './core/catalog.js';
 import { normalizeURL } from './ui/tabs.js';
-import { HIVE, ABOUT_SCREEN, COMMAND, DESKTOP_WORDS } from './core/everywhere-words.js';
+import { HIVE, ABOUT_SCREEN, COMMAND, DESKTOP_WORDS, HERE, split } from './core/everywhere-words.js';
 
 const $ = (id) => document.getElementById(id);
 const fillIcons = (root = document) => root.querySelectorAll('[data-icon]').forEach((el) => { if (!el.firstChild || el.tagName === 'BUTTON') el.innerHTML = icons[el.dataset.icon] ?? ''; });
@@ -118,7 +118,7 @@ ew?.enabled().then(({ listening = true, phrases = [] } = {}) => {
   let mine = heard(phrases);
   ew.onCommands?.((list) => { mine = heard(list); });
   voice.everywhere = {
-    wants: (t) => Date.now() < ewArmed || HIVE.test(t) || COMMAND.test(t.trim()) || mine.some((re) => re.test(t)) || document.visibilityState === 'hidden' || (!document.hasFocus() && (Date.now() < ewUntil || ABOUT_SCREEN.test(t) || DESKTOP_WORDS.test(t.trim()))),
+    wants: (t) => Date.now() < ewArmed || HIVE.test(t) || (split(t).length > 1 && !HERE.test(t)) || COMMAND.test(t.trim()) || mine.some((re) => re.test(t)) || document.visibilityState === 'hidden' || (!document.hasFocus() && (Date.now() < ewUntil || ABOUT_SCREEN.test(t) || DESKTOP_WORDS.test(t.trim()))),
     transcript: (t) => { if (Date.now() < ewArmed || !document.hasFocus()) ew.transcript(t); },
     run: (t, mode) => { ewArmed = 0; ewUntil = Date.now() + 30000; return ew.run(t, mode).catch(() => {}); },
     stop: () => ew.stop(),
@@ -133,7 +133,12 @@ ew?.enabled().then(({ listening = true, phrases = [] } = {}) => {
   // (No listening window after Dixi speaks: a follow-up starts with "Dixi", so its own voice can't loop.)
   ew.onSay((t) => { speaker.say(t); ewUntil = Date.now() + 30000; });
   ew.onKill(() => { speaker.stop(); voice.cancelAll({ quiet: true }); });
-  ew.onBrowse?.((t) => voice.handleText(t));   // a planned "web" step (main/plan.js): Dixi's own browser does it
+  // A planned "web" step (main/plan.js): Dixi's own browser does it, and says when it's done (the plan waits).
+  ew.onBrowse?.(async (t, id) => {
+    await voice.handleText(t).catch(() => {});
+    const mine = voice.plan.filter((p) => p.said === t), bad = mine.find((p) => p.state !== 'done');
+    ew.browsed?.(id, mine.length > 0 && !bad, bad?.label ?? (mine.length ? '' : "the browser didn't understand it"));
+  });
   // A yes/no from the Mac agent: said, or the card's button (whichever is first).
   ew.onConfirm(async ({ id, question }) => {
     ewConfirm = id;
