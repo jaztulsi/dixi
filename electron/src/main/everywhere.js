@@ -17,6 +17,8 @@ import * as input from './input.js';
 import { startBridge } from './bridge.js';
 import * as guardian from './guardian.js';
 import { unsafe } from './safesite.js';
+import { exec as macExec, openTarget, runScript, check as checkScript, installedApps } from './mac.js';
+import { mark } from './timing.js';
 import { ENDPOINTS, chat } from './providers.js';
 import { makeAsk } from './ask.js';
 import { openIndex } from './index.js';
@@ -107,6 +109,15 @@ export const isSensitive = (ctx) => SENSITIVE_APPS.test(ctx?.name ?? '') || MESS
 const GUARDED_APPS = /^(System Settings|System Preferences|Installer|Keychain Access|Terminal|iTerm2|Script Editor|Automator|Activity Monitor|Disk Utility)$/;
 export const isGuarded = (ctx) => GUARDED_APPS.test(ctx?.name ?? '') || /^com\.apple\.(systempreferences|installer|keychainaccess|Terminal|ScriptEditor2)$/.test(ctx?.bundle ?? '');
 /** Words an approval question may quote from the screen, without the ones that would answer it. */
+// Keys and typed text never go to a terminal, a code editor or Dixi itself: one stray word plus Enter there runs a command.
+// Matched by the app's own category (LSApplicationCategoryType in its Info.plist) or its bundle id, never by a phrase.
+const DEV_BUNDLES = /^(com\.apple\.(Terminal|dt\.)|com\.googlecode\.iterm2|dev\.warp\.|com\.todesktop\.230313mzl4w4u92|com\.microsoft\.VSCode|com\.vscodium|com\.exafunction\.windsurf|com\.jetbrains\.|com\.google\.android\.studio|com\.sublimetext\.|dev\.zed\.|com\.panic\.Nova|com\.barebones\.bbedit|org\.vim\.MacVim|net\.kovidgoyal\.kitty|(org|io)\.alacritty|com\.mitchellh\.ghostty|co\.zeit\.hyper|com\.github\.atom)/i;
+/** The front app ({ name, bundle, pid, category }) → why keys may not go there, or null. */
+export function keysRefused({ name = '', bundle = '', pid = 0, category = '' } = {}, self = process.pid) {
+  if (pid && pid === self) return "Dixi's own window is in front";
+  if (category === 'public.app-category.developer-tools' || DEV_BUNDLES.test(bundle)) return `${name || 'A terminal or code editor'} is in front (a terminal or code editor)`;
+  return null;
+}
 export const quoteLabel = (s, max = 60) => String(s).replace(/\b(yes|yeah|yep|no|nope|ok(ay)?|sure|confirm(ed)?|go ahead|do it|approve[ds]?)\b[.!,]*/gi, '').replace(/\s+/g, ' ').trim().slice(0, max) || 'this';
 
 // ---- what was said → which mode ----
@@ -170,6 +181,25 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const env = config.env;
   if (env.DIXI_EVERYWHERE === '0' || process.platform !== 'darwin') return { enabled: false };
   const state = { enabled: true, ctrl: null, armed: null, recent: [], notes: [], overlay: null, ready: null, hideTimer: null };
+  const cats = new Map();   // bundle id → its app category ('' when it has none)
+  async function frontNow() {
+    const f = await input.frontApp();
+    if (f.bundle && !cats.has(f.bundle)) {
+      const at = (await macExec('lsappinfo', ['info', '-only', 'bundlepath', String(f.pid)]).catch(() => ({ stdout: '' }))).stdout.match(/="([^"]+)"/)?.[1];
+      const cat = at ? (await macExec('plutil', ['-extract', 'LSApplicationCategoryType', 'raw', `${at}/Contents/Info.plist`]).catch(() => ({ stdout: '' }))).stdout.trim() : '';
+      cats.set(f.bundle, cat);
+    }
+    return { ...f, category: cats.get(f.bundle) ?? '' };
+  }
+  /** Read in code right before any key or typed text: null when the front app may get keys, else why not.
+   *  When it may not, `target` (the app the step is for) is brought to the front once and checked again. */
+  async function keysBlocked(target) {
+    const why = keysRefused(await frontNow());
+    if (!why || !target) return why;
+    await input.openApp(target);
+    await new Promise((r) => setTimeout(r, 400));
+    return keysRefused(await frontNow());
+  }
   // What you asked Dixi to remember: in memory only (never written to disk), for an afternoon.
   // (With the facts you said, memory.js. Both go in the user's message as data, never the system prompt.)
   const notesLine = (task = '') => { state.notes = state.notes.filter((n) => Date.now() - n.at < 4 * 3600000); return (state.notes.length ? `\nThe user asked you to remember (use it when relevant, e.g. to paste into another app): ${state.notes.map((n) => `[from ${n.app}${n.title ? `, “${n.title}”` : ''}] ${n.note}`).join(' | ')}` : '') + factsLine(mem, task); };
@@ -343,7 +373,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   }
 
   // ---- Agent: Claude's computer-use toolset drives the Mac ----
-  async function agent(task, shot, ctx, signal, found = [], said = task) {
+  async function agent(task, shot, ctx, signal, found = [], said = task, target = '') {
     if (!systemPreferences.isTrustedAccessibilityClient(false)) {
       systemPreferences.isTrustedAccessibilityClient(true);   // macOS shows its own prompt
       say('To click and type for you, Dixi needs Accessibility permission. Turn Dixi on in the setting that just opened, then ask again.');
@@ -486,6 +516,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     }
     if (n === 'cursor_position') { const p = await input.cursor(); return ok(`${Math.round(((p.x - shot.bounds.x) * shot.w) / shot.bounds.width)},${Math.round(((p.y - shot.bounds.y) * shot.h) / shot.bounds.height)}`); }
     if (n === 'scroll') { await input.scroll(c.input?.coordinate ? at : null, c.input.scroll_direction, c.input.scroll_amount); await pause(250); return acted(ok()); }
+    if (n === 'type' || n === 'key' || n === 'hold_key') {
+      const front = await keysBlocked(target);
+      if (front) return fail(`${front}, so no keys were sent. Stop and tell the user to bring the app they want to the front.`);
+    }
     if (n === 'type') {
       const f = await input.focused();
       if (secretField(f)) return no('a password, card, SSN or code field: the user types that themselves');
@@ -925,6 +959,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const clean = j.content.find((b) => b.type === 'text')?.text?.trim();   // (trimmed: never ends with a newline that sends)
     if (!clean || signal.aborted) return;
     if (profileFocused() || secretField(await input.focused())) { say("That box is for you to type, so I won't type there."); return; }
+    if (/\n/.test(clean) && (await keysBlocked())) { say("That has line breaks, and a line break in a terminal or code editor can run something, so I didn't type it."); return; }
     await input.type(clean);
     show({ state: 'done', title: 'Typed it', text: clean.slice(0, 260), linger: 5000 });
     say('Done.');
