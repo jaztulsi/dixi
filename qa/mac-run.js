@@ -7,7 +7,7 @@
 //   options: --timeout 30000  --max-usd 3  --app /path/to/electron (default: this worktree's electron/)
 //
 // Writes qa/results/mac-<stamp>.json. Never messages anyone: rows that would are 'blocked' until a test contact exists.
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
@@ -27,6 +27,16 @@ const UNSAFE_FRONT = /^(Terminal|iTerm2|Warp|Ghostty|Alacritty|kitty|WezTerm|Cur
 const SUITE = arg('suite', null);
 const ROWS = SUITE ? (await import(pathToFileURL(path.resolve(SUITE)).href)).ROWS : KNOWN;
 const OUT_DIR = SUITE ? path.dirname(path.resolve(SUITE)) : path.join(QA, 'results');
+// Terminals and editors are hidden during each row (NSRunningApplication, no Automation grant), so a screen agent
+// that loses focus can't land in one; only the ones this run hid are shown again, on every exit, crashes included.
+const HIDE = ['Terminal', 'iTerm2', 'Warp', 'Ghostty', 'Alacritty', 'kitty', 'WezTerm', 'Cursor', 'Code', 'Visual Studio Code', 'Zed', 'Claude'];
+const nsApps = (names, then) => `ObjC.import('AppKit'); const want = ${JSON.stringify(names)}; const out = [];
+  for (const a of ObjC.unwrap($.NSWorkspace.sharedWorkspace.runningApplications)) { const n = ObjC.unwrap(a.localizedName); if (want.includes(n)) { ${then} } } JSON.stringify(out)`;
+const hideRisky = () => new Promise((res) => execFile('osascript', ['-l', 'JavaScript', '-e', nsApps(HIDE, 'if (!a.hidden) { a.hide; out.push(n); }')], { timeout: 8000 }, (e, o) => { try { res(e ? [] : JSON.parse(o)); } catch { res([]); } }));
+const unhide = (names) => { if (names.length) try { execFileSync('osascript', ['-l', 'JavaScript', '-e', nsApps(names, 'a.unhide; out.push(n);')], { timeout: 8000 }); } catch {} };
+let hidden = [];
+process.on('exit', () => unhide(hidden));
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => process.exit(130));
 const pick = arg('rows', '').split(',').filter(Boolean);
 const rows = process.argv.includes('--baseline') ? ROWS.filter((r) => r.known || ['open-calculator', 'quit-calculator', 'volume-30', 'open-downloads', 'open-youtube'].includes(r.id))
   : pick.length ? ROWS.filter((r) => pick.includes(r.id)) : ROWS;
@@ -39,6 +49,11 @@ const spent = () => { try { return JSON.parse(fs.readFileSync(LEDGER, 'utf8')).t
 const FOUNDER_LOG = path.join(os.homedir(), 'Library/Application Support/Dixi/activity.jsonl');
 const founderEvents = (t0, t1) => { try { return fs.readFileSync(FOUNDER_LOG, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((e) => e.t >= t0 && e.t <= t1).length; } catch { return null; } };
 const log = (...a) => console.log('[mac]', ...a);
+// Which lane a failure goes to (orchestrator routing): the row's own owner, else by kind; a screen-agent fallback
+// or a confirmation question is named too, since those are where the time went.
+const ownerOf = (r, acts, heard) => [r.owner ?? (r.kind === 'multi' ? 'Lane A · plan.js' : 'Lane C · mac.js/desktop.js'),
+  acts.some((e) => e.kind === 'step' && /pressed|typed|clicked|scrolled/.test(e.verb ?? '')) && 'fell to the screen agent (Lane A · everywhere.js)',
+  heard.asked.length && `asked "${heard.asked[0].slice(0, 60)}"`].filter(Boolean).join(' · ');
 
 const a = await launchMac({ DIXI_EVERYWHERE: '1', ELEVENLABS_API_KEY: ' ', DEEPGRAM_API_KEY: ' ' });
 log(`test Dixi up in ${a.startMs} ms (profile ${a.profile})`);
@@ -74,6 +89,7 @@ try {
     const snap = { vol: await m.volume(), muted: await m.muted(), front: await m.front(), tabs: await m.tabIds(), finder: await m.finderWindows(), music: (await m.music()).state,
       running: Object.fromEntries(await Promise.all(APPS.map(async (n) => [n, await m.running(n)]))),
       extra: Object.fromEntries(await Promise.all((r.apps ?? []).map(async (n) => [n, await pgrep(n)]))) };
+    hidden = [...new Set([...hidden, ...(await hideRisky())])];
     await neutral();
     const s = { ...((await r.setup?.(m)) ?? {}) };
     if (s.blocked) { block(s.blocked); try { await r.cleanup?.(m, s); } catch {} continue; }
@@ -86,11 +102,13 @@ try {
     await a.ui(() => { window.__said.length = 0; window.__asked.length = 0; window.__runDone = 0; window.__runErr = ''; return true; });
     const t0 = Date.now(); s.t0 = t0;
     await a.ui((text) => { window.dixi.everywhere.run(text).then(() => { window.__runDone = Date.now(); }, (e) => { window.__runErr = String(e?.message ?? e); window.__runDone = Date.now(); }); return true; }, say);
-    let verified = null, last = { ok: false, got: '' };
+    let verified = null, last = { ok: false, got: '' }, unsafeStop = null;
     while (Date.now() - t0 < TIMEOUT) {
       const tc = Date.now();
       try { last = await r.check(m, s); } catch (err) { last = { ok: false, got: `check threw ${err.message}` }; }
       if (last.ok) { verified = Date.now() - t0; break; }   // when the check came back: an upper bound
+      const fNow = await m.front();
+      if (UNSAFE_FRONT.test(fNow)) { await a.ui(() => { window.dixi.everywhere.stop(); return true; }); unsafeStop = fNow; break; }
       if (await a.ui(() => window.__runDone)) { await sleep(1500); try { last = await r.check(m, s); } catch {} if (last.ok) verified = Date.now() - t0; break; }   // run() ended: one last look
       await sleep(400);
     }
@@ -110,10 +128,11 @@ try {
       status: verified != null ? 'pass' : 'fail', ms: verified ?? (Date.now() - t0), runMs: runDone ? runDone - t0 : null, hardStopped: stopped,
       got: last.got, said: heard.said, asked: heard.asked, runError: heard.err || undefined,
       steps: acts.filter((e) => e.kind === 'step').map((e) => [e.verb, e.role, e.label, e.model, e.ms].filter((x) => x != null).join(' ')).slice(0, 30),
+      unsafeStop: unsafeStop ?? undefined, owner: verified != null ? undefined : ownerOf(r, acts, heard),
       usd: Number(((await own()) - usd0).toFixed(4)), errs: a.errs.splice(0).slice(0, 8), loaded,
     };
     out.rows.push(row);
-    log(`${row.status.padEnd(7)} ${String(row.ms).padStart(6)} ms  $${row.usd.toFixed(3)}  ${say}${row.status === 'pass' ? '' : `  → ${row.got}`}${stopped ? '  [hard stop]' : ''}`);
+    log(`${row.status.padEnd(7)} ${String(row.ms).padStart(6)} ms  $${row.usd.toFixed(3)}  ${say}${row.status === 'pass' ? '' : `  → ${row.got}  [${row.owner}]`}${unsafeStop ? `  [stopped: ${unsafeStop} came to front]` : ''}${stopped ? '  [hard stop]' : ''}`);
     // Put the Mac back.
     try { row.restored = await r.cleanup?.(m, s); } catch (err) { row.cleanupError = err.message; }
     try {
@@ -129,6 +148,7 @@ try {
   }
 } finally {
   fs.rmSync(EMPTY, { recursive: true, force: true });
+  unhide(hidden); hidden = [];
   if (firstFront) await sh('open', ['-a', firstFront]);   // the user's own front app, as found (LaunchServices, no Automation)
   out.ledgerEnd = spent();
   out.usd = await own().catch(() => 0);

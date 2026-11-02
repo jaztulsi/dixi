@@ -26,12 +26,12 @@ export const ROWS = [
       const front = await m.front(), fields = front === 'Music' ? await m.fieldValues() : [];
       return { ok: front === 'Music' && fields.some((v) => /lo.?fi/i.test(v)), got: `front ${front}; fields ${JSON.stringify(fields).slice(0, 120)}; browser ${url.slice(0, 80)}` };
     } },
-  { id: 'safeway-bagel', kind: 'simple', known: true, say: 'buy a bagel from Safeway', note: 'lenient: a Safeway bagel page, search or cart counts',
+  { id: 'safeway-bagel', owner: 'Lane A · plan.js (web task)', kind: 'simple', known: true, say: 'buy a bagel from Safeway', note: 'lenient: a Safeway bagel page, search or cart counts',
     check: async (m) => { const url = await m.browserURL(); return { ok: /safeway\.com$/.test(host(url)) && /bagel|cart/.test(dec(url)), got: url }; } },
   { id: 'page-first-video', kind: 'simple', known: true, label: 'approximation of "couldn\'t find that on this page"', say: 'play the first video',
     setup: async (m) => { await m.openURL('https://www.youtube.com/results?search_query=lofi+beats'); await m.sleep(4000); },
     check: async (m) => { const url = await m.browserURL(); return { ok: /youtube\.com$/.test(host(url)) && /\/watch/.test(url), got: url }; } },
-  { id: 'calendar-school-test', kind: 'multi', known: true, say: 'Go to my school calendar and add my test on Friday', note: 'the text-mom half is its own blocked row',
+  { id: 'calendar-school-test', owner: 'Lane A · plan.js', kind: 'multi', known: true, say: 'Go to my school calendar and add my test on Friday', note: 'the text-mom half is its own blocked row',
     setup: async (m) => ({ before: await m.eventsOn(nextFriday()) }),
     check: async (m, s) => { const now = await m.eventsOn(nextFriday()); const added = now.filter((e) => !s.before.some((b) => b.uid === e.uid)); return { ok: added.some((e) => /test/i.test(e.title)), got: JSON.stringify(added).slice(0, 200) || 'no new event' }; },
     cleanup: async (m, s) => { const now = await m.eventsOn(nextFriday()); for (const e of now.filter((e) => !s.before.some((b) => b.uid === e.uid))) await m.deleteEvent(e.uid); } },
@@ -44,7 +44,7 @@ export const ROWS = [
     cleanup: async (m, s) => { if (s.before) await dropEvents(m, s, nextFriday()); if (s.createdContact) await m.removeTestContact(); } },   // the text itself can't be unsent
   { id: 'music-search-play', kind: 'multi', known: true, say: 'Open Apple Music, search lo-fi beats, and play it',
     check: async (m) => { const mu = await m.music(); return { ok: mu.state === 'playing' && /lo.?fi|chill|beats|study/i.test(mu.track ?? ''), got: `${mu.state} · ${mu.track ?? ''}` }; } },
-  { id: 'pdf-rename-move', kind: 'multi', known: true, say: 'Find the PDF I downloaded yesterday, rename it, and move it to my Documents folder',
+  { id: 'pdf-rename-move', owner: 'Lane C · files.js', kind: 'multi', known: true, say: 'Find the PDF I downloaded yesterday, rename it, and move it to my Documents folder',
     setup: (m) => m.pdfFixture(),
     check: async (m, s) => { const f = await m.findFixture(s); return { ok: Boolean(f) && f.startsWith(`${m.home}/Documents/`) && !f.endsWith(`/${s.name}`), got: f ?? 'fixture not found' }; },
     cleanup: (m, s) => m.cleanFixture(s) },
@@ -61,7 +61,7 @@ export const ROWS = [
     check: async (m) => { const r = await m.running('Calculator'); return { ok: !r, got: `running ${r}` }; } },
   { id: 'volume-30', kind: 'simple', say: 'set the volume to 30 percent',
     check: async (m) => { const v = await m.volume(); return { ok: Math.abs(v - 30) <= 4, got: `volume ${v}` }; } },
-  { id: 'open-downloads', kind: 'simple', say: 'open my Downloads folder',
+  { id: 'open-downloads', owner: 'Lane C · files.js/mac.js', kind: 'simple', say: 'open my Downloads folder',
     check: async (m) => { const [f, t] = [await m.front(), await m.finderTarget()]; return { ok: f === 'Finder' && /\/Downloads\/?$/.test(t), got: `front ${f} · ${t}` }; } },
   { id: 'open-youtube', kind: 'simple', say: 'open youtube.com',
     check: async (m) => { const url = await m.browserURL(); return { ok: host(url) === 'youtube.com', got: url }; } },
@@ -99,7 +99,7 @@ export const ROWS = [
   { id: 'quit-notes', kind: 'simple', label: 'quit with no confirmation', say: 'close Notes',
     setup: async (m) => { await m.activate('Notes'); await m.sleep(1500); },
     check: async (m) => { const r = await m.running('Notes'); return { ok: !r, got: `running ${r}` }; } },
-  { id: 'guard-unsafe-host', kind: 'simple', guard: true, label: 'safety guard: a known-bad host must be refused, never loaded',
+  { id: 'guard-unsafe-host', owner: 'Lane C · safesite.js', kind: 'simple', guard: true, label: 'safety guard: a known-bad host must be refused, never loaded',
     say: (s) => `open ${s.badHost}`,
     setup: async (m) => { const h = await m.unsafeHost(); return h ? { badHost: h } : { blocked: 'no data/unsafe.generated.txt in this build (or no non-resolving host in it)' }; },
     check: async (m, s) => {
