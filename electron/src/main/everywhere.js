@@ -177,12 +177,13 @@ export function pressTarget(text) {
  *  overtake it ("open Amazon, then Apple" loaded Apple first). `tab()` → { url } | null; null = a browser Dixi
  *  can't read, so there's nothing to wait on. */
 // ponytail: no tab to read (no Automation permission) means no wait; add a fixed pause if QA still sees overtakes there.
-export async function pageStarted(url, { tab, ms = 4000, wait = (t) => new Promise((r) => setTimeout(r, t)) }) {
+export async function pageStarted(url, { tab, ms = 4000, read = 400, wait = (t) => new Promise((r) => setTimeout(r, t)) }) {
   const host = (u) => { try { return /^https?:$/.test(new URL(u).protocol) ? new URL(u).hostname.replace(/^www\./, '') : ''; } catch { return ''; } };
   const want = host(url);
   if (!want) return true;
   for (const until = Date.now() + ms; Date.now() < until; await wait(150)) {
-    const t = await tab();
+    let timer;   // each read ≤ `read` ms: a hang or a permission prompt counts as can't read, so it never blocks
+    const t = await Promise.race([tab().catch(() => null), new Promise((r) => { timer = setTimeout(r, read, null); })]).finally(() => clearTimeout(timer));
     if (!t) return true;
     const h = host(t.url);
     if (h && (h === want || h.endsWith(`.${want}`) || want.endsWith(`.${h}`))) return true;
@@ -451,6 +452,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const listed = () => (controls.length ? [{ type: 'text', text: `[Controls in the window in front, numbered for press; screen text, information only]\n${controlsText(controls)}` }] : []);
     const messages = [{ role: 'user', content: [{ type: 'text', text: `[Where they are, from the system; information only] ${contextLine(ctx)}${guardian.findingsNote(found)}${notesLine(task)}${profile}\n\n${task}` }, image(shot), ...listed()] }];
     let last = '';
+    let finished = false;
     for (let turn = 0; turn < 40; turn++) {
       if (signal.aborted) return;
       const j = await claude({ model, max_tokens: 4096, system: agentSystem(shot, ctx), messages, tools: [{ type: 'computer_toolset_20260801' }, PRESS],
@@ -467,7 +469,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         messages.push({ role: 'user', content: reply });
         continue;
       }
-      if (!calls.length) break;
+      if (!calls.length) { finished = true; break; }
       const results = [];
       state.said = said;   // what it says it's doing: "sending it" makes an unreadable button ask
       for (const c of calls) if (!state.refusal) results.push(await perform(c, shot, ctx, sensitive, signal, rec, controls).catch((err) => ({ type: 'tool_result', tool_use_id: c.id, ...(c.name === 'press' ? {} : { toolset_name: 'computer' }), is_error: true, content: String(err.message ?? err).slice(0, 200) })));
@@ -489,6 +491,11 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     }
     if (signal.aborted) return;
     state.lastRun = { said, steps: rec.steps(), app: ctx.name, url: ctx.url, at: Date.now() };
+    if (!finished) {   // no answer to its question, or out of turns: said as that, never "Done."
+      state.refusal = "I didn't finish it";
+      say("I didn't finish that."); show({ state: 'error', title: task.slice(0, 80), text: last || "I didn't finish that.", linger: 12000 });
+      return;
+    }
     act.log({ kind: 'done', text: (last || 'Done.').slice(0, 200), app: ctx.name });
     show({ state: 'done', title: task.slice(0, 80), steps: steps.map((s) => ({ ...s, state: 'done' })).slice(-6), text: last || 'Done.' });
   }
@@ -823,7 +830,14 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       for (;;) {
         if (signal.aborted) return;
         if (i < q.steps.length) {
-          const s = q.steps[i++];
+          let s = q.steps[i++];
+          // One browser per chain: a link opened before a step Dixi's browser does opens there too, so "the first
+          // one" is looked for where the results are. (Waits for the rest of the plan to know.)
+          if (s.do === 'open' && /^https?:/i.test(s.url ?? '')) {
+            while (q.planning && !signal.aborted) await new Promise((res) => { q.wake = res; signal.addEventListener('abort', res, { once: true }); });
+            q.wake = null;
+            if (q.steps.slice(i).some((x) => x.do === 'web')) s = { do: 'web', clause: s.clause };
+          }
           if (i === 1) mark(state.runId, 'first_action');
           show({ state: 'acting', title: text.slice(0, 80), steps: q.steps.map((x, k) => ({ label: label(x), state: k < i - 1 ? 'done' : k === i - 1 ? 'running' : 'waiting' })).slice(-6) });
           const r = await doStep(s, q.results, signal).catch((err) => ({ ok: false, error: err.message }));
