@@ -227,3 +227,14 @@ test('"open a new Finder window": the app comes to the front, then ⌘N; never p
   assert.equal((await runDesktop(desktopIntent('open a new Flurb window'), none.deps)).say, "There's no app called Flurb on this Mac.");
 });
 
+test('"play some music": Music carries on, else shuffles your library; an empty library with no subscription is said plainly', async () => {
+  assert.deepEqual(desktopIntent('play some music'), { verb: 'media', op: 'play', app: undefined });
+  const off = (reply) => rig((c, a) => (/is running/.test(a[1]) ? 'false' : reply(a[1])));
+  const lib = off((s) => (/play library playlist 1/.test(s) ? 'Yesterday by The Beatles' : ''));
+  assert.equal((await runDesktop(desktopIntent('play some music'), lib.deps)).say, 'Playing Yesterday by The Beatles.', 'nothing open: Music opens and plays');
+  const empty = off((s) => (/play library playlist 1/.test(s) ? 'empty' : /Join Apple Music/.test(s) ? 'true' : ''));
+  assert.equal((await runDesktop(desktopIntent('play some music'), empty.deps)).say, "Your music library is empty, and Apple Music needs a subscription, so there's nothing to play.");
+  const spot = rig((c, a) => (/"Spotify" is running/.test(a[1]) ? 'true' : ''));
+  assert.equal((await runDesktop(desktopIntent('play some music'), spot.deps)).say, 'Playing.', 'Spotify open: it carries on there');
+  assert.ok(spot.calls.some((c) => c.includes('tell application "Spotify" to play')));
+});

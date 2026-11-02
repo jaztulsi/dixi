@@ -37,7 +37,7 @@ const RULES = [
   rule('volume', String.raw`(un)?mute(?: the)?(?: sound| volume| audio| mac| computer)?`, (m) => ({ op: m[1] ? 'unmute' : 'mute' })),
   rule('media', String.raw`play ?/ ?pause|play pause|toggle (?:the )?(?:music|playback)`, () => ({ op: 'playpause' })),
   rule('media', String.raw`(?:pause|stop)(?: the| my)? ${MEDIA_NOUN}`, (m) => ({ op: 'pause', app: mediaApp(m[0]) })),
-  rule('media', String.raw`(?:play|resume|unpause)(?: the| my)? ${MEDIA_NOUN}`, (m) => ({ op: 'play', app: mediaApp(m[0]) })),
+  rule('media', String.raw`(?:play|resume|unpause|put on|start)(?: the| my| some)? ${MEDIA_NOUN}|play something`, (m) => ({ op: 'play', app: mediaApp(m[0]) })),
   rule('media', String.raw`play (?:the song |the track )?(.{2,80}?) (?:on|in|from|with|using) (?:apple music|the music app|itunes)`, (m) => ({ op: 'song', q: m[1], app: 'Music' })),
   rule('media', String.raw`skip(?: the| this)? (?:song|track)|(?:play )?(?:the )?next (?:song|track)`, () => ({ op: 'next' })),
   rule('media', String.raw`(?:play )?(?:the )?(?:previous|last) (?:song|track)|go back (?:a|one) (?:song|track)`, () => ({ op: 'previous' })),
@@ -176,6 +176,29 @@ end run`;
 // ponytail: the English menu item; a Mac in another language falls through to "it didn't start playing".
 const NO_SUB = 'tell application "System Events" to tell process "Music" to return exists menu item "Join Apple Music…" of menu 1 of menu bar item "Account" of menu bar 1';
 const NOW = 'tell application "Music" to if player state is playing then return (name of current track) & " by " & (artist of current track)';
+// "play some music": what was playing carries on; with nothing to carry on, your whole library on shuffle.
+const MUSIC_PLAY = `tell application "Music"
+  if player state is not playing then
+    try
+      get name of current track
+      play
+    end try
+  end if
+  if player state is not playing then
+    if (count of tracks of library playlist 1) is 0 then return "empty"
+    set shuffle enabled to true
+    play library playlist 1
+  end if
+  if player state is playing then return (name of current track) & " by " & (artist of current track)
+  return "stopped"
+end tell`;
+async function playMusic(d) {
+  const r = await osa(d, MUSIC_PLAY);
+  if (r !== 'empty' && r !== 'stopped') return out(`Playing ${r}.`, 'Music');
+  const noSub = (await osa(d, NO_SUB).catch(() => '')) === 'true';
+  if (r === 'empty') return out(noSub ? "Your music library is empty, and Apple Music needs a subscription, so there's nothing to play." : 'Your music library is empty. Tell me a song to play from Apple Music.', 'Music');
+  return out(noSub ? 'Music didn\'t start: these songs need an Apple Music subscription.' : "Music didn't start playing.", 'Music');
+}
 async function playSong(q, d) {
   const { fetch: get = fetch, find = findControls, press = pressControl, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = d;
   const mine = await osa(d, LIB_PLAY, q.replace(/ by /i, " ")).catch(() => '');
@@ -211,6 +234,7 @@ const DO = {
     if (i.op === 'song') return playSong(i.q, d);
     for (const app of i.app ? [i.app] : MEDIA_APPS) {
       if (!MEDIA_APPS.includes(app) || !(await running(d, app))) continue;
+      if (app === 'Music' && i.op === 'play') return playMusic(d);
       if (i.op === 'now') {
         const r = await osa(d, `tell application "${app}" to (name of current track) & " by " & (artist of current track)`).catch(() => '');
         return out(r ? `Playing ${r}.` : 'Nothing is playing.', app);
@@ -218,6 +242,7 @@ const DO = {
       await osa(d, `tell application "${app}" to ${MEDIA_CMD[i.op]}`);
       return out({ playpause: 'Done.', play: 'Playing.', pause: 'Paused.', next: 'Next song.', previous: 'Previous song.' }[i.op], app);
     }
+    if (i.op === 'play' && i.app !== 'Spotify') return playMusic(d);   // "play some music" with nothing open: your library in Music
     return out(`${i.app ?? 'Music and Spotify'} ${i.app ? "isn't" : "aren't"} open. Open it first and I'll control it.`, 'Media');
   },
   async site(i, d) {
