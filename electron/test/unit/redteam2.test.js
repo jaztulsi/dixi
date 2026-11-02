@@ -53,11 +53,11 @@ function fakeMac({ front = OTHER, controls = [], at = null, press = 'ok' } = {})
 }
 
 // Claude stand-in: the agent's turns, scripted. Every request is kept, so the tool results can be read.
-let requests = [], script = [];
+let requests = [], script = [], planned = null;   // planned: the planner's reply (plan.js), when a test sets one
 globalThis.fetch = async (_url, { body }) => {
   const b = JSON.parse(body);
   requests.push(b);
-  const content = b.tools ? script.shift() ?? [{ type: 'text', text: 'Done.' }] : [{ type: 'text', text: '{"tasks":[]}' }];
+  const content = b.tools ? script.shift() ?? [{ type: 'text', text: 'Done.' }] : [{ type: 'text', text: planned && b.output_config?.format?.schema?.properties?.steps ? JSON.stringify(planned) : '{"tasks":[]}' }];
   return { ok: true, status: 200, json: async () => ({ content, usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: 'end_turn' }) };
 };
 const result = (id) => requests.flatMap((r) => r.messages ?? []).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).find((c) => c.type === 'tool_result' && c.tool_use_id === id)?.content;
@@ -134,6 +134,17 @@ test("A3: a many-part command with Dixi's own window in front: each part goes to
   await run('search the web for jazz records, then add the first one to the cart');
   assert.deepEqual(events, ['browse search the web for jazz records', 'done search the web for jazz records', 'browse add the first one to the cart', 'done add the first one to the cart']);
   assert.equal(asked.length, 0);
+  assert.ok(!done.some(([w]) => /click|press|type|key/.test(w)), 'nothing was clicked or typed on the screen');
+});
+
+test('QA open-nytimes / misheard-you-tube: a single "open …" that names no app goes to the planner, not the screen agent', mac, async () => {
+  const run = await harness;
+  fakeMac();   // another app in front; openApp finds no app called "you tube"
+  events = []; asked = []; requests = [];
+  planned = { steps: [{ do: 'web', clause: 'open you tube' }] };
+  try { await run('open you tube'); } finally { planned = null; }
+  assert.deepEqual(events, ['browse open you tube', 'done open you tube']);
+  assert.ok(!requests.some((b) => b.tools), 'the screen agent never ran');
   assert.ok(!done.some(([w]) => /click|press|type|key/.test(w)), 'nothing was clicked or typed on the screen');
 });
 
