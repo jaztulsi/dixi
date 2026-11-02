@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clickRisk, keyRisk, riskyLabel, isSensitive, isGuarded, isMoney, quoteLabel, pressTarget, controlsText, modeOf, contextLine, toScreen, ABOUT_SCREEN, keysRefused, readStream, userAsked } from '../../src/main/everywhere.js';
+import { clickRisk, keyRisk, riskyLabel, isSensitive, isGuarded, isMoney, quoteLabel, pressTarget, controlsText, modeOf, contextLine, toScreen, ABOUT_SCREEN, keysRefused, readStream, userAsked, pageStarted } from '../../src/main/everywhere.js';
 import { parseKey } from '../../src/main/input.js';
 import { HIVE } from '../../src/renderer/core/everywhere-words.js';
 
@@ -187,4 +187,21 @@ test('sign-ups, trials, upgrades and app downloads count as risky; look-alikes d
   assert.equal(userAsked(btn('Get'), 'install Slack from the App Store'), true);
   assert.equal(userAsked(btn('Get'), 'open the App Store'), false);
   assert.equal(userAsked(btn('Upgrade to Pro'), 'upgrade to pro'), true);
+});
+
+test('QA amazon-then-apple: an opened link waits until the browser tab is on that site, so the next open cannot overtake it', async () => {
+  const tabs = (...urls) => { let i = 0; return async () => ({ url: urls[Math.min(i++, urls.length - 1)] }); };
+  const wait = async () => {};
+  // Apple is opened while Amazon's tab is still in front: it waits for the Apple tab (www. and subdomains count).
+  let seen = 0; const t = tabs('https://www.amazon.com/', 'https://www.amazon.com/', 'https://www.apple.com/');
+  assert.equal(await pageStarted('https://apple.com', { tab: async () => { seen++; return t(); }, wait }), true);
+  assert.equal(seen, 3);
+  assert.equal(await pageStarted('https://amazon.com/s?k=bagels', { tab: tabs('https://smile.amazon.com/x'), wait }), true);
+  // Never on that site within the limit: gives up (bounded), and says so.
+  assert.equal(await pageStarted('https://apple.com', { tab: tabs('https://www.amazon.com/'), ms: 30, wait: (x) => new Promise((r) => setTimeout(r, x / 10)) }), false);
+  // No browser tab to read, or not a web link (music://…): nothing to wait on.
+  assert.equal(await pageStarted('https://apple.com', { tab: async () => null, wait }), true);
+  let asked = false;
+  assert.equal(await pageStarted('music://play', { tab: async () => { asked = true; return null; }, wait }), true);
+  assert.equal(asked, false);
 });
