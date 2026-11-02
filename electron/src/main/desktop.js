@@ -9,7 +9,7 @@ import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { unsafe } from './safesite.js';
-import { findControls, pressControl } from './input.js';
+import { findControls, pressControl, openApp, frontApp, key } from './input.js';
 
 /** The real exec: (cmd, args) → stdout. execFile, never a shell. The tests pass a fake. */
 export const exec = (cmd, args) => new Promise((resolve, reject) => {
@@ -61,6 +61,7 @@ const RULES = [
   rule('battery', String.raw`how much battery(?: do i have| is left| life)?(?: left)?|(?:${WHAT}|how(?:['’]?s| is)) (?:my |the )?battery(?: level| life| percentage)?(?: at| doing)?|(?:check |show |tell me )?(?:my |the )?battery(?: level| life| status| percentage)?|am i charging|is it charging`),
   rule('screenshot', String.raw`(?:take |grab |capture )(?:a |the |me a )?(?:screen ?shot|screen capture)(?: of (?:my|the) (?:screen|desktop))?|screen ?shot(?: (?:my|the) screen)?|capture (?:my |the )?screen`),
   rule('wifi', String.raw`(?:turn|switch|set) (?:on|off) (?:the |my )?wi[- ]?fi|(?:turn|switch|set) (?:the |my )?wi[- ]?fi (?:on|off)|(?:enable|disable) (?:the |my )?wi[- ]?fi|wi[- ]?fi (?:on|off)`, (m) => ({ on: /\b(on|enable)\b/i.test(m[0]) })),
+  rule('newwin', String.raw`(?:open|make|create|start|get|give me|show) (?:a |another |one more )?new (${APPNAME}) window|(?:a |another )?new (${APPNAME}) window|(?:open|make|create) (?:a |another )?new window in (${APPNAME})`, (m) => ({ app: (m[1] ?? m[2] ?? m[3]).trim() })),
   rule('quit', String.raw`(?:force )?quit (?:the )?(${APPNAME})(?: app| application)?`, (m) => ({ app: m[1].trim() })),
 ];
 const mediaApp = (s) => (/spotify/i.test(s) ? 'Spotify' : /apple music/i.test(s) ? 'Music' : undefined);
@@ -96,6 +97,7 @@ export function desktopIntent(text) {
     }
     if (verb === 'timer' && !a.ms) return null;
     if (verb === 'quit' && NOT_APPS.test(a.app)) return null;
+    if (verb === 'newwin' && (NOT_APPS.test(a.app) || /^(?:private|incognito|guest|browser|web|tab)$/i.test(a.app))) return null;   // a kind of window, not an app
     return { verb, ...a };
   }
   return null;
@@ -280,6 +282,17 @@ const DO = {
     const dev = ports.match(/Hardware Port: (?:Wi-Fi|AirPort)\s*\nDevice: (\w+)/)?.[1] ?? 'en0';
     await d.exec('networksetup', ['-setairportpower', dev, i.on ? 'on' : 'off']);
     return out(i.on ? 'Wi-Fi on.' : 'Wi-Fi off.', 'Wi-Fi');
+  },
+  // "open a new Finder window": the app in front, then its own New Window key (⌘N). Never pressed into another app.
+  async newwin(i, d) {
+    const { open = openApp, front = frontApp, press = d.key ?? key, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = d;
+    if (!(await open(i.app))) return out(`There's no app called ${i.app} on this Mac.`, 'Window');
+    const same = (n) => n && n.toLowerCase().replace(/\.app$/, '') === i.app.toLowerCase();
+    let f = await front();
+    for (let t = 0; t < 10 && !same(f.name); t++) { await wait(100); f = await front(); }
+    if (!same(f.name)) return out(`${i.app} didn't come to the front, so I didn't press anything.`, 'Window');
+    await press('cmd+n');
+    return out(`New ${f.name} window.`, 'Window');
   },
   async quit(i, d) {
     const name = String(i.app ?? '');

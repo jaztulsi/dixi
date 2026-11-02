@@ -210,3 +210,20 @@ test('a song on Apple Music: your library first, no subscription said plainly, e
   assert.deepEqual(sub.calls.find((c) => c[0] === 'open'), ['open', 'music://music.apple.com/us/album/here-comes-the-sun/1441164426?i=1441164589&uo=4']);
   assert.deepEqual(pressed, [[[0, 3], ['Play']]]);
 });
+
+test('"open a new Finder window": the app comes to the front, then ⌘N; never pressed into another app', async () => {
+  assert.deepEqual(desktopIntent('open a new Finder window'), { verb: 'newwin', app: 'Finder' });
+  assert.deepEqual(desktopIntent('open a new window in Safari'), { verb: 'newwin', app: 'Safari' });
+  assert.equal(desktopIntent('open a new private window'), null, 'a kind of window is not an app');
+  const keys = []; let fronts = ['Dixi', 'Finder'];
+  const ok = rig(() => '', { open: async (a) => a === 'Finder', front: async () => ({ name: fronts.shift() ?? 'Finder' }), key: async (k) => keys.push(k), wait: async () => {} });
+  assert.equal((await runDesktop(desktopIntent('open a new Finder window'), ok.deps)).say, 'New Finder window.');
+  assert.deepEqual(keys, ['cmd+n']);
+  keys.length = 0;
+  const stuck = rig(() => '', { open: async () => true, front: async () => ({ name: 'Google Chrome' }), key: async (k) => keys.push(k), wait: async () => {} });
+  assert.match((await runDesktop(desktopIntent('open a new Finder window'), stuck.deps)).say, /didn't come to the front/);
+  assert.deepEqual(keys, [], 'no ⌘N into the wrong app');
+  const none = rig(() => '', { open: async () => false, key: async () => assert.fail('no key') });
+  assert.equal((await runDesktop(desktopIntent('open a new Flurb window'), none.deps)).say, "There's no app called Flurb on this Mac.");
+});
+
