@@ -70,7 +70,8 @@ test('the Spotlight query is escaped and typed', () => {
   assert.ok(q.includes('kMDItemContentTypeTree == "com.adobe.pdf"'));
   assert.ok(spotlight({ src: 'screenshot' }, NOW).includes('kMDItemIsScreenCapture == 1'));
   assert.ok(spotlight({ when: 'today' }, NOW).includes('kMDItemContentModificationDate >='));
-  assert.ok(spotlight({ when: 'yesterday', src: 'downloads' }, NOW).includes('kMDItemDateAdded >='), 'downloaded yesterday = arrived yesterday');
+  const dl = spotlight({ when: 'yesterday', src: 'downloads' }, NOW);
+  assert.ok(dl.includes('kMDItemDateAdded >=') && dl.includes('|| (kMDItemContentModificationDate >='), 'downloaded yesterday = arrived or saved yesterday');
 });
 
 test('when ranges', () => {
