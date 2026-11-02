@@ -190,3 +190,23 @@ test('a missing Automation permission is explained, not thrown', async () => {
   assert.match(res.say, /permission/);
   assert.match((await runDesktop(null, r.deps)).say, /don't know/);
 });
+
+test('a song on Apple Music: your library first, no subscription said plainly, else open it and press Play by its name', async () => {
+  assert.deepEqual(desktopIntent('play Here Comes the Sun on Apple Music'), { verb: 'media', op: 'song', q: 'Here Comes the Sun', app: 'Music' });
+  const noNet = { fetch: async () => assert.fail('no search needed'), find: async () => assert.fail('no press needed'), wait: async () => {} };
+  const lib = rig((c, a) => (/search library/.test(a[1]) ? 'Here Comes the Sun by The Beatles' : ''), noNet);
+  assert.equal((await runDesktop(desktopIntent('play Here Comes the Sun on Apple Music'), lib.deps)).say, 'Playing Here Comes the Sun by The Beatles.');
+  assert.equal(lib.calls[0].at(-1), 'Here Comes the Sun', 'the song name goes in as an argument, never as script text');
+  const free = rig((c, a) => (/Join Apple Music/.test(a[1]) ? 'true' : ''), noNet);
+  assert.equal((await runDesktop(desktopIntent('play Here Comes the Sun on Apple Music'), free.deps)).say, 'Apple Music needs a subscription to play this.');
+  assert.ok(!free.calls.some((c) => c[0] === 'open'), 'nothing opened, no YouTube');
+  const pressed = [];
+  const sub = rig((c, a) => (/player state is playing/.test(a?.[1]) && pressed.length ? 'Here Comes the Sun by The Beatles' : /Join Apple Music/.test(a?.[1]) ? 'false' : ''), {
+    fetch: async (u) => { assert.match(u, /^https:\/\/itunes\.apple\.com\/search\?term=Here\+Comes\+the\+Sun&/); return { json: async () => ({ results: [{ trackName: 'Here Comes the Sun', trackViewUrl: 'https://music.apple.com/us/album/here-comes-the-sun/1441164426?i=1441164589&uo=4' }] }) }; },
+    find: async (name) => (name === 'Play' ? [{ path: [0, 3], labels: ['Play'] }] : []),
+    press: async (p, l) => { pressed.push([p, l]); return 'ok'; }, wait: async () => {},
+  });
+  assert.equal((await runDesktop(desktopIntent('play Here Comes the Sun on Apple Music'), sub.deps)).say, 'Playing Here Comes the Sun by The Beatles.');
+  assert.deepEqual(sub.calls.find((c) => c[0] === 'open'), ['open', 'music://music.apple.com/us/album/here-comes-the-sun/1441164426?i=1441164589&uo=4']);
+  assert.deepEqual(pressed, [[[0, 3], ['Play']]]);
+});

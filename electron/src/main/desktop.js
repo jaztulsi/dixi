@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { unsafe } from './safesite.js';
+import { findControls, pressControl } from './input.js';
 
 /** The real exec: (cmd, args) → stdout. execFile, never a shell. The tests pass a fake. */
 export const exec = (cmd, args) => new Promise((resolve, reject) => {
@@ -37,6 +38,7 @@ const RULES = [
   rule('media', String.raw`play ?/ ?pause|play pause|toggle (?:the )?(?:music|playback)`, () => ({ op: 'playpause' })),
   rule('media', String.raw`(?:pause|stop)(?: the| my)? ${MEDIA_NOUN}`, (m) => ({ op: 'pause', app: mediaApp(m[0]) })),
   rule('media', String.raw`(?:play|resume|unpause)(?: the| my)? ${MEDIA_NOUN}`, (m) => ({ op: 'play', app: mediaApp(m[0]) })),
+  rule('media', String.raw`play (?:the song |the track )?(.{2,80}?) (?:on|in|from|with|using) (?:apple music|the music app|itunes)`, (m) => ({ op: 'song', q: m[1], app: 'Music' })),
   rule('media', String.raw`skip(?: the| this)? (?:song|track)|(?:play )?(?:the )?next (?:song|track)`, () => ({ op: 'next' })),
   rule('media', String.raw`(?:play )?(?:the )?(?:previous|last) (?:song|track)|go back (?:a|one) (?:song|track)`, () => ({ op: 'previous' })),
   rule('media', String.raw`${WHAT}(?: song| track)? (?:now )?playing(?: right now)?|what (?:song|track) is (?:this|playing)(?: right now)?|${WHAT} this (?:song|track)`, () => ({ op: 'now' })),
@@ -158,6 +160,36 @@ const osa = (d, script, ...argv) => d.exec('osascript', ['-e', script, ...argv])
 const jxa = (d, body, args = {}) => d.exec('osascript', ['-l', 'JavaScript', '-e', `const A = ${JSON.stringify(args)}; ${body}`]);   // args as JSON, never as text
 const running = (d, app) => osa(d, 'application "' + app + '" is running').then((r) => r === 'true', () => false);   // app is one of MEDIA_APPS: fixed words
 
+// "play Here Comes the Sun on Apple Music": your library first; then, only with a subscription, the catalog:
+// Apple's public search (no key) → open the song's music:// link → press Play by its name → check it plays.
+// Never a guess and never YouTube: no subscription is said plainly. The song's name only travels as argv/URL.
+const LIB_PLAY = `on run argv
+  tell application "Music"
+    set r to search library playlist 1 for (item 1 of argv) only songs
+    if r is {} then return ""
+    play item 1 of r
+    return (name of item 1 of r) & " by " & (artist of item 1 of r)
+  end tell
+end run`;
+// ponytail: the English menu item; a Mac in another language falls through to "it didn't start playing".
+const NO_SUB = 'tell application "System Events" to tell process "Music" to return exists menu item "Join Apple Music…" of menu 1 of menu bar item "Account" of menu bar 1';
+const NOW = 'tell application "Music" to if player state is playing then return (name of current track) & " by " & (artist of current track)';
+async function playSong(q, d) {
+  const { fetch: get = fetch, find = findControls, press = pressControl, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = d;
+  const mine = await osa(d, LIB_PLAY, q.replace(/ by /i, " ")).catch(() => '');
+  if (mine) return out(`Playing ${mine}.`, 'Music');
+  if ((await osa(d, NO_SUB).catch(() => '')) === 'true') return out('Apple Music needs a subscription to play this.', 'Music');
+  const hit = (await get(`https://itunes.apple.com/search?${new URLSearchParams({ term: q, media: 'music', entity: 'song', limit: '1' })}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.json()).catch(() => null))?.results?.[0];
+  let link; try { link = new URL(hit.trackViewUrl); } catch { return out(`I couldn't find ${q} on Apple Music.`, 'Music'); }
+  if (link.hostname !== 'music.apple.com') return out(`I couldn't find ${q} on Apple Music.`, 'Music');
+  await d.exec('open', [`music://${link.host}${link.pathname}${link.search}`]);
+  let c = [];
+  for (let t = 0; t < 8 && !c.length; t++) { await wait(500); c = await find('Play'); }   // the page loads in 1-3 s
+  if (c.length && (await press(c[0].path, c[0].labels)) === 'ok')
+    for (let t = 0; t < 6; t++) { await wait(400); const now = await osa(d, NOW).catch(() => ''); if (now) return out(`Playing ${now}.`, 'Music'); }
+  return out(`I opened ${hit.trackName} in Music, but it didn't start playing. Press Play there.`, 'Music');
+}
+
 const DO = {
   async volume(i, d) {
     if (i.op === 'mute' || i.op === 'unmute') {
@@ -174,6 +206,7 @@ const DO = {
     return out(`Volume ${n} percent.`, 'Volume');
   },
   async media(i, d) {
+    if (i.op === 'song') return playSong(i.q, d);
     for (const app of i.app ? [i.app] : MEDIA_APPS) {
       if (!MEDIA_APPS.includes(app) || !(await running(d, app))) continue;
       if (i.op === 'now') {
