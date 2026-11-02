@@ -221,3 +221,10 @@ test('a file search with clauses that point back at it stays one file job, never
   assert.ok(r.steps.every((s) => s.do === 'instant' && s.kind === 'file'), JSON.stringify(r.steps));
   assert.equal(r.source, 'code');
 });
+
+test('QA youtube-search-play: one planned step over two clauses leaves the second planned too, never dropped', async () => {
+  const said = 'search YouTube for lo-fi beats and play the first video';
+  const model = async () => ({ content: [{ type: 'text', text: JSON.stringify({ steps: [{ do: 'open', clause: said, url: 'https://www.youtube.com/results?search_query=lo-fi+beats' }] }) }] });
+  const r = await plan(said, {}, { model });
+  assert.deepEqual(r.steps.map((s) => [s.do, s.clause]), [['open', said], ['computer', 'play the first video']]);
+});

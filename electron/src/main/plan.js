@@ -215,7 +215,10 @@ export async function plan(text, ctx = {}, deps = {}) {
   const merge = (r) => {
     const mine = r.steps.map((step, i) => ({ step, span: r.spans[i], mine: true }))
       .filter(({ span }) => !spans.some((s, k) => instant[k] && s[0] <= span[0] && span[0] < s[1]));   // code already has it
-    const missed = clauses.map((clause, k) => !instant[k] && !mine.some((m) => overlaps(m.span, spans[k])) && { step: { do: 'computer', clause, why: 'not planned' }, span: spans[k] });
+    // A clause is planned only by a step that starts in it: one step over two clauses ("search YouTube for X and
+    // play the first video" as one open) leaves the second unplanned, so it's done, never dropped.
+    const owner = (span) => { const k = spans.findIndex((s) => s[0] <= span[0] && span[0] < s[1]); return k >= 0 ? k : spans.findIndex((s) => overlaps(span, s)); };
+    const missed = clauses.map((clause, k) => !instant[k] && !mine.some((m) => owner(m.span) === k) && { step: { do: 'computer', clause, why: 'not planned' }, span: spans[k] });
     return [...clauses.map((_, k) => instant[k] && { step: instant[k], span: spans[k] }), ...missed].filter(Boolean).concat(mine).sort((x, y) => x.span[0] - y.span[0]);
   };
   // Streamed: everything up to the newest checked step is final (later steps can only sit later), so it starts now.
