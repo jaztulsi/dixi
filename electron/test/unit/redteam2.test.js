@@ -63,24 +63,24 @@ globalThis.fetch = async (_url, { body }) => {
 const result = (id) => requests.flatMap((r) => r.messages ?? []).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).find((c) => c.type === 'tool_result' && c.tool_use_id === id)?.content;
 
 // One Everywhere, set up the way main.js does; approvals are answered by `answer(question)` (true = yes).
-let answer = () => false, asked = [];
+let answer = () => false, asked = [], spoken = [];
 let quiet = () => {};   // the renderer saying Dixi's voice has finished (there's no renderer here)
 const harness = (async () => {
   if (process.platform !== 'darwin') return null;
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   const handlers = {}, ons = {};
   quiet = () => ons['everywhere:speaking']?.(false);
-  const win = { webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
+  const win = { webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
   setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
     userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
   return (text) => handlers['everywhere:run'](text);
 })();
-async function agentDoes(calls, mac) {
+async function agentDoes(calls, mac, said = 'organize these notes for me') {
   const run = await harness;
   fakeMac(mac);
-  requests = []; asked = [];
+  requests = []; asked = []; spoken = [];
   script = [[{ type: 'text', text: 'On it.' }, ...calls.map((c, i) => ({ type: 'tool_use', id: `t${i}`, ...c }))]];
-  await run('organize these notes for me');
+  await run(said);
 }
 const SAVE = { role: 'AXButton', subrole: '', labels: ['Save'], path: [0, 3], frame: { x: 100, y: 100, w: 40, h: 20 }, pid: OTHER };
 const mac = process.platform === 'darwin' ? {} : { skip: 'Everywhere is macOS only' };
@@ -104,25 +104,27 @@ test("P2: Dixi never presses, clicks or types in its own window (its safety swit
   assert.ok(!done.some(([w]) => w === 'click'));
 });
 
-test('P4: a control nobody can read asks, even in an ordinary app; an unnamed one there does not', mac, async () => {
+test('P4: a control nobody can read is refused, even in an ordinary app, without a question; an unnamed one there is not', mac, async () => {
   const { clickRisk } = await import('../../src/main/everywhere.js');
   assert.ok(clickRisk(null, { strict: false }));
   assert.equal(clickRisk({ role: 'AXButton', labels: [] }, { strict: false }), null);
-  answer = () => false;
-  await agentDoes([{ name: 'left_click', input: { coordinate: [640, 400] } }], { at: null });   // a remote desktop, a canvas, a game
-  assert.equal(asked.length, 1, 'it asked');
-  assert.ok(!done.some(([w]) => w === 'click'), 'and "no" meant no click');
+  answer = () => true;   // no questions any more: a yes waiting here must not be what lets a click through
+  await agentDoes([{ name: 'left_click', input: { coordinate: [640, 400] } }], { at: null }, 'send it to Alex');   // a remote desktop, a canvas, a game
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.ok(!done.some(([w]) => w === 'click'), 'and nothing was clicked, even though the user said "send"');
+  assert.ok(spoken.some((s) => /can't tell what that button does/.test(s)), 'and the reason was said');
 });
 
-test('a risky named control asks, and only a yes presses it', mac, async () => {
+test('a risky named control is never asked about: refused unless the user said it, pressed when they did', mac, async () => {
   const SEND = { ...SAVE, labels: ['Send'] };
-  answer = () => false;
-  await agentDoes([{ name: 'press', input: { ref: 1 } }], { controls: [SEND] });
-  assert.match(asked[0] ?? '', /Send/);
-  assert.ok(!done.some(([w]) => w === 'press'));
   answer = () => true;
-  await agentDoes([{ name: 'press', input: { ref: 1 } }], { controls: [SEND] });
-  assert.ok(done.some(([w]) => w === 'press'));
+  await agentDoes([{ name: 'press', input: { ref: 1 } }], { controls: [SEND] });   // "organize these notes": nobody said send
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.ok(!done.some(([w]) => w === 'press'), 'and Send was not pressed');
+  assert.ok(spoken.some((s) => /didn't ask me to press “Send”/.test(s)), 'and the reason was said');
+  await agentDoes([{ name: 'press', input: { ref: 1 } }], { controls: [SEND] }, 'send it to Alex');
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.ok(done.some(([w]) => w === 'press'), 'the user said send, so it was pressed');
 });
 
 // ---- the wake word, with a question open ----
