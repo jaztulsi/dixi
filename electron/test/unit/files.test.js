@@ -193,3 +193,18 @@ test('hostile names are cleaned and capped; there is no delete', async () => {
   const r = await fileAction({ verb: 'delete', index: 0 }, null, c);
   assert.match(r.text, /can't do that/);
 });
+
+test('a known folder is read directly (no Spotlight wait): kind by extension, words in the name, arrived or saved in the range', async () => {
+  const D = '/Users/t/Downloads', day = 864e5;
+  const stat = { 'a.pdf': [NOW - day * 0.9, NOW - day * 30], 'b.pdf': [NOW - day * 30, NOW - day * 30], 'c.png': [NOW - day * 0.9, NOW - day * 0.9], 'tax.pdf': [NOW - day * 0.6, NOW - day * 0.6] };   // NOW is Fri 12:00: a and tax arrived Thursday, b a month ago, c is no pdf
+  const fs = { readdir: async (p) => (p === D ? [...Object.keys(stat), '.hidden.pdf'] : []), stat: async (p) => { const s = stat[path.basename(p)]; if (!s) throw new Error('x'); return { birthtimeMs: s[0], mtimeMs: s[1], isDirectory: () => false }; } };
+  const exec = async () => assert.fail('no Spotlight when the folder answers');
+  const r = await findFiles(fileIntent('find the PDF I downloaded yesterday'), { exec, now: clock, home: HOME, fs });
+  assert.deepEqual(r.map((f) => f.name), ['tax.pdf', 'a.pdf'], 'a.pdf counts by when it arrived, though saved a month ago');
+  assert.deepEqual((await findFiles({ src: 'downloads', kind: 'pdf', query: 'tax' }, { exec, now: clock, home: HOME, fs })).map((f) => f.name), ['tax.pdf']);
+  const i = fileIntent('open the pdf on my desktop');
+  assert.equal(i.src, 'desktop'); assert.ok(!/desktop/i.test(i.query ?? ''), 'where to look is not part of the name');
+  let asked = false;
+  await findFiles({ src: 'downloads', kind: 'pdf', query: 'nothing here' }, { exec: async () => { asked = true; return ''; }, now: clock, home: HOME, fs });
+  assert.ok(asked, 'no match in the folder: Spotlight still gets a go');
+});
