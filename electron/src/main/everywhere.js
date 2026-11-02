@@ -29,7 +29,7 @@ import { createUndo } from './undo.js';
 import { BUILTIN_TOOLS } from './builtin-tools.js';
 import { grabSelection, pasteText, actOn } from './capture.js';
 import { IRREVERSIBLE, RECURRING } from '../renderer/ui/pagekit.js';
-import { HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
+import { HERE, HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
 import { openMemory, factsLine, memoryTurn, openProfile, loadProfile, profileLine, masked, FORM, secretField, profileFocused } from './memory.js';
 import * as brief from './brief.js';
 import { watchIntent, startWatch, stopWatch, isWatching, checkPrompt, CHECK_SCHEMA } from './watch.js';
@@ -719,7 +719,6 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // ---- a planned run (plan.js): each step starts as soon as it is planned, in the order said, with no "shall I?" ----
   // What's said while it runs is planned onto the end of the same queue; only "stop" or a protest ends it.
   const KEYS_IN = /\b(?:keystroke|key code)\b|\.keystroke\(|\.keyCode\(/i;
-  const HERE = /\b(?:this|these|here|screen)\b/i;   // needs the picture of the screen: not for the planner
   const newPlan = async () => ({ steps: [], results: [], planning: 0, wake: null, app: (await input.frontApp()).name, apps: await installedApps().catch(() => []) });
   function planInto(q, text, signal, runId, stream = true) {
     q.planning++;
@@ -750,7 +749,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       const a = (await quickAnswer(s.clause, { webAnswer }))?.say ?? (await webAnswer(s.clause));
       return a ? { ok: true, say: a, out: a } : { ok: false, error: "I couldn't find that out" };
     }
-    if (s.do === 'web') { onShowMain?.(); toMain('everywhere:browse', s.clause); return { ok: true }; }   // Dixi's own browser does the rest
+    if (s.do === 'web') return browse(s.clause, signal);
     if (s.do === 'script') {
       if (KEYS_IN.test(s.code)) {   // keystrokes go to whatever is in front: never a terminal, a code editor or Dixi
         if (s.app) await input.openApp(s.app);
@@ -770,7 +769,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (s.check && !(await checkScript({ lang: s.lang, code: s.check }))) return doStep({ do: 'computer', clause: s.clause, app: s.app }, prior, signal);
       return { ok: true, out: r.out };
     }
-    // 'computer': the screen agent, with only this clause and what the earlier steps found.
+    // 'computer': the screen agent, with only this clause and what the earlier steps found. It never acts on
+    // Dixi's own window, so with that in front (and no other app named) the step is the browser's.
+    if (!s.app && (await frontNow()).pid === process.pid) return browse(s.clause, signal);
     if (screenDenied()) { needScreenPermission(); return { ok: false, error: 'Dixi needs Screen Recording permission' }; }
     const [shot, ctx] = await Promise.all([snapshot(), context()]);
     if (!shot) { needScreenPermission(); return { ok: false, error: 'Dixi needs Screen Recording permission' }; }
@@ -778,6 +779,21 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const task = prior.length ? `${s.clause}\n(Earlier steps found: ${prior.join('; ').slice(0, 500)})` : s.clause;
     await agent(task, shot, ctx, signal, state.guard.open, s.clause, s.app ?? '');
     return state.refusal ? { ok: false, error: state.refusal, said: true } : { ok: true, said: true };
+  }
+  // A web step: Dixi's own browser does it (renderer voice.handleText), and the next step waits until it's done.
+  const browsing = new Map();
+  let browseN = 0;
+  on('everywhere:browsed', (id, ok, error) => browsing.get(id)?.({ ok: Boolean(ok), ...(ok ? { said: true } : { error: String(error ?? '').slice(0, 200) || "the browser couldn't do it" }) }));
+  function browse(text, signal) {
+    onShowMain?.();
+    const id = `b${++browseN}`;
+    return new Promise((resolve) => {
+      const done = (r) => { clearTimeout(timer); browsing.delete(id); resolve(r); };
+      const timer = setTimeout(() => done({ ok: false, error: "the browser didn't finish in a minute" }), 60000);
+      browsing.set(id, done);
+      signal.addEventListener('abort', () => done({ ok: false, error: 'stopped' }), { once: true });
+      toMain('everywhere:browse', { text: String(text), id });
+    });
   }
   async function runPlan(q, text, signal) {
     state.plan = q;
@@ -939,7 +955,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         const q = await newPlan();
         const r = await planInto(q, t, signal, runId, false);
         if (signal.aborted) return;
-        if (r.steps.length && !(r.steps.length === 1 && r.steps[0].do === 'computer')) { mark(runId, 'routed'); q.steps = r.steps; return await runPlan(q, t, signal); }
+        // One screen step goes straight to the agent below, unless Dixi's own window is in front (then it's the browser's).
+        const lone = r.steps.length === 1 && r.steps[0].do === 'computer' && (r.steps[0].app || (await frontNow()).pid !== process.pid);
+        if (r.steps.length && !lone) { mark(runId, 'routed'); q.steps = r.steps; return await runPlan(q, t, signal); }
       }
       mark(runId, 'routed');
       if (screenDenied()) return needScreenPermission();

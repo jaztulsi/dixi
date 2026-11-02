@@ -54,7 +54,8 @@ contextBridge.exposeInMainWorld('dixi', {
     onKill: (fn) => ipcRenderer.on('everywhere:kill', () => fn()),
     onAsk: (fn) => ipcRenderer.on('everywhere:ask', (_e, q) => fn(q)),
     onCommands: (fn) => ipcRenderer.on('everywhere:commands', (_e, list) => fn(list)),
-    onBrowse: (fn) => ipcRenderer.on('everywhere:browse', (_e, text) => fn(String(text ?? ''))),   // a planned web step's words, nothing else
+    onBrowse: (fn) => ipcRenderer.on('everywhere:browse', (_e, d) => fn(String(d?.text ?? ''), String(d?.id ?? ''))),   // a planned web step's words (and its id), nothing else
+    browsed: (id, ok, error) => ipcRenderer.send('everywhere:browsed', String(id), Boolean(ok), String(error ?? '').slice(0, 200)),
     answer: (id, text) => ipcRenderer.send('everywhere:answer', id, text),
   },
 });
