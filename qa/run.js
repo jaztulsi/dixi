@@ -16,13 +16,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMMANDS, FAILURES, DOCS, QUESTIONS, FEATURE_OF_FILE } from './suite.js';
-import { launch as launchApp } from './app.js';
+import { launch as launchApp, syncInteg, APP } from './app.js';
 
 const launch = (env) => launchApp(env, { onCrash: (text) => { run.crashes++; run.errors.push({ type: 'crash', text }); } });
 
 const QA = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(QA, '..');
-const APP = path.join(REPO, 'electron');
+const integ = syncInteg();   // Dixi under test = orch/integration HEAD in qa/.integ
+const REPO = path.dirname(APP);
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
 const LIVE = ['retrieval', 'commands', 'failures', 'e2e'];
 const ALL = ['unit', 'gate', 'static', 'secrets', 'idle', ...LIVE];
@@ -37,7 +37,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const pct = (xs, p) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.ceil((p / 100) * s.length) - 1)] : null; };
 const log = (...a) => console.log('[qa]', ...a);
 
-const run = { at: new Date().toISOString(), stages: {}, tests: [], latency: [], checks: [], retrieval: null, errors: [], crashes: 0 };
+const run = { at: new Date().toISOString(), commit: integ.commit, ref: integ.ref, stages: {}, tests: [], latency: [], checks: [], retrieval: null, errors: [], crashes: 0 };
 const test = (stage, id, feature, status, extra = {}) => run.tests.push({ stage, id, feature, status, ...extra });
 const check = (id, area, status, detail) => { run.checks.push({ id, area, status, detail }); test('static', id, area, status, { error: status === 'pass' ? undefined : detail }); };
 

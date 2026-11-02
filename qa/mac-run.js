@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { launchMac, QA, APP, QA_CAP, qaSpent, qaRecord } from './app.js';
+import { launchMac, syncInteg, QA, APP, QA_CAP, qaSpent, qaRecord } from './app.js';
 import { ROWS as KNOWN, mac } from './mac-suite.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
@@ -55,6 +55,8 @@ const ownerOf = (r, acts, heard) => [r.owner ?? (r.kind === 'multi' ? 'Lane A ·
   acts.some((e) => e.kind === 'step' && /pressed|typed|clicked|scrolled/.test(e.verb ?? '')) && 'fell to the screen agent (Lane A · everywhere.js)',
   heard.asked.length && `asked "${heard.asked[0].slice(0, 60)}"`].filter(Boolean).join(' · ');
 
+const integ = syncInteg();
+log(`Dixi under test: ${integ.ref} @ ${integ.commit}${integ.installed ? ' (npm ci ran)' : ''}`);
 const a = await launchMac({ DIXI_EVERYWHERE: '1', ELEVENLABS_API_KEY: ' ', DEEPGRAM_API_KEY: ' ' });
 log(`test Dixi up in ${a.startMs} ms (profile ${a.profile})`);
 process.on('exit', () => { try { a.child.kill(); } catch {} });   // a crash before the finally still takes the test copy down
@@ -77,7 +79,7 @@ const firstFront = await m.front();
 const testLog = () => { try { return fs.readFileSync(path.join(a.profile, 'activity.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
 const APPS = ['Music', 'Notes', 'Calendar', 'Calculator', 'Messages', 'Contacts', 'TextEdit', await m.browser()];
 
-const out = { at: new Date().toISOString(), app: APP, timeout: TIMEOUT, ledgerStart: spent(), rows: [], urls: [] };
+const out = { at: new Date().toISOString(), commit: integ.commit, ref: integ.ref, app: APP, timeout: TIMEOUT, ledgerStart: spent(), rows: [], urls: [] };
 const tRun0 = Date.now();
 try {
   for (const r of rows) {

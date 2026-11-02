@@ -1,12 +1,31 @@
 // The real app for QA: launched as a plain process with its own throwaway profile, driven over the
 // token-gated control port (eval/harness.js --real), spoken replies muted so the founder's Dixi never
 // hears it. Shared by run.js (browser commands) and mac-run.js (Dixi Everywhere).
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const QA = path.dirname(fileURLToPath(import.meta.url));
-export const APP = path.resolve(process.env.QA_APP ?? path.join(QA, '../electron'));
+// Dixi under test is always orch/integration's HEAD, checked out in qa/.integ (never lane/qa's own copy).
+const INTEG = path.join(QA, '.integ');
+export const APP = path.resolve(process.env.QA_APP ?? path.join(INTEG, 'electron'));
+/** Moves qa/.integ to `ref`'s current commit; reinstalls only when its package-lock differs from the one
+ *  beside the node_modules in use (unlinking a shared node_modules symlink first, so npm ci never touches it). */
+export function syncInteg(ref = 'orch/integration') {
+  const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
+  if (process.env.QA_APP) return { commit: git(APP, 'rev-parse', '--short', 'HEAD'), ref: 'QA_APP', installed: false };
+  git(INTEG, 'checkout', '-q', '--detach', git(INTEG, 'rev-parse', ref));
+  const nm = path.join(APP, 'node_modules'), lock = (d) => { try { return fs.readFileSync(path.join(d, 'package-lock.json'), 'utf8'); } catch { return ''; } };
+  let installed = false;
+  if (!fs.existsSync(nm) || lock(APP) !== lock(path.dirname(fs.realpathSync(nm)))) {
+    if (fs.lstatSync(nm, { throwIfNoEntry: false })?.isSymbolicLink()) fs.unlinkSync(nm);
+    execFileSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: APP, stdio: 'ignore' }); installed = true;
+  }
+  const commit = git(INTEG, 'rev-parse', '--short', 'HEAD');
+  if (commit !== git(INTEG, 'rev-parse', '--short', ref)) throw new Error(`qa/.integ is at ${commit}, not ${ref}`);
+  return { commit, ref, installed };
+}
 // The QA lane's own spend ledger: only what QA runs cost, capped across all of them (orchestrator: $1.50).
 export const QA_LEDGER = path.join(QA, 'results', 'qa-spend.json'), QA_CAP = 1.5;
 const readLedger = () => { try { return JSON.parse(fs.readFileSync(QA_LEDGER, 'utf8')); } catch { return { totalUSD: 0, runs: [] }; } };
