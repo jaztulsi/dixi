@@ -3,6 +3,7 @@
 // reading other apps' controls need the Accessibility permission (System Settings → Privacy & Security).
 
 import { execFile, execFileSync } from 'node:child_process';
+import { findApp } from './mac.js';
 
 // C3: nothing may stay pressed. `kids` are the osascript processes posting events right now; `held` is what they pressed
 // and haven't let go yet (id → JXA line that lets go). If a press is cut short (timeout, the kill switch, quit, a crash),
@@ -256,5 +257,10 @@ export async function browserTab(appName) {
     return i > 0 ? { url: out.slice(0, i), title: out.slice(i + 2) } : null;
   } catch { return null; }   // no Automation permission yet, or no window
 }
-/** macOS's own launcher: "open Spotify". False when no app has that name. */
-export const openApp = (name) => run(['open', '-a', String(name)]).then(() => true, () => false);
+/** macOS's own launcher: "open Spotify"; else the installed app the words mean ("my calendar"). False when there's none. */
+export async function openApp(name) {
+  const open = (n) => run(['open', '-a', n]).then(() => true, () => false);
+  if (await open(String(name))) return true;
+  const a = await findApp(name).catch(() => null);
+  return Boolean(a) && open(a.path);
+}

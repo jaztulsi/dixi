@@ -36,6 +36,10 @@ test('apps come from their bundles: every name, "Apple X" for Apple’s own, fou
   assert.equal((await findApp('visual studio', { run })).id, 'com.microsoft.VSCode', 'all the words of one app');
   assert.equal((await findApp('Code', { run })).name, 'Code');
   assert.equal(await findApp('Zentora', { run }), null);
+  assert.equal((await findApp('my music', { run })).id, 'com.apple.Music', 'my/the are not part of the name');
+  assert.equal((await findApp('the Google Chrome app', { run })).id, 'com.google.Chrome');
+  assert.equal((await findApp('visualstudio code', { run })).id, 'com.microsoft.VSCode', 'spaces aside');
+  assert.equal(await findApp('my', { run }), null);
 });
 
 test('open: the app (or the app a link belongs to) must really come up, else a clear error', async () => {

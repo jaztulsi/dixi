@@ -61,12 +61,14 @@ export function fileIntent(text) {
   if (/^\s*(?:this|that|these|those|here)\b/i.test(rest)) return null;   // about the screen, not a search
   rest = rest.replace(/\s+(?:in|with|using|on)\s+(?:the\s+|a\s+(?:new\s+)?)?finder(?:\s+app|\s+window)?\s*$/i, '');   // Finder is where it opens, not part of the name
   if ((m = rest.trim().match(HOME_DIR))) { const f = (m[1] ?? m[2]).toLowerCase(); return { ...none, verb: 'open', kind: 'folder', folder: f[0].toUpperCase() + f.slice(1) }; }
+  const inDir = rest.match(/\s+(?:on|in|from)\s+(?:my\s+|the\s+)?(desktop|documents)(?:\s+folder)?\b/i);   // "the pdf on my desktop": where to look, not a word of the name
+  if (inDir) rest = rest.replace(inDir[0], ' ');
   const w = rest.match(WHEN);
   const when = !w ? null : w[2] ? w[2].toLowerCase() : w[1].toLowerCase();
   if (w) rest = rest.replace(WHEN, ' ');
   const kind = KINDS.find(([, re]) => re.test(rest))?.[0] ?? null;
   const shot = /\bscreenshots?\b|\bscreen shots?\b/i.test(rest);
-  const src = shot ? 'screenshot' : kind !== 'folder' && (lead[2] || /\bdownload(?:s|ed)?\b/i.test(rest)) ? 'downloads' : null;
+  const src = shot ? 'screenshot' : kind !== 'folder' && (lead[2] || /\bdownload(?:s|ed)?\b/i.test(rest)) ? 'downloads' : inDir ? inDir[1].toLowerCase() : null;
   if (!src && !FILE_WORD.test(rest) && !(kind && (w || (/\b(?:my|the)\b/i.test(rest) && !/\bapps?\b/i.test(rest))))) return null;
   const newest = /\b(?:newest|latest|last|most recent|recent)\b/i.test(rest);
   const verb = lead[1]?.toLowerCase() === 'open' || (newest && /^show/i.test(lead[1] ?? '')) ? 'open' : 'find';
@@ -141,9 +143,30 @@ export function allowed(p, home) {
   return seg[0] !== 'Library' && !seg.some((s) => s.startsWith('.') || s === 'node_modules');
 }
 
+// A known folder is read directly: no wait for Spotlight to index a new file (~3 s), and "downloaded yesterday"
+// means it arrived (birthtime) or was saved (mtime) then. Only that folder's top level; Spotlight is the fallback.
+const EXT = { pdf: /\.pdf$/i, image: /\.(?:jpe?g|png|heic|gif|tiff?|webp|bmp)$/i, spreadsheet: /\.(?:xlsx?|csv|numbers)$/i, document: /\.(?:docx?|pages|rtf|txt|md)$/i,
+  slides: /\.(?:pptx?|key)$/i, video: /\.(?:mp4|mov|m4v|avi|mkv)$/i, audio: /\.(?:mp3|m4a|wav|aiff?|flac|aac)$/i };
+const DIRS = { downloads: 'Downloads', desktop: 'Desktop', documents: 'Documents' };
+async function scanDir(dir, { query, kind, when }, now, fs) {
+  const words = String(query ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+  const names = (await fs.readdir(dir).catch(() => [])).filter((n) => !n.startsWith('.') && (!EXT[kind] || EXT[kind].test(n)) && words.every((w) => n.toLowerCase().includes(w)));
+  const r = range(when, now);
+  const hits = await Promise.all(names.slice(0, 2000).map((n) => fs.stat(path.join(dir, n)).then((s) => {   // ponytail: 2000 entries cap, then Spotlight
+    if ((kind === 'folder') !== s.isDirectory()) return null;
+    const at = [s.birthtimeMs, s.mtimeMs].filter(Number.isFinite);
+    if (r && !at.some((t) => t >= +r[0] && t < +r[1])) return null;
+    return { path: path.join(dir, n), name: n, modified: Math.max(...at) };
+  }, () => null)));
+  return hits.filter(Boolean);
+}
 /** Up to 5 { path, name, modified (ms) }, newest first. */
 export async function findFiles({ query, kind, when, src } = {}, { exec = run, now = () => new Date(), home = os.homedir(), fs = fsp } = {}) {
-  const where = src === 'downloads' ? path.join(home, 'Downloads') : home;
+  if (DIRS[src]) {
+    const quick = await scanDir(path.join(home, DIRS[src]), { query, kind, when }, now(), fs);
+    if (quick.length) return quick.sort((a, b) => b.modified - a.modified).slice(0, 5);
+  }
+  const where = DIRS[src] ? path.join(home, DIRS[src]) : home;
   const out = await exec(['mdfind', '-onlyin', where, spotlight({ query, kind, when, src }, now())]);
   const paths = String(out).split('\n').filter((p) => path.isAbsolute(p) && allowed(p, home)).slice(0, 300);   // ponytail: stats at most 300 hits; narrow with a "when" if more
   const stats = await Promise.all(paths.map((p) => fs.stat(p).then((s) => ({ path: p, name: path.basename(p), modified: s.mtimeMs })).catch(() => null)));

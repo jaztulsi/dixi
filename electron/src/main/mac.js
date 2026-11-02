@@ -44,6 +44,8 @@ function run(argv) {
 }`;
 let apps = null;   // ponytail: read once per run of Dixi; refresh() after installing an app
 const norm = (s) => String(s ?? '').toLowerCase().replace(/\.app$/, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+// "my calendar", "the text edit app": the words around an app's name aren't part of it.
+const bare = (s) => norm(s).replace(/^(?:(?:my|the|an?|your|our)\s+)+/, '').replace(/\s+app$/, '');
 async function load(run) {
   const raw = JSON.parse((await run('osascript', ['-l', 'JavaScript', '-e', APPS_JXA, JSON.stringify(APP_DIRS)], { timeout: 20000 })).stdout);
   return raw.map((a) => {
@@ -57,12 +59,12 @@ export async function installedApps({ run = exec, refresh = false } = {}) {
   if (!apps || refresh) apps = load(run).catch((err) => { apps = null; throw err; });
   return [...new Set((await apps).flatMap((a) => a.names))].sort();
 }
-/** The app a name means: exact (any of its names, any case), else the only app whose name contains every word. */
+/** The app a name means: exact (any of its names, any case, my/the and spaces aside), else the only app whose name contains every word. */
 export async function findApp(name, { run = exec } = {}) {
   await installedApps({ run });
-  const list = await apps, k = norm(name);
+  const list = await apps, k = bare(name), tight = (x) => x.replaceAll(' ', '');
   if (!k) return null;
-  const exact = list.find((a) => a.keys.includes(k));
+  const exact = list.find((a) => a.keys.includes(norm(name))) ?? list.find((a) => a.keys.some((x) => tight(x) === tight(k)));
   if (exact) return pick(exact);
   const words = k.split(' ');
   const partial = list.filter((a) => a.keys.some((x) => words.every((w) => x.split(' ').includes(w))));
