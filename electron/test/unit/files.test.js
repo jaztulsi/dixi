@@ -50,7 +50,7 @@ test('screen questions and plain app or button asks do not match', () => {
 
 test('compound and app commands are not file searches; home folders open themselves', async () => {
   for (const t of ['Open Apple Music, search lo-fi beats, and play the first one', 'Open Apple Music', 'open the Music app', 'open Photos', 'open Keynote',
-    'find the PDF I downloaded yesterday, rename it to Receipt and move it to Documents', 'rename it to Q4 plan and move it to Documents', 'find my tax pdf then open it'])
+    'rename it to Q4 plan and move it to Documents', 'find my tax pdf, rename it and email it to Sam', 'find my tax pdf then open it'])
     assert.equal(fileIntent(t), null, t);
   assert.equal(fileIntent('rename it to Tom and Jerry').name, 'Tom and Jerry', 'an "and" inside a name is not a second command');
   assert.equal(fileIntent('find my vacation photos').kind, 'image');
@@ -157,11 +157,31 @@ test('with the undo log, move and rename happen without a question and can be un
   await fileAction(fileIntent('move it to Documents'), null, deps);
   await fileAction(fileIntent('rename it to Q4 plan'), null, deps);
   assert.deepEqual(moved, [[src, '/Users/t/Documents/Tax 2025.pdf', 'Move Tax 2025.pdf'], ['/Users/t/Documents/Tax 2025.pdf', '/Users/t/Documents/Q4 plan.pdf', 'Rename Tax 2025.pdf']]);
-  assert.equal(said[0], 'Moved. Say undo that to put it back.');
+  assert.equal(said[0], 'Moved it to Documents. Say undo that to put it back.');
   const c = { ...deps, fs: fakeFs({ [src]: T(1), '/Users/t/Documents/Tax 2025.pdf': 1 }) };
   remember([{ path: src, name: 'Tax 2025.pdf', modified: T(1) }]); moved.length = 0;
   await fileAction(fileIntent('move it to Documents'), null, c);
   assert.deepEqual(moved, [], 'still never over another file');
+});
+
+test('a one-file chain: find, rename it (no name: its title, else first line, else old name + date added), move it, all on the undo log', async () => {
+  const t = 'Find the PDF I downloaded yesterday, rename it, and move it to my Documents folder';
+  const i = fileIntent(t);
+  assert.deepEqual([i.verb, i.kind, i.src, i.when, i.then], ['find', 'pdf', 'downloads', 'yesterday', [{ verb: 'rename', name: null, dest: null }, { verb: 'move', name: null, dest: 'Documents' }]]);
+  assert.equal(fileIntent('rename it').verb, 'rename');
+  const src = '/Users/t/Downloads/QA receipt.pdf';
+  const meta = { kMDItemTitle: '(null)', kMDItemDateAdded: '2026-10-31 09:00:00 +0000' };
+  const exec = async (a) => (a[0] === 'mdfind' ? src : a[0] === 'mdls' ? meta[a[3]] : a[0] === 'osascript' ? '\n  Invoice #42: Acme / Oct\nline 2' : '');
+  const moved = []; const said = [];
+  const undo = { group: (label) => ({ label }), move: async (a, b, g) => { moved.push([a, b, g.label]); return b; } };
+  const deps = { exec, say: (x) => said.push(x), approve: async () => assert.fail('never asks'), undo, now: clock, home: HOME, fs: fakeFs({ [src]: T(1) }) };
+  const r = await fileAction(i, null, deps);
+  assert.deepEqual(moved, [[src, '/Users/t/Downloads/Invoice #42 Acme Oct.pdf', 'Rename QA receipt.pdf'], ['/Users/t/Downloads/Invoice #42 Acme Oct.pdf', '/Users/t/Documents/Invoice #42 Acme Oct.pdf', 'Move Invoice #42 Acme Oct.pdf']]);
+  assert.equal(r.title, 'Done');
+  assert.equal(said.length, 1, 'one sentence for the whole chain');
+  const { autoName } = await import('../../src/main/files.js');
+  assert.equal(await autoName({ path: src }, { exec: async (a) => (a[3] === 'kMDItemTitle' ? 'Q3 statement' : '') }), 'Q3 statement', 'the title first');
+  assert.equal(await autoName({ path: src }, { exec: async (a) => (a[3] === 'kMDItemDateAdded' ? meta.kMDItemDateAdded : '') }), 'QA receipt 2026-10-31', 'else the old name and the date added');
 });
 
 test('hostile names are cleaned and capped; there is no delete', async () => {

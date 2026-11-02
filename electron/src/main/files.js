@@ -48,7 +48,8 @@ export function fileIntent(text) {
   const t = clean1(String(text ?? '').replace(/[.!?]+$/, ''));
   let m;
   const none = { kind: null, when: null, index: 0, dest: null, name: null, query: '' };
-  if (MORE.test(t)) return null;
+  if (MORE.test(t)) return chain(t);
+  if ((m = t.match(new RegExp(`^(?:please\\s+)?rename\\s+(${REF})$`, 'i')))) return { ...none, verb: 'rename', index: indexOf(m[1]) };   // a name is picked for it
   if ((m = t.match(new RegExp(`^(?:please\\s+)?(?:show|reveal)\\s+(${REF})\\s+in finder$`, 'i')))) return { ...none, verb: 'reveal', index: indexOf(m[1]) };
   if ((m = t.match(new RegExp(`^(?:please\\s+)?open\\s+(?:up\\s+)?(${REF})$`, 'i')))) return { ...none, verb: 'open', index: indexOf(m[1]) };
   if ((m = t.match(new RegExp(`^(?:please\\s+)?(?:move|put)\\s+(${REF})\\s+(?:to|into|in)\\s+(?:my\\s+|the\\s+)?(.+?)(?:\\s+folder)?$`, 'i')))) return { ...none, verb: 'move', index: indexOf(m[1]), dest: m[2] };
@@ -70,6 +71,18 @@ export function fileIntent(text) {
   const verb = lead[1]?.toLowerCase() === 'open' || (newest && /^show/i.test(lead[1] ?? '')) ? 'open' : 'find';
   const query = clean1(rest.replace(/\bscreen shots?\b/gi, ' ').replace(NOISE, ' ')).replace(/[^\p{L}\p{N}\s._'-]/gu, ' ').replace(/\s+/g, ' ').trim();
   return { verb, query: stripKinds(query), kind: shot ? 'image' : kind, when, index: 0, dest: null, name: null, src, newest };
+}
+// "Find the PDF I downloaded yesterday, rename it, and move it to my Documents folder": one file, found then changed.
+// Split only right before "rename it" / "move it" / "put it", so "rename it to Tom and Jerry" stays whole. Anything else → null.
+const CHAIN_CUT = /\s*(?:,|\band\b|\bthen\b)\s*(?:(?:and|then)\s+)*(?=(?:rename|move|put)\s+(?:it|them)\b)/i;
+function chain(t) {
+  const [head, ...tail] = t.split(new RegExp(CHAIN_CUT.source, 'gi')).map((x) => x.replace(/[,\s]+$/, '').trim()).filter(Boolean);
+  if (!tail.length || MORE.test(head)) return null;
+  const first = fileIntent(head);
+  if (!first || !['find', 'open'].includes(first.verb) || !(first.query || first.kind || first.src)) return null;
+  const then = tail.map((x) => fileIntent(x));
+  if (!then.every((x) => x && ['rename', 'move'].includes(x.verb))) return null;
+  return { ...first, verb: 'find', newest: true, then: then.map(({ verb, name, dest }) => ({ verb, name, dest })) };
 }
 const stripKinds = (q) => clean1(KINDS.reduce((s, [, re]) => s.replace(new RegExp(re.source, 'gi'), ' '), q));
 /** For everywhere-words.js: cheap pre-check; fileIntent has the final say. */
@@ -152,6 +165,25 @@ async function openFile(f, { exec, tell }) {
   await exec(['open', f.path]);
   return tell(`Opening ${name}.`, 'Opening', name);
 }
+// A new name for "rename it" with none given: the file's title, else its first line of text, else the old name and the date it arrived.
+// Text from a file is anyone's words: cleaned, capped at 60, and never a scammy line (checkText).
+const PDF_TEXT = "function run(argv) { ObjC.import('PDFKit'); const d = $.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(argv[0])); return d.isNil() || !d.pageCount ? '' : String(d.pageAtIndex(0).string.js || '').slice(0, 2000); }";
+const nameSafe = (x) => String(x ?? '').replace(/[\p{Cc}\p{Cf}/\\:*?"<>|]+/gu, ' ').replace(/\s+/g, ' ').trim().replace(/^\.+/, '').slice(0, 60).trim();
+export async function autoName(f, { exec = run, now = () => new Date() } = {}) {
+  const { name: base } = path.parse(f.path);
+  const ok = (x) => { const n = nameSafe(x); return n && n !== '(null)' && n.toLowerCase() !== base.toLowerCase() && !checkText(n).length ? n : null; };
+  const ask = (args) => exec(args).then(String, () => '');
+  const t = await ask(['mdls', '-raw', '-name', 'kMDItemTitle', f.path]);
+  const title = /\.[a-z0-9]{2,4}\s*$|^\s*(?:untitled|microsoft \w+ - )/i.test(t) ? null : ok(t);   // a file name or "Untitled" is no title
+  if (title) return title;
+  const text = /\.pdf$/i.test(f.path) ? await ask(['osascript', '-l', 'JavaScript', '-e', PDF_TEXT, f.path])
+    : /\.(?:docx?|rtf|odt|html?|txt|md)$/i.test(f.path) ? await ask(['textutil', '-convert', 'txt', '-stdout', f.path]) : '';
+  const line = ok(text.split(/[\r\n\u2028\u2029]+/).find((l) => l.trim()));
+  if (line) return line;
+  const m = (await ask(['mdls', '-raw', '-name', 'kMDItemDateAdded', f.path])).match(/^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d) ([+-]\d\d)(\d\d)/);
+  const added = m ? new Date(`${m[1]}T${m[2]}${m[3]}:${m[4]}`) : now();
+  return `${base} ${added.toLocaleDateString('en-CA')}`;   // YYYY-MM-DD in local time
+}
 const NUM = ['none', 'one', 'two', 'three', 'four', 'five'];
 const ORDW = ['first', 'second', 'third', 'fourth', 'fifth'];
 const dateWords = (ms, now) => {
@@ -200,6 +232,16 @@ export async function fileAction(intent, last, { exec = run, approve, say, undo,
     if (intent.newest) list = list.slice(0, 1);
     remember(list);
     if (!list.length) return tell("I didn't find anything like that.", 'No files found');
+    if (intent.then?.length) {   // a one-file chain: the newest match, then each change in order, one sentence at the end
+      const said = [`Found ${safeName(list[0].name)}.`];
+      let r;
+      for (const step of intent.then) {
+        r = await fileAction({ verb: step.verb, name: step.name, dest: step.dest, index: 0 }, null, { exec, approve, undo, now, home, fs, say: (x) => said.push(x) });
+        if (r.title !== 'Done') break;
+      }
+      say(said.join(' ').replaceAll(' Say undo that to put it back.', '') + (undo && r.title === 'Done' ? ' Say undo that to put it back.' : ''));
+      return { title: r.title, text: r.text, results: lastResults };
+    }
     if (intent.verb === 'open') {
       return { ...(await openFile(list[0], { exec, tell })), results: list };
     }
@@ -224,7 +266,7 @@ export async function fileAction(intent, last, { exec = run, approve, say, undo,
     to = path.join(dir, path.basename(f.path));
     ask = `Move “${name}” to ${safeName(path.relative(home, dir))}?`;
   } else if (intent.verb === 'rename') {
-    let n = String(intent.name ?? '').replace(/[\p{Cc}\p{Cf}]/gu, '').trim();
+    let n = String(intent.name || (await autoName(f, { exec, now }))).replace(/[\p{Cc}\p{Cf}]/gu, '').trim();
     if (!n || /[/\\:]/.test(n) || n.startsWith('.') || n.length > 120) return tell("I can't use that name. I didn't rename it.");
     const ext = path.extname(f.path);   // always kept: photo.jpg must never become photo.command
     if (path.extname(n).toLowerCase() !== ext.toLowerCase()) n += ext;
@@ -242,5 +284,6 @@ export async function fileAction(intent, last, { exec = run, approve, say, undo,
     else await fs.rename(f.path, to);
   } catch { return tell(`I couldn't ${intent.verb} it.`); }
   remember(lastResults.map((r) => (r.path === f.path ? { ...r, path: to, name: path.basename(to) } : r)));
-  return tell(`${intent.verb === 'move' ? 'Moved' : 'Renamed'}.${undo ? ' Say undo that to put it back.' : ''}`, 'Done', safeName(path.basename(to)));
+  const where = intent.verb === 'move' ? `Moved it to ${safeName(path.relative(home, path.dirname(to)))}.` : `Renamed it to ${safeName(path.basename(to))}.`;
+  return tell(`${where}${undo ? ' Say undo that to put it back.' : ''}`, 'Done', safeName(path.basename(to)));
 }
