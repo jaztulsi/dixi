@@ -54,7 +54,7 @@ test('compound and app commands are not file searches; home folders open themsel
     assert.equal(fileIntent(t), null, t);
   assert.equal(fileIntent('rename it to Tom and Jerry').name, 'Tom and Jerry', 'an "and" inside a name is not a second command');
   assert.equal(fileIntent('find my vacation photos').kind, 'image');
-  for (const [t, f] of [['open my Downloads folder', 'Downloads'], ['open downloads', 'Downloads'], ['open the documents folder', 'Documents'], ['open my music folder', 'Music'], ['show me my pictures folder', 'Pictures']])
+  for (const [t, f] of [['open the desktop folder in Finder', 'Desktop'], ['open my documents in the Finder', 'Documents'], ['open my Downloads folder', 'Downloads'], ['open downloads', 'Downloads'], ['open the documents folder', 'Documents'], ['open my music folder', 'Music'], ['show me my pictures folder', 'Pictures']])
     assert.deepEqual([fileIntent(t).folder, fileIntent(t).kind], [f, 'folder'], t);
   assert.equal(fileIntent('open the qa folder').folder, undefined, 'any other folder is still a search');
   const calls = []; const said = [];

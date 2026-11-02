@@ -59,6 +59,7 @@ export function fileIntent(text) {
   if (!lead) return null;
   let rest = t.slice(lead[0].length);
   if (/^\s*(?:this|that|these|those|here)\b/i.test(rest)) return null;   // about the screen, not a search
+  rest = rest.replace(/\s+(?:in|with|using|on)\s+(?:the\s+|a\s+(?:new\s+)?)?finder(?:\s+app|\s+window)?\s*$/i, '');   // Finder is where it opens, not part of the name
   if ((m = rest.trim().match(HOME_DIR))) { const f = (m[1] ?? m[2]).toLowerCase(); return { ...none, verb: 'open', kind: 'folder', folder: f[0].toUpperCase() + f.slice(1) }; }
   const w = rest.match(WHEN);
   const when = !w ? null : w[2] ? w[2].toLowerCase() : w[1].toLowerCase();
