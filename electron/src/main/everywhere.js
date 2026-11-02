@@ -173,6 +173,22 @@ export function pressTarget(text) {
   const m = String(text).trim().match(/^(?:please\s+)?(?:click|press|tap|hit)\s+(?:on\s+)?(?:the\s+)?["“']?([^"”']{1,40}?)["”']?(?:\s+(?:button|link|tab|menu))?[.!]?$/i);
   return m && !/\b(this|that|it|here|there|one|first|second|third|last|next|top|bottom|left|right)\b/i.test(m[1]) ? m[1].trim() : null;
 }
+/** An opened link's page has started: the browser's front tab is on that site (≤ ms), so the next step can't
+ *  overtake it ("open Amazon, then Apple" loaded Apple first). `tab()` → { url } | null; null = a browser Dixi
+ *  can't read, so there's nothing to wait on. */
+// ponytail: no tab to read (no Automation permission) means no wait; add a fixed pause if QA still sees overtakes there.
+export async function pageStarted(url, { tab, ms = 4000, wait = (t) => new Promise((r) => setTimeout(r, t)) }) {
+  const host = (u) => { try { return /^https?:$/.test(new URL(u).protocol) ? new URL(u).hostname.replace(/^www\./, '') : ''; } catch { return ''; } };
+  const want = host(url);
+  if (!want) return true;
+  for (const until = Date.now() + ms; Date.now() < until; await wait(150)) {
+    const t = await tab();
+    if (!t) return true;
+    const h = host(t.url);
+    if (h && (h === want || h.endsWith(`.${want}`) || want.endsWith(`.${h}`))) return true;
+  }
+  return false;
+}
 /** "You're in Google Chrome, on docs.google.com: “Q4 plan”." No model writes this, so it never guesses. */
 export function contextLine(c) {
   if (!c?.name) return 'The app in front is unknown.';
@@ -743,7 +759,11 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         return { ok: true, said: true, out: r?.results?.map((x) => x.name ?? x).slice(0, 5).join(', ') };
       }
     }
-    if (s.do === 'open') { const r = await openTarget({ app: s.app, url: s.url }); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
+    if (s.do === 'open') {
+      const r = await openTarget({ app: s.app, url: s.url });
+      if (r.ok && s.url) await pageStarted(s.url, { tab: async () => input.browserTab((await input.frontApp())?.name ?? '') });   // started before the next step
+      return r.ok ? { ok: true } : { ok: false, error: r.error };
+    }
     if (s.do === 'answer') {
       if (s.say) return { ok: true, say: s.say };
       const a = (await quickAnswer(s.clause, { webAnswer }))?.say ?? (await webAnswer(s.clause));
