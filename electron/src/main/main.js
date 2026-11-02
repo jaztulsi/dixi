@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { chat, abort, prewarm, tiers, keyStatus, Spend, ENDPOINTS, discoverModels, problems, escalation, modeOf } from './providers.js';
+import * as input from './input.js';
 import { DeepgramBridge } from './deepgram.js';
 import { ElevenLabsBridge } from './stt.js';
 import { Resolver } from './resolve.js';
@@ -51,7 +52,7 @@ let win = null;
 let pendingURL = null;
 let everywhere = { enabled: false };   // Dixi on the whole Mac (everywhere.js), set up once the app is ready
 let quitting = false;
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => { quitting = true; input.stopAll(); });   // C3: no key or button stays held after quit
 // Speech-to-text: ElevenLabs Scribe when its key is set (or DIXI_STT=elevenlabs), else Deepgram Flux.
 // ElevenLabs out of credit or refused → Deepgram Flux, when DEEPGRAM_API_KEY is set.
 const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');

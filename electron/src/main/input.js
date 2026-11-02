@@ -2,11 +2,37 @@
 // (osascript -l JavaScript) calls CoreGraphics and the macOS Accessibility API. Clicking, typing and
 // reading other apps' controls need the Accessibility permission (System Settings → Privacy & Security).
 
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 
+// C3: nothing may stay pressed. `kids` are the osascript processes posting events right now; `held` is what they pressed
+// and haven't let go yet (id → JXA line that lets go). If a press is cut short (timeout, the kill switch, quit, a crash),
+// stopAll() kills the posters and releases every held key and button.
+const kids = new Set();
+const held = new Map();
+const keyUp = (code) => `$.CGEventPost(0, $.CGEventCreateKeyboardEvent(null, ${Number(code)}, false));`;
+const mouseUp = ({ x, y }) => `$.CGEventPost(0, $.CGEventCreateMouseEvent(null, 2, {x: ${Number(x)}, y: ${Number(y)}}, 0));`;
 const run = (args, timeout = 5000) => new Promise((resolve, reject) => {
-  execFile(args[0], args.slice(1), { timeout }, (err, out) => (err ? reject(err) : resolve(String(out).trim())));
+  const c = execFile(args[0], args.slice(1), { timeout }, (err, out) => { kids.delete(c); return err ? reject(err) : resolve(String(out).trim()); });
+  kids.add(c);
 });
+/** Runs one press while it's tracked: released for sure if it fails or is cut short. */
+const pressing = (id, release, p) => { held.set(id, release); return p.then((v) => { held.delete(id); return v; }, async (e) => { await releaseAll(); throw e; }); };
+
+/** Lets go of every key and mouse button Dixi still holds. sync for process exit, when nothing async can run. */
+export function releaseAll({ sync = false } = {}) {
+  if (!held.size) return Promise.resolve(false);
+  const args = ['-l', 'JavaScript', '-e', `ObjC.import('CoreGraphics'); ${[...held.values()].join(' ')}`];
+  held.clear();
+  if (sync) { try { execFileSync('osascript', args, { timeout: 3000 }); } catch {} return Promise.resolve(true); }
+  return new Promise((r) => execFile('osascript', args, { timeout: 3000 }, () => r(true)));
+}
+/** The kill switch and quit: stop every event poster mid-way, then release what they held. */
+export function stopAll({ sync = false } = {}) {
+  for (const c of kids) { try { c.kill('SIGKILL'); } catch {} }
+  kids.clear();
+  return releaseAll({ sync });
+}
+process.once('exit', () => stopAll({ sync: true }));   // a crash or a quit: nothing keeps pressing after Dixi is gone
 // Arguments go in as JSON (valid JS), never spliced into the script as text.
 const jxa = (body, args = {}, timeout) => run(['osascript', '-l', 'JavaScript', '-e', `ObjC.import('CoreGraphics'); ObjC.import('ApplicationServices'); const A = ${JSON.stringify(args)}; ${body}`], timeout);
 
@@ -46,12 +72,17 @@ export function click({ x, y }, { button = 'left', count = 1, mods = '' } = {}) 
     }`, { x, y, count, down, up, btn, flags: modFlags(mods) });
 }
 export const move = ({ x, y }) => jxa('$.CGEventPost(0, $.CGEventCreateMouseEvent(null, 5, {x: A.x, y: A.y}, 0));', { x, y });
-export const mouseButton = ({ x, y }, down) => jxa('$.CGEventPost(0, $.CGEventCreateMouseEvent(null, A.t, {x: A.x, y: A.y}, 0));', { x, y, t: down ? 1 : 2 });
+export const mouseButton = ({ x, y }, down) => {
+  const p = jxa('$.CGEventPost(0, $.CGEventCreateMouseEvent(null, A.t, {x: A.x, y: A.y}, 0));', { x, y, t: down ? 1 : 2 });
+  if (!down) return p.then((v) => { held.delete('mouse'); return v; });
+  held.set('mouse', mouseUp({ x, y }));   // stays held until the matching up (or stopAll)
+  return p.catch(async (e) => { await releaseAll(); throw e; });
+};
 export function drag(from, to) {
-  return jxa(`const post = (t, p) => $.CGEventPost(0, $.CGEventCreateMouseEvent(null, t, p, 0));
+  return pressing('drag', mouseUp(to), jxa(`const post = (t, p) => $.CGEventPost(0, $.CGEventCreateMouseEvent(null, t, p, 0));
     post(5, A.a); post(1, A.a);
     for (let i = 1; i <= 10; i++) { post(6, {x: A.a.x + (A.b.x - A.a.x) * i / 10, y: A.a.y + (A.b.y - A.a.y) * i / 10}); delay(0.02); }
-    post(2, A.b);`, { a: from, b: to });
+    post(2, A.b);`, { a: from, b: to }));
 }
 /** Wheel clicks; direction up/down/left/right. Moves to the point first when one is given. */
 export function scroll(at, direction, amount = 3) {
@@ -64,12 +95,14 @@ export function scroll(at, direction, amount = 3) {
 export function key(combo, { repeat = 1, holdSecs = 0 } = {}) {
   const k = parseKey(combo);
   if (!k) return Promise.reject(new Error(`unknown key "${combo}"`));
-  return jxa(`for (let i = 0; i < A.repeat; i++) for (const down of [true, false]) {
+  const reps = Math.max(1, Math.min(100, repeat)), hold = Math.max(0, Math.min(5, holdSecs));
+  // The timeout covers every hold, so it never cuts a press in half (and if anything else does, pressing() lets go).
+  return pressing(`key${k.code}`, keyUp(k.code), jxa(`for (let i = 0; i < A.repeat; i++) for (const down of [true, false]) {
       const e = $.CGEventCreateKeyboardEvent(null, A.code, down);
       if (A.flags) $.CGEventSetFlags(e, A.flags);
       $.CGEventPost(0, e);
       if (down && A.hold) delay(A.hold);
-    }`, { ...k, repeat: Math.max(1, Math.min(100, repeat)), hold: Math.min(5, holdSecs) }, 15000);
+    }`, { ...k, repeat: reps, hold }, 15000 + reps * hold * 1000));
 }
 /** Types text by pasting it (any language, emoji, any length), then puts your clipboard back. */
 export async function type(text) {

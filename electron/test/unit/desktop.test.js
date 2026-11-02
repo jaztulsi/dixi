@@ -190,3 +190,51 @@ test('a missing Automation permission is explained, not thrown', async () => {
   assert.match(res.say, /permission/);
   assert.match((await runDesktop(null, r.deps)).say, /don't know/);
 });
+
+test('a song on Apple Music: your library first, no subscription said plainly, else open it and press Play by its name', async () => {
+  assert.deepEqual(desktopIntent('play Here Comes the Sun on Apple Music'), { verb: 'media', op: 'song', q: 'Here Comes the Sun', app: 'Music' });
+  const noNet = { fetch: async () => assert.fail('no search needed'), find: async () => assert.fail('no press needed'), wait: async () => {} };
+  const lib = rig((c, a) => (/search library/.test(a[1]) ? 'Here Comes the Sun by The Beatles' : ''), noNet);
+  assert.equal((await runDesktop(desktopIntent('play Here Comes the Sun on Apple Music'), lib.deps)).say, 'Playing Here Comes the Sun by The Beatles.');
+  assert.equal(lib.calls[0].at(-1), 'Here Comes the Sun', 'the song name goes in as an argument, never as script text');
+  const free = rig((c, a) => (/Join Apple Music/.test(a[1]) ? 'true' : ''), noNet);
+  assert.equal((await runDesktop(desktopIntent('play Here Comes the Sun on Apple Music'), free.deps)).say, 'Apple Music needs a subscription to play this.');
+  assert.ok(!free.calls.some((c) => c[0] === 'open'), 'nothing opened, no YouTube');
+  const pressed = [];
+  const sub = rig((c, a) => (/player state is playing/.test(a?.[1]) && pressed.length ? 'Here Comes the Sun by The Beatles' : /Join Apple Music/.test(a?.[1]) ? 'false' : ''), {
+    fetch: async (u) => { assert.match(u, /^https:\/\/itunes\.apple\.com\/search\?term=Here\+Comes\+the\+Sun&/); return { json: async () => ({ results: [{ trackName: 'Here Comes the Sun', trackViewUrl: 'https://music.apple.com/us/album/here-comes-the-sun/1441164426?i=1441164589&uo=4' }] }) }; },
+    find: async (name) => (name === 'Play' ? [{ path: [0, 3], labels: ['Play'] }] : []),
+    press: async (p, l) => { pressed.push([p, l]); return 'ok'; }, wait: async () => {},
+  });
+  assert.equal((await runDesktop(desktopIntent('play Here Comes the Sun on Apple Music'), sub.deps)).say, 'Playing Here Comes the Sun by The Beatles.');
+  assert.deepEqual(sub.calls.find((c) => c[0] === 'open'), ['open', 'music://music.apple.com/us/album/here-comes-the-sun/1441164426?i=1441164589&uo=4']);
+  assert.deepEqual(pressed, [[[0, 3], ['Play']]]);
+});
+
+test('"open a new Finder window": the app comes to the front, then ⌘N; never pressed into another app', async () => {
+  assert.deepEqual(desktopIntent('open a new Finder window'), { verb: 'newwin', app: 'Finder' });
+  assert.deepEqual(desktopIntent('open a new window in Safari'), { verb: 'newwin', app: 'Safari' });
+  assert.equal(desktopIntent('open a new private window'), null, 'a kind of window is not an app');
+  const keys = []; let fronts = ['Dixi', 'Finder'];
+  const ok = rig(() => '', { open: async (a) => a === 'Finder', front: async () => ({ name: fronts.shift() ?? 'Finder' }), key: async (k) => keys.push(k), wait: async () => {} });
+  assert.equal((await runDesktop(desktopIntent('open a new Finder window'), ok.deps)).say, 'New Finder window.');
+  assert.deepEqual(keys, ['cmd+n']);
+  keys.length = 0;
+  const stuck = rig(() => '', { open: async () => true, front: async () => ({ name: 'Google Chrome' }), key: async (k) => keys.push(k), wait: async () => {} });
+  assert.match((await runDesktop(desktopIntent('open a new Finder window'), stuck.deps)).say, /didn't come to the front/);
+  assert.deepEqual(keys, [], 'no ⌘N into the wrong app');
+  const none = rig(() => '', { open: async () => false, key: async () => assert.fail('no key') });
+  assert.equal((await runDesktop(desktopIntent('open a new Flurb window'), none.deps)).say, "There's no app called Flurb on this Mac.");
+});
+
+test('"play some music": Music carries on, else shuffles your library; an empty library with no subscription is said plainly', async () => {
+  assert.deepEqual(desktopIntent('play some music'), { verb: 'media', op: 'play', app: undefined });
+  const off = (reply) => rig((c, a) => (/is running/.test(a[1]) ? 'false' : reply(a[1])));
+  const lib = off((s) => (/play library playlist 1/.test(s) ? 'Yesterday by The Beatles' : ''));
+  assert.equal((await runDesktop(desktopIntent('play some music'), lib.deps)).say, 'Playing Yesterday by The Beatles.', 'nothing open: Music opens and plays');
+  const empty = off((s) => (/play library playlist 1/.test(s) ? 'empty' : /Join Apple Music/.test(s) ? 'true' : ''));
+  assert.equal((await runDesktop(desktopIntent('play some music'), empty.deps)).say, "Your music library is empty, and Apple Music needs a subscription, so there's nothing to play.");
+  const spot = rig((c, a) => (/"Spotify" is running/.test(a[1]) ? 'true' : ''));
+  assert.equal((await runDesktop(desktopIntent('play some music'), spot.deps)).say, 'Playing.', 'Spotify open: it carries on there');
+  assert.ok(spot.calls.some((c) => c.includes('tell application "Spotify" to play')));
+});
