@@ -111,7 +111,11 @@ try {
       if (last.ok) { verified = Date.now() - t0; break; }   // when the check came back: an upper bound
       const fNow = await m.front();
       if (UNSAFE_FRONT.test(fNow)) { await a.ui(() => { window.dixi.everywhere.stop(); return true; }); unsafeStop = fNow; break; }
-      if (await a.ui(() => window.__runDone)) { await sleep(1500); try { last = await r.check(m, s); } catch {} if (last.ok) verified = Date.now() - t0; break; }   // run() ended: one last look
+      if (await a.ui(() => window.__runDone)) {   // run() ended: poll the end state every 100 ms for up to 1.5 s; ms = time to that state
+        const end = Date.now() + 1500;
+        do { try { last = await r.check(m, s); } catch {} if (last.ok) { verified = Date.now() - t0; break; } await sleep(100); } while (Date.now() < end);
+        break;
+      }
       await sleep(400);
     }
     // Don't let a finished check overlap the next row: wait for run() to end, up to the hard stop.
