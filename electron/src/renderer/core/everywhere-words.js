@@ -1,6 +1,23 @@
 // Which spoken requests go to Dixi Everywhere (the whole Mac) instead of Dixi's own browser.
 // Shared by the voice loop (here, in the renderer) and main/everywhere.js.
 
+import { splitClauses } from './interpret.js';
+
+// ---- a command's parts, in the order said (main/plan.js plans them; here it decides where they go) ----
+// Strong breaks always split; "and" or a comma splits only before a verb (so "salt and pepper" stays whole).
+const STRONG = /\s*(?:;|[,.!?]?\s+(?:and then|and after that|after that|afterwards|then)\s+|[.!?]\s+then\s+)\s*/i;
+const MORE_VERBS = '(?:rename|move|text|message|send|email|mail|call|create|write|save|copy|delete|quit|lock|empty|remind|schedule|reply|share|print|translate|summari[sz]e|draft)';
+const MORE = new RegExp(`\\s*(?:,\\s*(?:and\\s+)?|\\s+and\\s+)(?=${MORE_VERBS}\\b)`, 'i');
+const tidy = (s) => s.trim().replace(/^(?:and|then|also|please)\s+/i, '').replace(/^[,.;!?\s]+|[,.;!?\s]+$/g, '');
+
+/** "Open Music, search lo-fi and play it; then text Mom I'll be late" → ["Open Music", "search lo-fi", "play it", "text Mom I'll be late"] */
+export function split(text) {
+  return String(text ?? '').split(STRONG).flatMap((part) => splitClauses(part)).flatMap((c) => c.split(MORE)).map(tidy).filter((c) => c.length > 1);
+}
+
+/** Needs the picture of the screen: not for the planner. */
+export const HERE = /\b(?:this|these|here|screen)\b/i;
+
 /** Hard, many-part jobs for your own Claude Code agents. */
 export const HIVE = /\b(swarm|(my|your|the) (claude )?team|hand (it|this|that) (off )?to claude|claude code|send (it|this) to claude)\b/i;
 /** "Dixi, …" said while another app is in front goes to Everywhere when it's about the screen. */

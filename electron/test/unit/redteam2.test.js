@@ -63,14 +63,14 @@ globalThis.fetch = async (_url, { body }) => {
 const result = (id) => requests.flatMap((r) => r.messages ?? []).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).find((c) => c.type === 'tool_result' && c.tool_use_id === id)?.content;
 
 // One Everywhere, set up the way main.js does; approvals are answered by `answer(question)` (true = yes).
-let answer = () => false, asked = [], spoken = [];
+let answer = () => false, asked = [], spoken = [], events = [];
 let quiet = () => {};   // the renderer saying Dixi's voice has finished (there's no renderer here)
 const harness = (async () => {
   if (process.platform !== 'darwin') return null;
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   const handlers = {}, ons = {};
   quiet = () => ons['everywhere:speaking']?.(false);
-  const win = { webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
+  const win = { webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:browse') { events.push(`browse ${d.text}`); setTimeout(() => { events.push(`done ${d.text}`); ons['everywhere:browsed'](d.id, true, ''); }, 30); } if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
   setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
     userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
   return (text) => handlers['everywhere:run'](text);
@@ -125,6 +125,16 @@ test('a risky named control is never asked about: refused unless the user said i
   await agentDoes([{ name: 'press', input: { ref: 1 } }], { controls: [SEND] }, 'send it to Alex');
   assert.equal(asked.length, 0, 'nothing was asked');
   assert.ok(done.some(([w]) => w === 'press'), 'the user said send, so it was pressed');
+});
+
+test("A3: a many-part command with Dixi's own window in front: each part goes to Dixi's browser, in order, the next only after the last is done", mac, async () => {
+  const run = await harness;
+  fakeMac({ front: process.pid });   // Dixi's own window in front: the screen agent never acts there
+  events = []; asked = [];
+  await run('search the web for jazz records, then add the first one to the cart');
+  assert.deepEqual(events, ['browse search the web for jazz records', 'done search the web for jazz records', 'browse add the first one to the cart', 'done add the first one to the cart']);
+  assert.equal(asked.length, 0);
+  assert.ok(!done.some(([w]) => /click|press|type|key/.test(w)), 'nothing was clicked or typed on the screen');
 });
 
 // ---- the wake word, with a question open ----
