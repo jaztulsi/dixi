@@ -49,6 +49,14 @@ export function instantOf(clause, { apps = [], commands = [], filesBefore = fals
   return null;
 }
 
+/** "find the PDF I downloaded yesterday, rename it, and move it to Documents": a file search, then clauses that only point
+ *  back at what it found. files.js does that whole chain as one instant path, so it is never split or planned. */
+const BACK = /\b(?:it|that|them|those)\b/i;
+export function fileChain(text, clauses = split(text)) {
+  const f = clauses.length > 1 && fileIntent(clauses[0]);
+  return Boolean(f && f.verb === 'find' && (f.query || f.kind || f.src)) && clauses.slice(1).every((c) => BACK.test(c));
+}
+
 // ---- 2. the one planner call ----
 const DOS = ['instant', 'open', 'script', 'web', 'computer', 'answer'];
 // Only do + clause are required: every empty field the model writes costs output time. (Instant steps come from code.)
@@ -198,6 +206,8 @@ export async function plan(text, ctx = {}, deps = {}) {
   });
   let sent = 0;   // steps already handed to onStep (every step goes there once, in order, whichever path planned it)
   const finish = (r) => { if (deps.onStep) for (; sent < r.steps.length; sent++) deps.onStep(r.steps[sent], sent); return r; };
+  const whole = fileChain(text, clauses) && fileIntent(text);   // (until files.js takes the chain, its clauses go one by one below)
+  if (whole) return finish({ steps: [{ do: 'instant', clause: String(text).trim(), kind: 'file', intent: whole }], source: 'code', ms: Math.round(now() - t0) });
   if (clauses.length && instant.every(Boolean)) return finish({ steps: instant, source: 'code', ms: Math.round(now() - t0) });
   const fallback = (why) => finish({ steps: clauses.map((c, k) => instant[k] ?? { do: 'computer', clause: c }), source: 'code', ms: Math.round(now() - t0), why });
   if (!deps.model) return fallback('no planner');

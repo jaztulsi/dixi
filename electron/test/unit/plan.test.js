@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { split, instantOf, check, plan, plannerBody, nearApps, siteOk, salvage, SYSTEM } from '../../src/main/plan.js';
+import { split, instantOf, check, plan, plannerBody, nearApps, siteOk, salvage, SYSTEM, fileChain } from '../../src/main/plan.js';
 
 const apps = ['Music', 'Notes', 'Messages', 'Safari', 'Calendar', 'Claude', 'Google Chrome', 'Reminders', 'Mail'];
 const commands = [{ id: 'a', phrase: 'my bank', action: 'website', target: 'chase.com', enabled: true }];
@@ -208,4 +208,16 @@ test('recorded planner replies pass the checks and keep their meaning', async ()
     if (!f.stop || f.stop === 'end_turn') assert.equal(r.source, 'model', `${said}: ${r.why}`);
     if (want[said]) assert.deepEqual(r.steps.map((s) => s.do), want[said], said);
   }
+});
+
+test('a file search with clauses that point back at it stays one file job, never planned', async () => {
+  assert.equal(fileChain('find the PDF I downloaded yesterday, rename it, and move it to Documents'), true);
+  assert.equal(fileChain('find my tax PDF and open it'), true);
+  assert.equal(fileChain('find the PDF and open Music'), false);   // the second part is about something else
+  assert.equal(fileChain('open Music and play jazz'), false);
+  assert.equal(fileChain('find my tax PDF'), false);
+  // (When files.js takes the whole chain it comes back as one step; until then each clause is its own file step.)
+  const r = await plan('find my tax PDF and open it', {}, { model: () => { throw new Error('planner called'); } });
+  assert.ok(r.steps.every((s) => s.do === 'instant' && s.kind === 'file'), JSON.stringify(r.steps));
+  assert.equal(r.source, 'code');
 });
