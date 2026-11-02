@@ -36,7 +36,10 @@ const hideRisky = () => new Promise((res) => execFile('osascript', ['-l', 'JavaS
 const unhide = (names) => { if (names.length) try { execFileSync('osascript', ['-l', 'JavaScript', '-e', nsApps(names, 'a.unhide; out.push(n);')], { timeout: 8000 }); } catch {} };
 let hidden = [];
 process.on('exit', () => unhide(hidden));
-for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => process.exit(130));
+// First signal = clean stop: Dixi's current run is stopped, that row is restored, then teardown and the ledger run as
+// usual (pkill -INT <pid>). A second signal exits at once (the exit handlers still unhide apps and kill the test copy).
+let stopAsked = false, stopDixi = () => {};
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { if (stopAsked) process.exit(130); stopAsked = true; console.log('[mac] stop asked: finishing this row cleanly'); stopDixi(); });
 const pick = arg('rows', '').split(',').filter(Boolean);
 const rows = process.argv.includes('--baseline') ? ROWS.filter((r) => r.known || ['open-calculator', 'quit-calculator', 'volume-30', 'open-downloads', 'open-youtube'].includes(r.id))
   : pick.length ? ROWS.filter((r) => pick.includes(r.id)) : ROWS;
@@ -59,7 +62,8 @@ const integ = syncInteg();
 log(`Dixi under test: ${integ.ref} @ ${integ.commit}${integ.installed ? ' (npm ci ran)' : ''}`);
 const a = await launchMac({ DIXI_EVERYWHERE: '1', ELEVENLABS_API_KEY: ' ', DEEPGRAM_API_KEY: ' ' });
 log(`test Dixi up in ${a.startMs} ms (profile ${a.profile})`);
-process.on('exit', () => { try { a.child.kill(); } catch {} });   // a crash before the finally still takes the test copy down
+process.on('exit', () => { try { a.child.kill(); } catch {} });
+stopDixi = () => a.ui(() => { window.dixi.everywhere.stop(); return true; }).catch(() => {});   // a crash before the finally still takes the test copy down
 // Own spend: every Spend.add in the test copy (the app's own pricing) is also counted here, so the shared
 // ledger's other spenders (the founder's Dixi, other agents) never land in QA's numbers.
 await a.main(async (_e, u) => { const { Spend } = await import(u); globalThis.__qaUSD = 0; const add = Spend.prototype.add; Spend.prototype.add = function (...x) { const usd = add.apply(this, x); globalThis.__qaUSD += usd; return usd; }; return true; }, pathToFileURL(path.join(APP, 'src/main/providers.js')).href);
@@ -87,6 +91,7 @@ try {
     const block = (why, say = r.say) => { out.rows.push({ id: r.id, kind: r.kind, known: Boolean(r.known), say: typeof say === 'function' ? '(set at run time)' : say, status: 'blocked', why }); log(`blocked  ${r.id}  (${why})`); };
     if (r.blocked) { block(r.blocked); continue; }
     if (r.messaging && !MESSAGING) { block('SKIP-TCC: needs a one-time macOS grant (Contacts/Messages Automation); then --messaging'); continue; }
+    if (stopAsked) { out.stoppedByRequest = true; break; }
     { const u = await own(); if (qa0 + u >= MAX_USD || u >= RUN_USD) { log(`spend guard: ${u >= RUN_USD ? `this run at $${RUN_USD}` : `QA total at $${MAX_USD}`}, stopping`); out.stoppedForSpend = true; break; } }
     // Snapshot what this row may change, so it can be put back.
     const snap = { vol: await m.volume(), muted: await m.muted(), front: await m.front(), finder: await m.finderWindows(), music: (await m.music()).state,
@@ -107,7 +112,7 @@ try {
     const t0 = Date.now(); s.t0 = t0;
     await a.ui((text) => { window.dixi.everywhere.run(text).then(() => { window.__runDone = Date.now(); }, (e) => { window.__runErr = String(e?.message ?? e); window.__runDone = Date.now(); }); return true; }, say);
     let verified = null, last = { ok: false, got: '' }, unsafeStop = null;
-    while (Date.now() - t0 < TIMEOUT) {
+    while (Date.now() - t0 < TIMEOUT && !stopAsked) {
       const tc = Date.now();
       try { last = await r.check(m, s); } catch (err) { last = { ok: false, got: `check threw ${err.message}` }; }
       if (last.ok) { verified = Date.now() - t0; break; }   // when the check came back: an upper bound
