@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clickRisk, keyRisk, riskyLabel, isSensitive, isGuarded, isMoney, quoteLabel, pressTarget, controlsText, modeOf, contextLine, toScreen, ABOUT_SCREEN } from '../../src/main/everywhere.js';
+import { clickRisk, keyRisk, riskyLabel, isSensitive, isGuarded, isMoney, quoteLabel, pressTarget, controlsText, modeOf, contextLine, toScreen, ABOUT_SCREEN, keysRefused, readStream } from '../../src/main/everywhere.js';
 import { parseKey } from '../../src/main/input.js';
 import { HIVE } from '../../src/renderer/core/everywhere-words.js';
 
@@ -131,4 +131,30 @@ test('spoken settings and memory commands reach Everywhere from anywhere; ordina
   for (const t of ['open YouTube', 'buy AirPods Pro', 'remember to call mom tomorrow on my calendar app']) assert.ok(!w.COMMAND.test(t) || t.startsWith('remember to'), t);
   assert.ok(w.UNDO.test('undo'));
   assert.ok(!w.UNDO.test('undo my last three emails and archive them'));
+});
+
+test('keys never go to a terminal, a code editor or Dixi itself (by bundle id or app category, not by name)', () => {
+  for (const bundle of ['com.apple.Terminal', 'com.googlecode.iterm2', 'dev.warp.Warp-Stable', 'com.todesktop.230313mzl4w4u92', 'com.microsoft.VSCode', 'com.apple.dt.Xcode', 'com.jetbrains.intellij', 'dev.zed.Zed', 'com.mitchellh.ghostty'])
+    assert.ok(keysRefused({ name: 'Anything', bundle, pid: 7 }, 1), bundle);
+  assert.ok(keysRefused({ name: 'Some IDE', bundle: 'org.example.ide', category: 'public.app-category.developer-tools', pid: 7 }, 1));
+  assert.match(keysRefused({ name: 'Electron', bundle: 'com.github.Electron', pid: 42 }, 42), /Dixi/);
+  for (const bundle of ['com.apple.Notes', 'com.apple.TextEdit', 'com.apple.mail', 'com.google.Chrome', 'com.apple.Safari'])
+    assert.equal(keysRefused({ name: 'App', bundle, pid: 7, category: 'public.app-category.productivity' }, 1), null, bundle);
+  assert.equal(keysRefused({ name: 'Terminal', bundle: 'org.example.notes', pid: 7 }, 1), null);   // a name alone decides nothing
+});
+
+test('a streamed reply reads the same as a whole one, even when events split across chunks', async () => {
+  const ev = (o) => `event: ${o.type}\ndata: ${JSON.stringify(o)}\n\n`;
+  const all = [ev({ type: 'message_start', message: { id: 'm', usage: { input_tokens: 9 } } }), ev({ type: 'content_block_start', index: 0 }),
+    ev({ type: 'content_block_delta', delta: { type: 'text_delta', text: '{"steps":' } }), ev({ type: 'content_block_delta', delta: { type: 'text_delta', text: '[]}' } }),
+    ev({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 4 } }), ev({ type: 'message_stop' })].join('');
+  const bytes = new TextEncoder().encode(all);
+  const chunks = [bytes.slice(0, 50), bytes.slice(50, 51), bytes.slice(51, 200), bytes.slice(200)];
+  const seen = [];
+  const j = await readStream(chunks, (t) => seen.push(t));
+  assert.deepEqual(seen, ['{"steps":', '{"steps":[]}']);
+  assert.equal(j.content[0].text, '{"steps":[]}');
+  assert.equal(j.stop_reason, 'end_turn');
+  assert.deepEqual(j.usage, { input_tokens: 9, output_tokens: 4 });
+  await assert.rejects(readStream([new TextEncoder().encode(ev({ type: 'error', error: { message: 'overloaded' } }))], () => {}), /overloaded/);
 });

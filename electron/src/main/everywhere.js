@@ -17,6 +17,9 @@ import * as input from './input.js';
 import { startBridge } from './bridge.js';
 import * as guardian from './guardian.js';
 import { unsafe } from './safesite.js';
+import { exec as macExec, openTarget, runScript, check as checkScript, installedApps } from './mac.js';
+import { mark } from './timing.js';
+import { plan, split } from './plan.js';
 import { ENDPOINTS, chat } from './providers.js';
 import { makeAsk } from './ask.js';
 import { openIndex } from './index.js';
@@ -107,6 +110,33 @@ export const isSensitive = (ctx) => SENSITIVE_APPS.test(ctx?.name ?? '') || MESS
 const GUARDED_APPS = /^(System Settings|System Preferences|Installer|Keychain Access|Terminal|iTerm2|Script Editor|Automator|Activity Monitor|Disk Utility)$/;
 export const isGuarded = (ctx) => GUARDED_APPS.test(ctx?.name ?? '') || /^com\.apple\.(systempreferences|installer|keychainaccess|Terminal|ScriptEditor2)$/.test(ctx?.bundle ?? '');
 /** Words an approval question may quote from the screen, without the ones that would answer it. */
+// Keys and typed text never go to a terminal, a code editor or Dixi itself: one stray word plus Enter there runs a command.
+// Matched by the app's own category (LSApplicationCategoryType in its Info.plist) or its bundle id, never by a phrase.
+const DEV_BUNDLES = /^(com\.apple\.(Terminal|dt\.)|com\.googlecode\.iterm2|dev\.warp\.|com\.todesktop\.230313mzl4w4u92|com\.microsoft\.VSCode|com\.vscodium|com\.exafunction\.windsurf|com\.jetbrains\.|com\.google\.android\.studio|com\.sublimetext\.|dev\.zed\.|com\.panic\.Nova|com\.barebones\.bbedit|org\.vim\.MacVim|net\.kovidgoyal\.kitty|(org|io)\.alacritty|com\.mitchellh\.ghostty|co\.zeit\.hyper|com\.github\.atom)/i;
+/** The front app ({ name, bundle, pid, category }) → why keys may not go there, or null. */
+export function keysRefused({ name = '', bundle = '', pid = 0, category = '' } = {}, self = process.pid) {
+  if (pid && pid === self) return "Dixi's own window is in front";
+  if (category === 'public.app-category.developer-tools' || DEV_BUNDLES.test(bundle)) return `${name || 'A terminal or code editor'} is in front (a terminal or code editor)`;
+  return null;
+}
+/** A streamed Claude reply (server-sent events, in byte chunks) → the same shape as an unstreamed one.
+ *  partial(textSoFar) runs as each piece of text arrives. */
+export async function readStream(chunks, partial) {
+  let j = {}, text = '', buf = '';
+  const dec = new TextDecoder();
+  for await (const chunk of chunks) {
+    buf += dec.decode(chunk, { stream: true });
+    for (let k; (k = buf.indexOf('\n\n')) >= 0; buf = buf.slice(k + 2)) {
+      const data = buf.slice(0, k).split('\n').find((l) => l.startsWith('data: '))?.slice(6);
+      const e = data ? JSON.parse(data) : {};
+      if (e.type === 'message_start') j = e.message;
+      else if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta') partial((text += e.delta.text));
+      else if (e.type === 'message_delta') j = { ...j, stop_reason: e.delta?.stop_reason, usage: { ...j.usage, ...e.usage } };
+      else if (e.type === 'error') throw new Error(e.error?.message ?? 'Claude stopped mid-answer.');
+    }
+  }
+  return { ...j, content: [{ type: 'text', text }] };
+}
 export const quoteLabel = (s, max = 60) => String(s).replace(/\b(yes|yeah|yep|no|nope|ok(ay)?|sure|confirm(ed)?|go ahead|do it|approve[ds]?)\b[.!,]*/gi, '').replace(/\s+/g, ' ').trim().slice(0, max) || 'this';
 
 // ---- what was said → which mode ----
@@ -170,6 +200,25 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const env = config.env;
   if (env.DIXI_EVERYWHERE === '0' || process.platform !== 'darwin') return { enabled: false };
   const state = { enabled: true, ctrl: null, armed: null, recent: [], notes: [], overlay: null, ready: null, hideTimer: null };
+  const cats = new Map();   // bundle id → its app category ('' when it has none)
+  async function frontNow() {
+    const f = await input.frontApp();
+    if (f.bundle && !cats.has(f.bundle)) {
+      const at = (await macExec('lsappinfo', ['info', '-only', 'bundlepath', String(f.pid)]).catch(() => ({ stdout: '' }))).stdout.match(/="([^"]+)"/)?.[1];
+      const cat = at ? (await macExec('plutil', ['-extract', 'LSApplicationCategoryType', 'raw', `${at}/Contents/Info.plist`]).catch(() => ({ stdout: '' }))).stdout.trim() : '';
+      cats.set(f.bundle, cat);
+    }
+    return { ...f, category: cats.get(f.bundle) ?? '' };
+  }
+  /** Read in code right before any key or typed text: null when the front app may get keys, else why not.
+   *  When it may not, `target` (the app the step is for) is brought to the front once and checked again. */
+  async function keysBlocked(target) {
+    const why = keysRefused(await frontNow());
+    if (!why || !target) return why;
+    await input.openApp(target);
+    await new Promise((r) => setTimeout(r, 400));
+    return keysRefused(await frontNow());
+  }
   // What you asked Dixi to remember: in memory only (never written to disk), for an afternoon.
   // (With the facts you said, memory.js. Both go in the user's message as data, never the system prompt.)
   const notesLine = (task = '') => { state.notes = state.notes.filter((n) => Date.now() - n.at < 4 * 3600000); return (state.notes.length ? `\nThe user asked you to remember (use it when relevant, e.g. to paste into another app): ${state.notes.map((n) => `[from ${n.app}${n.title ? `, “${n.title}”` : ''}] ${n.note}`).join(' | ')}` : '') + factsLine(mem, task); };
@@ -256,7 +305,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   }
 
   // ---- Claude (the key stays in this process; spend counted against the Anthropic cap) ----
-  async function claude(body, signal, betas = []) {
+  /** One Claude call. With `partial`, the reply streams and partial(textSoFar) runs as each piece of text arrives. */
+  async function claude(body, signal, betas = [], partial) {
     if (!config.keys.anthropic) throw new Error('Dixi needs an Anthropic key for this.');
     if (spend.overFor('anthropic')) throw new Error("Dixi's spending cap is reached.");
     if (/sonnet-5-5|opus-5|fable-5/.test(body.model) && !body.thinking) { body = { ...body, fallbacks: 'default' }; betas = [...betas, 'server-side-fallback-2026-07-01']; }
@@ -264,9 +314,11 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const res = await fetch(ENDPOINTS.anthropic.url, {
       method: 'POST', signal: AbortSignal.any([signal, AbortSignal.timeout(60000)]),
       headers: { 'x-api-key': config.keys.anthropic, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', ...(betas.length ? { 'anthropic-beta': betas.join(',') } : {}), ...(ws ? { 'anthropic-workspace-id': ws } : {}) },
-      body: JSON.stringify(body),
+      body: JSON.stringify(partial ? { ...body, stream: true } : body),
     });
-    const j = await res.json();
+    let j = {};
+    if (!partial || !res.ok) j = await res.json();
+    else j = await readStream(res.body, partial);
     if (!res.ok) throw new Error(j.error?.message ?? `Claude answered ${res.status}`);
     spend.add(`anthropic:${body.model}`, j.usage);
     if (j.stop_reason === 'refusal') throw new Error("Claude wouldn't help with that one.");
@@ -343,7 +395,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   }
 
   // ---- Agent: Claude's computer-use toolset drives the Mac ----
-  async function agent(task, shot, ctx, signal, found = [], said = task) {
+  async function agent(task, shot, ctx, signal, found = [], said = task, target = '') {
     if (!systemPreferences.isTrustedAccessibilityClient(false)) {
       systemPreferences.isTrustedAccessibilityClient(true);   // macOS shows its own prompt
       say('To click and type for you, Dixi needs Accessibility permission. Turn Dixi on in the setting that just opened, then ask again.');
@@ -486,6 +538,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     }
     if (n === 'cursor_position') { const p = await input.cursor(); return ok(`${Math.round(((p.x - shot.bounds.x) * shot.w) / shot.bounds.width)},${Math.round(((p.y - shot.bounds.y) * shot.h) / shot.bounds.height)}`); }
     if (n === 'scroll') { await input.scroll(c.input?.coordinate ? at : null, c.input.scroll_direction, c.input.scroll_amount); await pause(250); return acted(ok()); }
+    if (n === 'type' || n === 'key' || n === 'hold_key') {
+      const front = await keysBlocked(target);
+      if (front) return fail(`${front}, so no keys were sent. Stop and tell the user to bring the app they want to the front.`);
+    }
     if (n === 'type') {
       const f = await input.focused();
       if (secretField(f)) return no('a password, card, SSN or code field: the user types that themselves');
@@ -632,9 +688,108 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   }
 
   // ---- one request ----
+  // ---- a planned run (plan.js): each step starts as soon as it is planned, in the order said, with no "shall I?" ----
+  // What's said while it runs is planned onto the end of the same queue; only "stop" or a protest ends it.
+  const KEYS_IN = /\b(?:keystroke|key code)\b|\.keystroke\(|\.keyCode\(/i;
+  const HERE = /\b(?:this|these|here|screen)\b/i;   // needs the picture of the screen: not for the planner
+  const newPlan = async () => ({ steps: [], results: [], planning: 0, wake: null, app: (await input.frontApp()).name, apps: await installedApps().catch(() => []) });
+  function planInto(q, text, signal, runId, stream = true) {
+    q.planning++;
+    return plan(text, { app: q.app }, {
+      apps: q.apps, commands, home: os.homedir(), recentFiles: Date.now() - (state.filesAt ?? 0) < 300000, signal,
+      model: (body, sig, partial) => claude(body, sig, [], partial),
+      ...(stream && { onStep: (step) => { q.steps.push(step); q.wake?.(); } }),
+    }).catch((err) => ({ steps: [], why: err.message }))
+      .finally(() => { mark(runId, 'planned'); q.planning--; q.wake?.(); });
+  }
+  /** One step → { ok, say?, out?, error? }. `prior`: what earlier steps found, for steps that need it. */
+  async function doStep(s, prior, signal) {
+    if (s.do === 'instant') {
+      if (s.kind === 'command') { await runCommand(s.command); return { ok: true, said: true }; }   // it says what it did
+      if (s.kind === 'open') return (await input.openApp(s.app)) ? { ok: true } : { ok: false, error: `I couldn't open ${s.app}` };
+      if (s.kind === 'quick') { const qa = await quickAnswer(s.clause, { webAnswer }); return qa ? { ok: true, say: qa.say, out: qa.say } : { ok: false, error: "I couldn't work that out" }; }
+      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return { ok: r.ok !== false, say: r.say }; }
+      if (s.kind === 'file') {
+        const r = await fileAction(s.intent, null, { approve, say, undo });
+        if (r?.results) state.filesAt = Date.now();
+        if (s.intent.verb === 'move' || s.intent.verb === 'rename') state.fileChangeAt = Date.now();
+        return { ok: true, said: true, out: r?.results?.map((x) => x.name ?? x).slice(0, 5).join(', ') };
+      }
+    }
+    if (s.do === 'open') { const r = await openTarget({ app: s.app, url: s.url }); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
+    if (s.do === 'answer') {
+      if (s.say) return { ok: true, say: s.say };
+      const a = (await quickAnswer(s.clause, { webAnswer }))?.say ?? (await webAnswer(s.clause));
+      return a ? { ok: true, say: a, out: a } : { ok: false, error: "I couldn't find that out" };
+    }
+    if (s.do === 'web') { onShowMain?.(); toMain('everywhere:browse', s.clause); return { ok: true }; }   // Dixi's own browser does the rest
+    if (s.do === 'script') {
+      if (KEYS_IN.test(s.code)) {   // keystrokes go to whatever is in front: never a terminal, a code editor or Dixi
+        if (s.app) await input.openApp(s.app);
+        const why = await keysBlocked(s.app);
+        if (why) return { ok: false, error: `${why}, so I didn't press any keys` };
+      }
+      let r = await runScript({ lang: s.lang, code: s.code });
+      if (!r.ok && !r.refused && !signal.aborted) {   // one repair, then the screen agent does it
+        const j = await claude({ model: 'claude-haiku-5-5', max_tokens: 400, thinking: { type: 'disabled' },
+          system: 'A macOS script failed. Reply with only the fixed script, same language, no fences.',
+          messages: [{ role: 'user', content: `Task: ${s.clause}\nLanguage: ${s.lang}\nScript:\n${s.code}\nError: ${r.error}` }] }, signal).catch(() => null);
+        const code = j?.content?.find((b) => b.type === 'text')?.text?.trim();
+        if (code && !(KEYS_IN.test(code) && !KEYS_IN.test(s.code))) r = await runScript({ lang: s.lang, code });
+      }
+      if (r.refused) return { ok: false, error: r.error };
+      if (!r.ok) return doStep({ do: 'computer', clause: s.clause, app: s.app }, prior, signal);
+      if (s.check && !(await checkScript({ lang: s.lang, code: s.check }))) return doStep({ do: 'computer', clause: s.clause, app: s.app }, prior, signal);
+      return { ok: true, out: r.out };
+    }
+    // 'computer': the screen agent, with only this clause and what the earlier steps found.
+    if (screenDenied()) { needScreenPermission(); return { ok: false, error: 'Dixi needs Screen Recording permission' }; }
+    const [shot, ctx] = await Promise.all([snapshot(), context()]);
+    if (!shot) { needScreenPermission(); return { ok: false, error: 'Dixi needs Screen Recording permission' }; }
+    state.guard = guardian.track(state.guard, [...guardian.checkContext(ctx), ...guardian.checkText(`${ctx.title ?? ''}\n${s.clause}`)], ctx);
+    const task = prior.length ? `${s.clause}\n(Earlier steps found: ${prior.join('; ').slice(0, 500)})` : s.clause;
+    await agent(task, shot, ctx, signal, state.guard.open, s.clause, s.app ?? '');
+    return { ok: true, said: true };
+  }
+  async function runPlan(q, text, signal) {
+    state.plan = q;
+    const label = (s) => s.clause.slice(0, 90);
+    let i = 0, spoke = false;
+    try {
+      for (;;) {
+        if (signal.aborted) return;
+        if (i < q.steps.length) {
+          const s = q.steps[i++];
+          if (i === 1) mark(state.runId, 'first_action');
+          show({ state: 'acting', title: text.slice(0, 80), steps: q.steps.map((x, k) => ({ label: label(x), state: k < i - 1 ? 'done' : k === i - 1 ? 'running' : 'waiting' })).slice(-6) });
+          const r = await doStep(s, q.results, signal).catch((err) => ({ ok: false, error: err.message }));
+          if (signal.aborted) return;
+          if (!r.ok) {
+            const why = `Step ${i}, “${label(s)}”, didn't work${r.error ? `: ${String(r.error).replace(/[.\s]+$/, '')}` : ''}.`;
+            show({ state: 'error', title: text.slice(0, 80), text: why, linger: 12000 }); say(why); return;
+          }
+          if (r.say) say(r.say);
+          spoke ||= Boolean(r.say || r.said);
+          if (r.out) q.results.push(`${label(s)} → ${String(r.out).slice(0, 200)}`);
+          continue;
+        }
+        if (!q.planning) break;
+        await new Promise((res) => { q.wake = res; signal.addEventListener('abort', res, { once: true }); });
+        q.wake = null;
+      }
+      if (!q.steps.length) { say("I couldn't plan that."); return; }
+      show({ state: 'done', title: text.slice(0, 80), steps: q.steps.map((x) => ({ label: label(x), state: 'done' })).slice(-6), text: 'Done.', linger: 4000 });
+      if (!spoke) say('Done.');
+    } finally { if (state.plan === q) state.plan = null; }
+  }
   async function run(text, forced) {
     // A lesson in progress hears its own words ("repeat", "I'm stuck", "do it for me"), so they don't end it.
     if (state.lesson) { const w = tutorControl(text); if (w) return state.lesson.control(w); }
+    const runId = (Date.now() - (state.heardAt ?? 0) < 30000 && state.heardId) || `r${Date.now().toString(36)}`;   // one per utterance (timing.js)
+    state.heardId = null;
+    mark(runId, 'stt_final');
+    if (!forced && state.plan && state.ctrl) { mark(runId, 'routed'); planInto(state.plan, text, state.ctrl.signal, runId); return; }   // added to the running plan
+    state.runId = runId;
     state.ctrl?.abort();
     for (const done of approvals.values()) done(false);   // a late yes can't land on the old run
     for (const done of asks.values()) done(null);
@@ -679,8 +834,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // Your own files (files.js): Spotlight, no picture. "Open it" counts only right after a list.
       const fi = fileIntent(t);
       if (fi && (fi.verb === 'find' || fi.query || fi.kind || fi.src || Date.now() - (state.filesAt ?? 0) < 300000)) {
-        const r = await fileAction(fi, null, { approve, say });
+        const r = await fileAction(fi, null, { approve, say, undo });   // undo: move and rename just happen; "undo that" puts them back
         if (r.results) state.filesAt = Date.now();
+        if (fi.verb === 'move' || fi.verb === 'rename') state.fileChangeAt = Date.now();   // so "undo that" means this, not ⌘Z
         show({ state: 'done', title: r.title, text: String(r.text).slice(0, 260), linger: 8000 });
         return;
       }
@@ -702,6 +858,13 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       }
       if (UNDO.test(t)) { await input.key('cmd+z'); say('Undone.'); show({ state: 'done', title: 'Undone', text: '⌘Z', linger: 1500 }); return; }
       if (forced === 'type') return await typeOut(text, signal);
+      // Several things in one breath: planned once, then done in order (plan.js).
+      if (!forced && split(t).length > 1 && !HERE.test(t) && !DO_IT.test(t) && !tutorIntent(t) && !SCAM_CHECK.test(t) && !CAL_ADD.test(t) && !REMEMBER.test(t) && modeOf(t) !== 'hive') {
+        mark(runId, 'routed');
+        const q = await newPlan();
+        planInto(q, t, signal, runId);
+        return await runPlan(q, t, signal);
+      }
       // The Mac itself, no AI and no picture: volume, music, windows, timers… (desktop.js) and "why is my
       // Mac slow" (doctor.js, read-only). Risky ones (quit, Wi-Fi off) ask first.
       const dk = !forced && desktopIntent(t);
@@ -743,6 +906,14 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         const name = text.trim().match(OPEN_APP)[1];
         if (await input.openApp(name)) { say(`Opening ${name}.`); show({ state: 'done', text: `Opening ${name}`, linger: 2500 }); return; }
       }
+      // One task for another app: a script or a link when the planner has one; the screen agent only when it doesn't.
+      if (mode === 'agent' && !doIt && !ri && !HERE.test(t) && !SCAM_CHECK.test(t) && !CAL_ADD.test(t) && !REMEMBER.test(t)) {
+        const q = await newPlan();
+        const r = await planInto(q, t, signal, runId, false);
+        if (signal.aborted) return;
+        if (r.steps.length && !(r.steps.length === 1 && r.steps[0].do === 'computer')) { mark(runId, 'routed'); q.steps = r.steps; return await runPlan(q, t, signal); }
+      }
+      mark(runId, 'routed');
       if (screenDenied()) return needScreenPermission();
       const [shot, ctx] = armed ? [armed.shot, armed.ctx] : await Promise.all([snapshot(), context()]);
       if (!shot) return needScreenPermission();
@@ -767,7 +938,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       console.warn('[everywhere]', err.message);
       show({ state: 'error', title: 'Something went wrong', text: err.message });
       say(err.message);
-    } finally { if (state.ctrl === ctrl) state.ctrl = null; trayTitle(); micAfter(12000); }
+    } finally { mark(runId, 'done'); if (state.ctrl === ctrl) state.ctrl = null; trayTitle(); micAfter(12000); }
   }
   function stop() {
     if (!state.ctrl && !approvals.size && !asks.size) return false;
@@ -924,6 +1095,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const clean = j.content.find((b) => b.type === 'text')?.text?.trim();   // (trimmed: never ends with a newline that sends)
     if (!clean || signal.aborted) return;
     if (profileFocused() || secretField(await input.focused())) { say("That box is for you to type, so I won't type there."); return; }
+    if (/\n/.test(clean) && (await keysBlocked())) { say("That has line breaks, and a line break in a terminal or code editor can run something, so I didn't type it."); return; }
     await input.type(clean);
     show({ state: 'done', title: 'Typed it', text: clean.slice(0, 260), linger: 5000 });
     say('Done.');
@@ -1106,8 +1278,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   handle('everywhere:enabled', () => ({ listening: listening(), phrases: phrases() }));
   on('everywhere:answer', (id, text) => asks.get(Number(id))?.(text));
   handle('everywhere:run', (text, mode) => run(String(text ?? '').slice(0, 4000), mode));
-  on('everywhere:speaking', (talking) => { state.talking = Boolean(talking); if (!talking) state.saidAt = 0; ui('ew:speaking', state.talking); trayTitle(); });
-  on('everywhere:transcript', (t) => { if (!state.ctrl) show({ state: 'listening', text: String(t ?? '').slice(0, 300) || 'Listening…' }); });
+  on('everywhere:speaking', (talking) => { if (talking) mark(state.runId, 'first_audio'); state.talking = Boolean(talking); if (!talking) state.saidAt = 0; ui('ew:speaking', state.talking); trayTitle(); });
+  on('everywhere:transcript', (t) => { if (!state.heardId || Date.now() - state.heardAt > 30000) { state.heardAt = Date.now(); mark((state.heardId = `r${state.heardAt.toString(36)}`), 'heard'); } if (!state.ctrl) show({ state: 'listening', text: String(t ?? '').slice(0, 300) || 'Listening…' }); });
   on('everywhere:confirm-reply', (id, ok) => approvals.get(Number(id))?.(Boolean(ok)));
   on('everywhere:stop', () => stop());
   const fromOverlay = (e) => e.sender === state.overlay?.webContents;

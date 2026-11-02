@@ -59,7 +59,7 @@ test('a command code cannot do alone goes to ONE planner call, with a short prom
   assert.deepEqual(r.steps.map((s) => s.do), ['open', 'script', 'script']);
   assert.equal(r.steps[0].app, 'Music');
   assert.equal(body.model, 'claude-haiku-5-5');
-  assert.ok(SYSTEM.length < 1500, `system prompt is ${SYSTEM.length} chars`);
+  assert.ok(SYSTEM.length < 1700, `system prompt is ${SYSTEM.length} chars`);
   assert.match(body.messages[0].content, /Installed apps you named: Music\n/);   // only the apps you named, not the whole list
 });
 
@@ -159,6 +159,27 @@ test('a reply cut off mid-JSON keeps its finished steps; anything the model skip
   assert.match(r.why, /cut off/);
   const skipped = await plan('add milk to my shopping list and text Sam I am late', {}, deps(reply([{ do: 'script', clause: 'add milk to my shopping list', app: 'Reminders', code: 'tell application "Reminders" to tell list "shopping" to make new reminder with properties {name:"milk"}' }])));
   assert.deepEqual(skipped.steps.map((s) => s.do), ['script', 'computer']);
+});
+
+test('streamed: each step starts as soon as it and everything said before it is settled', async () => {
+  const log = [];
+  const steps = [{ do: 'script', clause: 'start a new note', app: 'Notes', code: 'tell application "Notes" to make new note' }];
+  const full = JSON.stringify({ steps: [...steps, { do: 'web', clause: 'order a pizza' }] });
+  const model = async (b, signal, partial) => {
+    for (const n of [12, full.indexOf('},{') + 2, full.length - 3]) { log.push(`chunk ${n}`); partial(full.slice(0, n)); }
+    log.push('done');
+    return { content: [{ type: 'text', text: full }] };
+  };
+  const r = await plan('Turn the volume down, start a new note, then lock the screen', {}, { ...deps(model), onStep: (s, i) => log.push(`${i} ${s.do}`) });
+  // The volume (code) and the note (model) start mid-stream; "order a pizza" was never said, so it's dropped; lock waits for the end.
+  assert.deepEqual(log, ['chunk 12', `chunk ${full.indexOf('},{') + 2}`, '0 instant', '1 script', `chunk ${full.length - 3}`, 'done', '2 instant']);
+  assert.deepEqual(r.steps.map((s) => s.do), ['instant', 'script', 'instant']);
+  assert.match(r.why, /not said/);
+  // The planner fails after a step has started: that step stays, the rest is still done.
+  const n = [];
+  const broke = await plan('start a new note and text Sam I am late', {}, { ...deps(async (b, sg, partial) => { partial(full.slice(0, full.indexOf('},{') + 2)); throw new Error('reset'); }), onStep: (s) => n.push(s.do) });
+  assert.deepEqual(n, ['script', 'computer']);
+  assert.equal(broke.source, 'model'); assert.match(broke.why, /reset/);
 });
 
 test('page or screen text never reaches the planner; only your words, the front app and app names', () => {

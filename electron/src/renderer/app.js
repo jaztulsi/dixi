@@ -133,6 +133,7 @@ ew?.enabled().then(({ listening = true, phrases = [] } = {}) => {
   // (No listening window after Dixi speaks: a follow-up starts with "Dixi", so its own voice can't loop.)
   ew.onSay((t) => { speaker.say(t); ewUntil = Date.now() + 30000; });
   ew.onKill(() => { speaker.stop(); voice.cancelAll({ quiet: true }); });
+  ew.onBrowse?.((t) => voice.handleText(t));   // a planned "web" step (main/plan.js): Dixi's own browser does it
   // A yes/no from the Mac agent: said, or the card's button (whichever is first).
   ew.onConfirm(async ({ id, question }) => {
     ewConfirm = id;
