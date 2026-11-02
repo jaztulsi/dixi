@@ -9,7 +9,7 @@ import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { unsafe } from './safesite.js';
-import { findControls, pressControl, openApp, frontApp, key } from './input.js';
+import { findControls, pressControl, openApp, frontApp, key, windowTexts } from './input.js';
 
 /** The real exec: (cmd, args) → stdout. execFile, never a shell. The tests pass a fake. */
 export const exec = (cmd, args) => new Promise((resolve, reject) => {
@@ -39,6 +39,7 @@ const RULES = [
   rule('media', String.raw`(?:pause|stop)(?: the| my)? ${MEDIA_NOUN}`, (m) => ({ op: 'pause', app: mediaApp(m[0]) })),
   rule('media', String.raw`(?:play|resume|unpause|put on|start)(?: the| my| some)? ${MEDIA_NOUN}|play something`, (m) => ({ op: 'play', app: mediaApp(m[0]) })),
   rule('media', String.raw`play (?:the song |the track )?(.{2,80}?) (?:on|in|from|with|using) (?:apple music|the music app|itunes)`, (m) => ({ op: 'song', q: m[1], app: 'Music' })),
+  rule('media', String.raw`(?:search(?: for)?|look up|find) (.{2,80}?) (?:on|in|with|using) (?:apple music|the music app|itunes)|search(?: for)? (.{2,80}?) in music|search (?:apple music|itunes|the music app) for (.{2,80})`, (m) => ({ op: 'search', q: (m[1] ?? m[2] ?? m[3]).trim(), app: 'Music' })),
   rule('media', String.raw`skip(?: the| this)? (?:song|track)|(?:play )?(?:the )?next (?:song|track)`, () => ({ op: 'next' })),
   rule('media', String.raw`(?:play )?(?:the )?(?:previous|last) (?:song|track)|go back (?:a|one) (?:song|track)`, () => ({ op: 'previous' })),
   rule('media', String.raw`${WHAT}(?: song| track)? (?:now )?playing(?: right now)?|what (?:song|track) is (?:this|playing)(?: right now)?|${WHAT} this (?:song|track)`, () => ({ op: 'now' })),
@@ -215,6 +216,21 @@ async function playSong(q, d) {
   return out(`I opened ${hit.trackName} in Music, but it didn't start playing. Press Play there.`, 'Music');
 }
 
+// Music's search page for the words (its link fills no field), then a check that results for them really show.
+async function searchMusic(q, d) {
+  const { texts = windowTexts, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = d;
+  const region = (new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).maximize().region ?? 'US').toLowerCase();
+  await d.exec('open', [`music://music.apple.com/${region}/search?term=${encodeURIComponent(q)}`]);
+  const flat = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');   // "Lo‑Fi", "LoFi" and "lo-fi" read the same
+  const words = q.split(/\s+/).map(flat).filter(Boolean);
+  for (let t = 0; t < 25; t++) {   // a cold Music opens and loads in 2-6 s
+    const seen = flat((await texts('Music')).join(' '));
+    if (words.every((w) => seen.includes(w))) return out(`Here are the Apple Music results for ${q}.`, 'Music');
+    await wait(300);
+  }
+  return out(`I opened Music, but no results for ${q} showed up.`, 'Music');
+}
+
 const DO = {
   async volume(i, d) {
     if (i.op === 'mute' || i.op === 'unmute') {
@@ -232,6 +248,7 @@ const DO = {
   },
   async media(i, d) {
     if (i.op === 'song') return playSong(i.q, d);
+    if (i.op === 'search') return searchMusic(i.q, d);
     for (const app of i.app ? [i.app] : MEDIA_APPS) {
       if (!MEDIA_APPS.includes(app) || !(await running(d, app))) continue;
       if (app === 'Music' && i.op === 'play') return playMusic(d);
