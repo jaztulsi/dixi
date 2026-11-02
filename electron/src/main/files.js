@@ -113,9 +113,9 @@ export function spotlight({ query, kind, when, src }, now = new Date()) {
   if (kind && TYPES[kind]) p.push(`(${TYPES[kind].map((t) => `kMDItemContentTypeTree == ${lit(t)}`).join(' || ')})`);
   for (const w of String(query ?? '').split(/\s+/).filter(Boolean).slice(0, 8)) p.push(`kMDItemDisplayName == ${lit(`*${w}*`)}cd`);
   const r = range(when, now);
-  // "Downloaded yesterday" is when it arrived, not when its maker last saved it.
-  const at = src === 'downloads' ? 'kMDItemDateAdded' : 'kMDItemContentModificationDate';
-  if (r) p.push(`${at} >= $time.iso(${iso(r[0])})`, `${at} < $time.iso(${iso(r[1])})`);
+  // "Downloaded yesterday": when it arrived (date added), or when it was last saved (a browser sets that to the download time).
+  const span = (at) => `(${at} >= $time.iso(${iso(r[0])}) && ${at} < $time.iso(${iso(r[1])}))`;
+  if (r) p.push(src === 'downloads' ? `(${span('kMDItemDateAdded')} || ${span('kMDItemContentModificationDate')})` : span('kMDItemContentModificationDate'));
   return p.length ? p.join(' && ') : 'kMDItemFSName == "*"';
 }
 
