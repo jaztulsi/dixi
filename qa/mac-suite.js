@@ -88,7 +88,7 @@ export const ROWS = [
   { id: 'new-finder-window', kind: 'simple', say: 'open a new Finder window',
     setup: async (m) => ({ n: (await m.finderWindows()).length }),
     check: async (m, s) => { const n = (await m.finderWindows()).length; return { ok: n > s.n, got: `finder windows ${s.n}→${n}` }; } },
-  { id: 'play-music', kind: 'simple', say: 'play some music', check: async (m) => { const mu = await m.music(); return { ok: mu.state === 'playing', got: `${mu.state} · ${mu.track ?? ''}` }; } },
+  { id: 'play-music', kind: 'simple', say: 'play some music', setup: (m) => m.musicFixture(), cleanup: (m, s) => m.removeMusicFixture(s), check: async (m) => { const mu = await m.music(); return { ok: mu.state === 'playing', got: `${mu.state} · ${mu.track ?? ''}` }; } },
   { id: 'note-buy-milk', kind: 'simple', say: 'make a note that says QA buy milk',
     check: async (m, s) => { const n = await m.notesSince(s.t0); return { ok: n.some((x) => /buy milk/i.test(`${x.name} ${x.text}`)), got: JSON.stringify(n).slice(0, 160) || 'no new note' }; },
     cleanup: (m, s) => m.deleteNotesSince(s.t0) },
@@ -130,7 +130,7 @@ export const ROWS = [
     setup: async (m) => ({ before: await m.eventsOn(tomorrow()) }),
     check: async (m, s) => { const [a, n] = [await newEvents(m, s, tomorrow()), await m.notesSince(s.t0)]; return { ok: a.some((e) => /standup/i.test(e.title) && new Date(e.start).getHours() === 9) && n.some((x) => /standup prep/i.test(`${x.name} ${x.text}`)), got: `events ${JSON.stringify(a).slice(0, 90)} · notes ${JSON.stringify(n).slice(0, 90)}` }; },
     cleanup: async (m, s) => { await dropEvents(m, s, tomorrow()); await m.deleteNotesSince(s.t0); } },
-  { id: 'volume-then-play', kind: 'multi', say: 'turn the volume to 20 and play some music',
+  { id: 'volume-then-play', kind: 'multi', say: 'turn the volume to 20 and play some music', setup: (m) => m.musicFixture(), cleanup: (m, s) => m.removeMusicFixture(s),
     check: async (m) => { const [v, mu] = [await m.volume(), await m.music()]; return { ok: Math.abs(v - 20) <= 4 && mu.state === 'playing', got: `volume ${v} · ${mu.state}` }; } },
   { id: 'quit-then-open', kind: 'multi', label: 'quit with no confirmation', say: 'quit Calculator and open Notes',
     setup: async (m) => { await m.activate('Calculator'); await m.sleep(1200); },
@@ -153,6 +153,8 @@ export function mac({ osa, main, inputURL, fs, path, os, crypto, execFile, sleep
   const json = async (src) => { const o = await osa(src); try { return JSON.parse(o); } catch { return { err: o }; } };
   const BROWSERS = /^(Google Chrome|Brave Browser|Microsoft Edge|Arc|Vivaldi|Chromium)$/;
   let browser = null;
+  // JXA prelude: `b` = the browser, `w` = the QA window or null (m.qaWin is set by qaWindow()).
+  const qw = (b) => `const b = Application(${JSON.stringify(b)}); let w = null; try { if (${JSON.stringify(m.qaWin)} != null) { w = b.windows.byId(${JSON.stringify(m.qaWin)}); w.id(); } } catch (e) { w = null; }`;
   const m = {
     home, sleep, osa, said, navs,
     muted: async () => (await osa('const c = Application.currentApplication(); c.includeStandardAdditions = true; c.getVolumeSettings().outputMuted')) === 'true',
@@ -193,22 +195,52 @@ export function mac({ osa, main, inputURL, fs, path, os, crypto, execFile, sleep
     volume: async () => Number(await osa('const c = Application.currentApplication(); c.includeStandardAdditions = true; c.getVolumeSettings().outputVolume')),
     setVolume: (v) => osa(`const c = Application.currentApplication(); c.includeStandardAdditions = true; c.setVolume(null, { outputVolume: ${Number(v)} })`),
     async browser() { return (browser ??= (await osa("ObjC.import('AppKit'); $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.URLWithString('https://example.com')).path.js")).replace(/^.*\//, '').replace(/\.app$/, '')); },
-    async browserURL() {
-      const b = await m.browser();
-      const src = b === 'Safari' ? "const s = Application('Safari'); s.running() && s.documents.length ? s.documents[0].url() : ''"
-        : `const b = Application(${JSON.stringify(b)}); b.running() && b.windows.length ? b.windows[0].activeTab.url() : ''`;
-      const u = await osa(src); return u.startsWith('ERR') ? '' : u;
+    // Dixi is tested in one dedicated window of the default browser (Chromium family): checks read, change and close
+    // only that window's tabs, never the user's own tabs or windows. ponytail: any other default browser reads as "no tabs".
+    qaWin: null,
+    /** Makes sure the QA window exists, covers the main screen (so the user's windows stay out of screenshots) and is in front. */
+    async qaWindow() {
+      const b = await m.browser(); if (!BROWSERS.test(b)) return null;
+      const o = await json(`ObjC.import('AppKit'); ${qw(b)} if (!w) { b.Window().make(); w = b.windows[0]; }
+        const f = $.NSScreen.mainScreen.visibleFrame, H = $.NSScreen.mainScreen.frame.size.height;
+        w.bounds = { x: f.origin.x, y: H - f.origin.y - f.size.height, width: f.size.width, height: f.size.height };
+        w.index = 1; b.activate(); JSON.stringify({ id: w.id() })`);
+      m.qaWin = o?.id ?? null; return m.qaWin;
     },
-    /** { tabId: url } of every tab in the default browser (Chromium family; Safari by window/tab index). */
-    async tabURLs() {
-      const b = await m.browser();
-      const src = b === 'Safari' ? "const s = Application('Safari'); const o = {}; if (s.running()) s.windows().forEach((w, i) => w.tabs().forEach((t, j) => { o[i + '.' + j] = t.url(); })); JSON.stringify(o)"
-        : `const b = Application(${JSON.stringify(b)}); const o = {}; if (b.running()) for (const w of b.windows()) for (const t of w.tabs()) o[t.id()] = t.url(); JSON.stringify(o)`;
-      const o = await json(src); return o && !o.err ? o : {};
+    async browserURL() { if (m.qaWin == null) return ''; const u = await osa(`${qw(browser)} w ? w.activeTab.url() : ''`); return u.startsWith('ERR') ? '' : u; },
+    /** { tabId: url } of the QA window's tabs only. */
+    async tabURLs() { if (m.qaWin == null) return {}; const o = await json(`${qw(browser)} const o = {}; if (w) for (const t of w.tabs()) o[t.id()] = t.url(); JSON.stringify(o)`); return o && !o.err ? o : {}; },
+    async tabIds() { return Object.keys(await m.tabURLs()).map(Number); },
+    async closeTabsExcept(keep) { if (m.qaWin != null) await osa(`${qw(browser)} const keep = ${JSON.stringify(keep)}; if (w) for (const t of w.tabs()) if (!keep.includes(t.id())) t.close()`); },
+    async closeQaWindow() { if (m.qaWin != null) await osa(`${qw(browser)} if (w) w.close()`); m.qaWin = null; },
+    /** How many browser windows are open (a count only: Dixi opening one outside the QA window shows up here). */
+    async browserWindows() { const b = await m.browser(); return BROWSERS.test(b) ? Number(await osa(`const b = Application(${JSON.stringify(b)}); b.running() ? b.windows.length : 0`)) || 0 : 0; },
+    openURL: async (u) => { if ((await m.qaWindow()) != null) await osa(`${qw(browser)} if (w) w.activeTab.url = ${JSON.stringify(u)}`); },
+    /** One local track for the play rows (no subscription needed): a spoken AIFF added to the library, deleted after by its persistent ID. */
+    async musicFixture() {
+      // The file name is the track's name: "QA Dixi Tone", in a private temp folder.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-tone-')), f = path.join(dir, 'QA Dixi Tone.aiff');
+      await sh('say', ['-o', f, 'QA Dixi tone. This is a short test track for Dixi.']);
+      if (!fs.existsSync(f)) { fs.rmdirSync(dir); return { blocked: 'could not make the QA Dixi Tone track' }; }
+      const o = await json(`const mu = Application('Music'); if (!mu.running()) { mu.launch(); delay(3); }   // add() fails (-50) before Music is up
+        const t = mu.add([Path(${JSON.stringify(f)})]); JSON.stringify({ id: t.persistentID() })`);
+      return o?.id ? { tone: o.id, toneFile: f } : { blocked: `could not add the QA Dixi Tone track (${String(o?.err).slice(0, 80)})`, toneFile: f };
     },
-    async tabIds() { const b = await m.browser(); if (!BROWSERS.test(b)) return []; const o = await json(`const b = Application(${JSON.stringify(b)}); JSON.stringify(b.running() ? b.windows().flatMap((w) => w.tabs().map((t) => t.id())) : [])`); return Array.isArray(o) ? o : []; },
-    async closeTabsExcept(keep) { const b = await m.browser(); if (!BROWSERS.test(b)) return; await osa(`const b = Application(${JSON.stringify(b)}); const keep = ${JSON.stringify(keep)}; if (b.running()) for (const w of b.windows()) for (const t of w.tabs()) if (!keep.includes(t.id())) t.close()`); },
-    openURL: async (u) => { await sh('open', [u]); },
+    /** Deletes exactly the fixture track (by persistent ID) and the copy Music made of it, then the temp file. */
+    async removeMusicFixture(s) {
+      const media = path.join(home, 'Music/Music/Media.localized/Music/Unknown Artist/Unknown Album');
+      let copies = [];
+      if (s.tone) {
+        const o = await json(`const mu = Application('Music'); const ts = mu.libraryPlaylists[0].tracks.whose({ persistentID: ${JSON.stringify(s.tone)} })();
+          const locs = ts.map((t) => { try { return t.location().toString(); } catch (e) { return ''; } }); ts.forEach((t) => t.delete()); JSON.stringify(locs)`);
+        copies = Array.isArray(o) ? o : [];
+      } else if (s.toneFile && fs.existsSync(path.join(media, 'QA Dixi Tone.aiff'))
+        && fs.statSync(path.join(media, 'QA Dixi Tone.aiff')).size === fs.statSync(s.toneFile, { throwIfNoEntry: false })?.size) copies = [path.join(media, 'QA Dixi Tone.aiff')];   // a failed add can still copy the file
+      for (const l of copies) if (l && l.startsWith(path.join(home, 'Music') + '/') && path.basename(l).startsWith('QA Dixi Tone')) fs.rmSync(l, { force: true });
+      if (s.toneFile) { fs.rmSync(s.toneFile, { force: true }); try { fs.rmdirSync(path.dirname(s.toneFile)); } catch {} }
+    },
+
+
     async music() { return json(`const m = Application('Music'); let track = ''; if (m.running()) { try { const t = m.currentTrack; track = [t.name(), t.artist(), t.album(), t.genre()].join(' | '); } catch (e) {} } JSON.stringify(m.running() ? { state: m.playerState(), track } : { state: 'not running' })`); },
     /** Every control in the front window (Dixi's own Accessibility walker): [{ role, value, labels, ... }]. */
     controls: () => main(async (_e, u) => (await import(u)).listControls({ max: 300, ms: 2500 }), inputURL).catch(() => []),

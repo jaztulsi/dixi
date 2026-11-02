@@ -76,6 +76,7 @@ const sh = (cmd, args) => new Promise((r) => execFile(cmd, args, { timeout: 8000
 const pgrep = (n) => new Promise((r) => execFile('pgrep', ['-x', n], (e) => r(!e)));
 const neutral = async () => { await sh('open', [EMPTY]); await sleep(700); };
 const firstFront = await m.front();
+await m.qaWindow();   // the dedicated browser window every web row runs in; closed (only it) at the end
 const testLog = () => { try { return fs.readFileSync(path.join(a.profile, 'activity.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
 const APPS = ['Music', 'Notes', 'Calendar', 'Calculator', 'Messages', 'Contacts', 'TextEdit', await m.browser()];
 
@@ -88,11 +89,12 @@ try {
     if (r.messaging && !MESSAGING) { block('SKIP-TCC: needs a one-time macOS grant (Contacts/Messages Automation); then --messaging'); continue; }
     if (qa0 + (await own()) >= MAX_USD) { log(`spend guard: QA total at $${MAX_USD}, stopping`); out.stoppedForSpend = true; break; }
     // Snapshot what this row may change, so it can be put back.
-    const snap = { vol: await m.volume(), muted: await m.muted(), front: await m.front(), tabs: await m.tabIds(), finder: await m.finderWindows(), music: (await m.music()).state,
+    const snap = { vol: await m.volume(), muted: await m.muted(), front: await m.front(), finder: await m.finderWindows(), music: (await m.music()).state,
       running: Object.fromEntries(await Promise.all(APPS.map(async (n) => [n, await m.running(n)]))),
       extra: Object.fromEntries(await Promise.all((r.apps ?? []).map(async (n) => [n, await pgrep(n)]))) };
     hidden = [...new Set([...hidden, ...(await hideRisky())])];
-    await neutral();
+    await neutral(); await m.qaWindow(); await sleep(300);   // then the QA browser window in front
+    snap.tabs = await m.tabIds(); snap.wins = await m.browserWindows();
     const s = { ...((await r.setup?.(m)) ?? {}) };
     if (s.blocked) { block(s.blocked); try { await r.cleanup?.(m, s); } catch {} continue; }
     const say = typeof r.say === 'function' ? r.say(s) : r.say;
@@ -135,7 +137,7 @@ try {
       got: last.got, said: heard.said, asked: heard.asked, runError: heard.err || undefined,
       steps: acts.filter((e) => e.kind === 'step').map((e) => [e.verb, e.role, e.label, e.model, e.ms].filter((x) => x != null).join(' ')).slice(0, 30),
       unsafeStop: unsafeStop ?? undefined, owner: verified != null ? undefined : ownerOf(r, acts, heard),
-      usd: Number(((await own()) - usd0).toFixed(4)), errs: a.errs.splice(0).slice(0, 8), loaded,
+      usd: Number(((await own()) - usd0).toFixed(4)), strayBrowserWindows: Math.max(0, (await m.browserWindows()) - snap.wins) || undefined, errs: a.errs.splice(0).slice(0, 8), loaded,
     };
     out.rows.push(row);
     log(`${row.status.padEnd(7)} ${String(row.ms).padStart(6)} ms  $${row.usd.toFixed(3)}  ${say}${row.status === 'pass' ? '' : `  → ${row.got}  [${row.owner}]`}${unsafeStop ? `  [stopped: ${unsafeStop} came to front]` : ''}${stopped ? '  [hard stop]' : ''}`);
@@ -154,6 +156,7 @@ try {
   }
 } finally {
   fs.rmSync(EMPTY, { recursive: true, force: true });
+  await m.closeQaWindow().catch(() => {});
   unhide(hidden); hidden = [];
   if (firstFront) await sh('open', ['-a', firstFront]);   // the user's own front app, as found (LaunchServices, no Automation)
   out.ledgerEnd = spent();
