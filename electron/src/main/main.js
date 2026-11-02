@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
-import { chat, abort, tiers, keyStatus, Spend, ENDPOINTS, discoverModels, problems, escalation, modeOf } from './providers.js';
+import { chat, abort, prewarm, tiers, keyStatus, Spend, ENDPOINTS, discoverModels, problems, escalation, modeOf } from './providers.js';
 import { DeepgramBridge } from './deepgram.js';
 import { ElevenLabsBridge } from './stt.js';
 import { Resolver } from './resolve.js';
@@ -56,9 +56,11 @@ app.on('before-quit', () => { quitting = true; });
 // ElevenLabs out of credit or refused → Deepgram Flux, when DEEPGRAM_API_KEY is set.
 const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');
 const emitToUI = (channel, data) => win?.webContents.send(channel, data);
+// Speech is coming in, so a planner call is about to follow: warm the API connection now (B5; throttled inside).
+const sttEmit = (channel, data) => { if (channel === 'deepgram:message' && config.keys.anthropic) prewarm(); emitToUI(channel, data); };
 const deepgram = sttName === 'elevenlabs'
-  ? new ElevenLabsBridge(config.keys.elevenlabs, emitToUI, { fallback: config.deepgramAPIKey ? new DeepgramBridge(config.deepgramAPIKey, emitToUI) : null })
-  : new DeepgramBridge(config.deepgramAPIKey, emitToUI);
+  ? new ElevenLabsBridge(config.keys.elevenlabs, sttEmit, { fallback: config.deepgramAPIKey ? new DeepgramBridge(config.deepgramAPIKey, sttEmit) : null })
+  : new DeepgramBridge(config.deepgramAPIKey, sttEmit);
 // One ledger for the app and test runs (whatever their profile), so per-provider caps hold across both.
 const spendCaps = Object.fromEntries(Object.keys(ENDPOINTS).map((p) => [p, Number(config.env[`DIXI_CAP_${p.toUpperCase()}`]) || 0]));
 const spend = new Spend(path.join(app.getPath('appData'), 'Dixi', 'spend.json'), config.spendCapUSD, spendCaps);

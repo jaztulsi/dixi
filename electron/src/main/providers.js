@@ -172,6 +172,17 @@ function cacheFile(dir, req) {
 }
 
 const inflight = new Map();  // request id → AbortController
+// B5: open the connection to the Anthropic API while the user is still talking, so the first real call skips the TCP+TLS
+// handshake (measured 88 → ~60 ms here; two round trips on a slow home network). A keyless GET to /v1/messages answers 405
+// and keeps the socket alive (HEAD / answers Connection: close). No key is sent and it costs nothing. At most once per 20 s.
+let warmAt = -Infinity;
+export function prewarm(fetchImpl = fetch, now = Date.now()) {
+  if (now - warmAt < 20000) return false;
+  warmAt = now;
+  Promise.resolve().then(() => fetchImpl(ENDPOINTS.anthropic.url)).then((r) => r?.arrayBuffer?.()).catch(() => {});
+  return true;
+}
+
 export function abort(id) { inflight.get(id)?.abort(); inflight.delete(id); }
 const sleep = (ms, signal) => new Promise((r) => { const t = setTimeout(r, ms); signal?.addEventListener('abort', () => { clearTimeout(t); r(); }, { once: true }); });
 
