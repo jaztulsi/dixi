@@ -138,6 +138,18 @@ test('"click X" by name: pressed when the words name it, skipped with one line w
   assert.ok(spoken.some((s) => /didn't ask me to press “Delete Account”/.test(s)), 'and the reason was said');
 });
 
+test('a form uses your profile without asking: said on the card, logged without its values', mac, async () => {
+  fs.writeFileSync(path.join(rt2Dir, 'profile.json'), JSON.stringify({ name: 'Pat Example', email: 'pat@example.com' }));
+  answer = () => false;   // a "no" waiting here must not be what decides
+  await agentDoes([], {}, 'fill out this form');
+  fs.rmSync(path.join(rt2Dir, 'profile.json'));
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.match(JSON.stringify(requests[0]?.messages?.[0]), /Pat Example/, 'the agent got the profile');
+  const log = fs.readFileSync(path.join(rt2Dir, 'activity.jsonl'), 'utf8');
+  assert.match(log, /used your profile/);
+  assert.doesNotMatch(log, /pat@example|Pat Example/, 'no profile values in the log');
+});
+
 test('a risky named control is never asked about: refused unless the user said it, pressed when they did', mac, async () => {
   const SEND = { ...SAVE, labels: ['Send'] };
   answer = () => true;

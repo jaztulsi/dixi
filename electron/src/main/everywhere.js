@@ -461,12 +461,14 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const hold = guardian.held(state.guard, ctx);   // cooling-off: nothing done on this site or app for 15 minutes after a stop
     if (hold) { say(hold.say); show({ state: 'error', title: 'Dixi Guardian', text: hold.say, linger: 14000 }); return; }
     const sensitive = isSensitive(ctx);
-    // A form: your typed profile, read back (masked) and approved before the agent sees it.
+    // A form: your typed profile. Normal mode uses it and says so (masked) on the card; careful mode asks first.
     const p = FORM.test(task) ? loadProfile(profileFile) : {};
-    const profile = Object.keys(p).length && (await approve(`Use your profile for this? ${masked(p)}.`)) ? profileLine(p) : '';
+    const useP = Object.keys(p).length > 0 && (!prefs.careful || (await approve(`Use your profile for this? ${masked(p)}.`)));
+    const profile = useP ? profileLine(p) : '';
     const steps = [];
     const step = (label, st = 'running') => { steps.forEach((s) => { if (s.state === 'running') s.state = 'done'; }); steps.push({ label: label.slice(0, 90), state: st }); show({ state: 'acting', title: task.slice(0, 80), steps: steps.slice(-6), app: found[0] ? `Guardian: ${found[0].say}` : contextLine(ctx) }); };
     step('Looking at your screen');
+    if (useP) { step(`Using your profile: ${masked(p)}`); act.log({ kind: 'step', verb: 'used your profile', app: ctx.name }); }   // values never logged
     const model = env.DIXI_EVERYWHERE_AGENT_MODEL || 'claude-sonnet-5-5';
     const rec = createRecorder();   // what it did, for "save that as a skill" (skills.js)
     // The window's controls, like the browser's element list: pressed by number, so nothing is guessed.
