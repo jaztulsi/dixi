@@ -21,3 +21,4 @@ website/.next/
 .claude-flow/
 **/.claude-flow/
 node_modules/
+electron/bench/out/

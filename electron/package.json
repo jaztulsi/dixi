@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test --test-timeout=20000 --import ./test/no-network.js test/unit/*.test.js",
+    "test": "node test/gate.js test/unit/*.test.js",
     "test:e2e": "playwright test",
     "live": "node eval/live.js",
     "demo": "node eval/demo.js",
@@ -16,7 +16,8 @@
     "stt": "node eval/audio.js",
     "refresh-apple-catalog": "node scripts/refresh-apple-catalog.js",
     "refresh-blocklist": "node scripts/refresh-blocklist.js",
-    "refresh-unsafe": "node scripts/refresh-unsafe.js"
+    "refresh-unsafe": "node scripts/refresh-unsafe.js",
+    "bench": "node --import ./test/no-network.js eval/bench.js"
   },
   "dependencies": {
     "dotenv": "18.0.8",
