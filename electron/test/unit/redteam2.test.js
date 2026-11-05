@@ -271,6 +271,12 @@ test('clicks: the front app and menu extras yes; another window or a system prom
   await agentDoes(click, { at: { role: 'AXButton', labels: ['Allow'], pid: 98 }, owner: '/System/Library/CoreServices/SecurityAgent.app/Contents/MacOS/SecurityAgent' }, 'click allow');
   assert.ok(!done.some(([w]) => w === 'click'), 'never a system security prompt, even when the user said it');
   assert.equal(refusals(), 2, 'both refusals logged');
+  // The front app can't be read (frontApp failed: pid 0): fails closed, so a coreautha button is still never clicked.
+  await agentDoes(click, { front: 0, at: { role: 'AXButton', labels: ['Use Password…'], pid: 97 }, owner: '/System/Library/Frameworks/LocalAuthentication.framework/Support/coreautha.bundle/Contents/MacOS/coreautha' }, 'click use password');
+  assert.ok(!done.some(([w]) => w === 'click'), 'front app unknown: still never a system prompt');
+  await agentDoes(click, { front: 0, at: { role: 'AXButton', labels: ['OK'], pid: 96 }, owner: '/Applications/TextEdit.app/Contents/MacOS/TextEdit' }, 'click ok');
+  assert.ok(!done.some(([w]) => w === 'click'), "front app unknown: an ordinary window's button isn't clicked either");
+  assert.equal(refusals(), 4, 'and each refusal logged');
   assert.equal(asked.length, 0, 'nothing was asked');
 });
 

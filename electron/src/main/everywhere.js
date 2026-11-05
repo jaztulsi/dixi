@@ -565,17 +565,18 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (/^(left|right|middle|double|triple)_click$/.test(n)) {
       const el = await input.elementAt(at);
       if (el?.pid === process.pid) return fail("That's Dixi's own window: Dixi doesn't press its own controls.");
+      // A click lands only on a control read back in the front app (its sheets, dialogs and menus too) or on a
+      // menu bar extra; never on a blind point, and never on a system security prompt. Every refusal is logged,
+      // and these come before any risk question, so nothing is asked and then refused. Front app unknown
+      // (pid 0) = every point is someone else's: it fails closed.
+      const front = await input.frontApp(), theirs = Boolean(el) && el.pid !== front.pid;
+      const owner = !el ? '' : theirs ? await input.procName(el.pid) : `${front.name} ${front.bundle}`;
+      const deny = (text, r) => { act.log({ kind: 'refused', text, app: front.name, role: el?.role, label: el?.labels?.[0] }); return r; };
+      if (SYSTEM_PROMPT.test(owner)) return deny('a system security prompt', no('That is a system security prompt. The user answers it themselves'));
+      if (theirs && !MENU_BAR.test(`${el.role} ${el.subrole ?? ''}`)) { const t = `That point is in another app's window, not ${front.name || 'the front app'}'s, so I didn't click there. Use the controls list, or bring that app to the front first.`; return deny(t, fail(t)); }
       const why = clickRisk(el, strict) || moneyButton(el);
       if (why && !asked && !(await yes(why))) return no(why);
-      // A click lands only on a control read back in the front app (its sheets, dialogs and menus too) or on a
-      // menu bar extra; never on a blind point, and never on a system security prompt. Every refusal is logged.
-      const front = await input.frontApp(), theirs = el && front.pid && el.pid !== front.pid;
-      const owner = theirs ? await input.procName(el.pid) : `${front.name} ${front.bundle}`;
-      const refused = !el ? "That point isn't on anything I can read, so I didn't click there."
-        : SYSTEM_PROMPT.test(owner) ? null
-        : theirs && !MENU_BAR.test(`${el.role} ${el.subrole ?? ''}`) ? `That point is in another app's window, not ${front.name || 'the front app'}'s, so I didn't click there. Use the controls list, or bring that app to the front first.` : null;
-      if (el && SYSTEM_PROMPT.test(owner)) { act.log({ kind: 'refused', text: 'a system security prompt', app: front.name, role: el.role, label: el.labels?.[0] }); return no('That is a system security prompt. The user answers it themselves'); }
-      if (refused) { act.log({ kind: 'refused', text: refused, app: front.name, role: el?.role, label: el?.labels?.[0] }); return fail(refused); }
+      if (!el) { const t = "That point isn't on anything I can read, so I didn't click there."; return deny(t, fail(t)); }
       if (signal.aborted) return no('stopped');
       // A skill's replay: the control is read again just before the press, and must still be the recorded one.
       if (c.expect && !c.expect(await input.elementAt(at))) return { type: 'tool_result', tool_use_id: c.id, toolset_name: 'computer', is_error: true, content: 'The control there changed, so it was not pressed.' };
@@ -1201,9 +1202,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (!clean || signal.aborted) return;
     if (profileFocused() || secretField(await input.focused())) { say("That box is for you to type, so I won't type there."); return; }
     if (/\n/.test(clean) && (await keysBlocked())) { say("That has line breaks, and a line break in a terminal or code editor can run something, so I didn't type it."); return; }
-    await input.type(clean);
+    const typed = await input.pasteChecked(clean, { name: (await input.frontApp()).name || 'that' });   // read back, like the agent's typing
+    if (!typed.ok) { show({ state: 'error', title: "Didn't type it", text: typed.why, linger: 5000 }); say(typed.why); return; }
     show({ state: 'done', title: 'Typed it', text: clean.slice(0, 260), linger: 5000 });
-    say('Done.');
+    say(typed.checked ? 'Done.' : "Typed it, but I can't read that box to check.");
   }
 
   // ---- settings by voice or menu: careful mode, and the microphone (⌘⌥Space) ----

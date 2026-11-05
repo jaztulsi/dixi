@@ -71,7 +71,7 @@ test('A2: a field in a web view with no AX name → the site key, learned for ne
   assert.ok(again.log.list <= 6 && again.log.enable === 1, 'two ways tried (AX, AX switched on), no wandering');
 });
 test('A2: a paste is checked; nothing landed → one more way to the box, then a clear failure', async () => {
-  const seen = [{ len: 0, has: false }, { len: 0, has: false }, { len: 12, has: true }];
+  const seen = [{ len: 0, has: false }, { len: 0, has: false }, { len: 0, has: false }, { len: 12, has: true }];
   let pasted = 0;
   const d = { paste: async () => { pasted++; }, has: async () => seen.shift(), focus: async (o) => ({ ok: true, how: 'ax', skip: o.skip }) };
   assert.deepEqual(await input.pasteChecked('hello Gemini', { name: 'Gemini' }, d), { ok: true, checked: true });
@@ -80,4 +80,12 @@ test('A2: a paste is checked; nothing landed → one more way to the box, then a
   assert.deepEqual(await input.pasteChecked('x', { name: 'Gemini' }, never), { ok: false, why: "The text didn't show up in the Gemini input." });
   const canvas = { paste: async () => {}, has: async () => ({ read: false, len: 0, has: false }) };
   assert.deepEqual(await input.pasteChecked('x', {}, canvas), { ok: true, checked: false }, 'a box with no value: not claimed as checked');
+});
+
+test('A2: focus moves off a readable box during the paste → not pasted twice, and not claimed as checked', async () => {
+  const seen = [{ read: true, len: 3, has: false }, { read: false, len: 0, has: false }];
+  let pasted = 0, refocus = 0;
+  const d = { paste: async () => { pasted++; }, has: async () => seen.shift(), focus: async () => { refocus++; return { ok: true }; } };
+  assert.deepEqual(await input.pasteChecked('hello', { name: 'Notes' }, d), { ok: true, checked: false });
+  assert.deepEqual([pasted, refocus], [1, 0]);
 });

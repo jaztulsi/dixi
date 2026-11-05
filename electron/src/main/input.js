@@ -312,13 +312,15 @@ export async function pasteChecked(text, { where, name, how = 'focused', before 
   before ??= await has(text);   // (the caller can read it alongside focused(): one AX round trip fewer)
   await paste(text);
   let after = await has(text);
-  // A box with no readable value (a canvas, a custom control) can't be checked: said so, not claimed.
-  if (before.read === false && after.read === false) return { ok: true, checked: false };
+  // Nothing readable after the paste (a canvas, a custom control, or focus moved on): said so, never
+  // claimed, and never pasted a second time.
   const landed = () => after.has || after.len !== before.len;
+  if (after.read === false) return { ok: true, checked: false };
   if (!landed()) {
     const r = await focus({ where, name, skip: [how] }, d);
-    if (r.ok) { await paste(text); after = await has(text); }
-    if (!landed()) return { ok: false, why: `The text didn't show up in the ${name} input.` };
+    if (r.ok) { before = await has(text); await paste(text); after = await has(text); }   // (the new box's own before)
+    if (after.read === false) return { ok: true, checked: false };
+    if (!r.ok || !landed()) return { ok: false, why: `The text didn't show up in the ${name} input.` };
   }
   return { ok: true, checked: true };
 }
