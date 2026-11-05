@@ -3,6 +3,7 @@
 // Int16 mic audio over IPC; transcripts come back as 'deepgram:message' events.
 
 import WebSocket from 'ws';
+import { ENDPOINTS } from './providers.js';
 
 // Flux (v2): the whole turn so far ~4x a second and its own end-of-turn detection. Measured on the same
 // audio: the last word lands 0.17 s after you stop talking (nova-2 v1: 1.8 s, updates only once a second).
@@ -28,7 +29,7 @@ export class DeepgramBridge {
     this.close();
     const q = new URLSearchParams(DEEPGRAM_PARAMS);
     for (const k of keyterms.slice(0, 50)) if (k !== 'Dixi') q.append('keyterm', k);
-    const url = 'wss://api.deepgram.com/v2/listen?' + q;
+    const url = `${ENDPOINTS.deepgram.url}?${q}`;
     const ws = new WebSocket(url, { headers: { Authorization: `Token ${this.apiKey}` } });
     this.ws = ws;
     return new Promise((resolve) => {

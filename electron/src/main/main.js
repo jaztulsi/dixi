@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
-import { chat, abort, prewarm, tiers, keyStatus, Spend, ENDPOINTS, discoverModels, problems, escalation, modeOf } from './providers.js';
+import { chat, abort, prewarm, tiers, keyStatus, Spend, Dead, deadAnswer, ENDPOINTS, discoverModels, problems, escalation, modeOf } from './providers.js';
 import * as input from './input.js';
 import { DeepgramBridge } from './deepgram.js';
 import { ElevenLabsBridge } from './stt.js';
@@ -55,12 +55,14 @@ let quitting = false;
 app.on('before-quit', () => { quitting = true; input.stopAll(); });   // C3: no key or button stays held after quit
 // Speech-to-text: ElevenLabs Scribe when its key is set (or DIXI_STT=elevenlabs), else Deepgram Flux.
 // ElevenLabs out of credit or refused → Deepgram Flux, when DEEPGRAM_API_KEY is set.
+// A service that refused its key or ran out of credit is skipped for 6 h, across relaunches (STT and TTS share it).
+const dead = new Dead(path.join(app.getPath('userData'), 'dead-services.json'));
 const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');
 const emitToUI = (channel, data) => win?.webContents.send(channel, data);
 // Speech is coming in, so a planner call is about to follow: warm the API connection now (B5; throttled inside).
 const sttEmit = (channel, data) => { if (channel === 'deepgram:message' && config.keys.anthropic) prewarm(); emitToUI(channel, data); };
 const deepgram = sttName === 'elevenlabs'
-  ? new ElevenLabsBridge(config.keys.elevenlabs, sttEmit, { fallback: config.deepgramAPIKey ? new DeepgramBridge(config.deepgramAPIKey, sttEmit) : null })
+  ? new ElevenLabsBridge(config.keys.elevenlabs, sttEmit, { dead, fallback: config.deepgramAPIKey ? new DeepgramBridge(config.deepgramAPIKey, sttEmit) : null })
   : new DeepgramBridge(config.deepgramAPIKey, sttEmit);
 // One ledger for the app and test runs (whatever their profile), so per-provider caps hold across both.
 const spendCaps = Object.fromEntries(Object.keys(ENDPOINTS).map((p) => [p, Number(config.env[`DIXI_CAP_${p.toUpperCase()}`]) || 0]));
@@ -278,10 +280,9 @@ handle('tab:opensearch', async (url) => openSearchTemplate((await fetchPage(Stri
 // Returns mp3 bytes, or null (the renderer then falls back to the system voice).
 // Without ElevenLabs (no key, over the cap, out of credit) the Mac's own voice is rendered here and played
 // like any other audio, so the microphone's echo canceller removes it (speechSynthesis plays outside Chrome).
-let ttsPausedUntil = 0;
 const localSpeech = (text) => import('./localvoice.js').then((m) => m.localVoice(speakable(String(text).slice(0, 400)))).catch(() => null);
 handle('tts:speak', async (text) => {
-  if (!config.keys.elevenlabs || spend.over || Date.now() < ttsPausedUntil) return localSpeech(text);
+  if (!config.keys.elevenlabs || spend.over || dead.is('elevenlabs')) return localSpeech(text);
   // Matilda (knowledgeable, upbeat; the user's pick). Others that sound good: Jessica cgSgspJ2msm6clMCkdW9, Bella hpp4J3VqNfWAUOO0d1Us.
   const voice = config.env.DIXI_VOICE || 'XrExE9yKIg1WjnnlVkGX';
   try {
@@ -295,7 +296,7 @@ handle('tts:speak', async (text) => {
     if (!res.ok) {
       const why = (await res.text()).slice(0, 160);
       console.warn('[tts]', res.status, why);
-      if (/quota|credit|payment|limit/i.test(why)) ttsPausedUntil = Date.now() + 600000;   // don't wait on it for every line
+      if (deadAnswer(res.status, why)) dead.mark('elevenlabs', `TTS ${res.status} ${why}`);   // no more round trips to it for 6 h
       return localSpeech(text);
     }
     return new Uint8Array(await res.arrayBuffer());

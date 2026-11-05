@@ -5,16 +5,20 @@
 //   committed_transcript → TurnInfo EndOfTurn   (the turn is over: voice-activity detection heard a pause)
 // Pick it with DIXI_STT=elevenlabs (the default when ELEVENLABS_API_KEY is set).
 // With a fallback bridge (Deepgram, when its key is set), a refused connection or an out-of-credit
-// message hands the mic to the fallback for the rest of the session.
+// message hands the mic to the fallback: for 6 h when the key is refused or out of credit (the shared dead
+// registry, so a relaunch skips it too), for retryMs after a network error or 5xx, then ElevenLabs is tried again.
 
 import WebSocket from 'ws';
-import { ENDPOINTS } from './providers.js';
+import { ENDPOINTS, deadAnswer, DEAD_MS } from './providers.js';
 
 // quota_exceeded / auth_error, not insufficient_audio_activity or chunk_size_exceeded (those aren't the key).
 const OUT_OF_CREDIT = /quota|auth_error|unauthori[sz]ed|payment|credit/;
 
 export class ElevenLabsBridge {
-  constructor(apiKey, emit, { silenceSecs = '0.9', fallback = null } = {}) {
+  constructor(apiKey, emit, { silenceSecs = '0.9', fallback = null, dead = null, retryMs = 60e3 } = {}) {
+    this.retryMs = retryMs;
+    this.retryAt = 0;   // skip ElevenLabs until then (this session) after a transient failure
+    this.dead = dead;   // the shared dead-service registry (providers.js Dead)
     this.apiKey = apiKey;
     this.emit = emit;
     this.silenceSecs = silenceSecs;
@@ -26,13 +30,18 @@ export class ElevenLabsBridge {
   }
 
   async open(opts = {}) {
-    if (this.fallen) return this.fallback.open(opts);
+    if (this.dead?.is('elevenlabs') || Date.now() < this.retryAt) {   // 0 round trips to ElevenLabs
+      if (!this.fallback) return { ok: false, error: 'ElevenLabs is out of credit or refused the key' };
+      this.fallen = true;
+      return this.fallback.open(opts);
+    }
+    if (this.fallen) { this.fallen = false; this.fallback.close(); }   // retry time: back to ElevenLabs
     const pending = this.connect(opts);
     const closes = this.closes;   // connect() closes the old socket first; a close after this is the caller giving up
     const r = await pending;
     if (r.ok || !this.fallback) return r;
     if (this.closes !== closes) return { ok: false, error: 'closed while connecting' };   // never open the fallback after a cancel
-    console.warn(`[stt] ElevenLabs unavailable (${r.error}); using the fallback`);
+    this.giveUp(r.error, deadAnswer(Number(/HTTP (\d+)/.exec(r.error)?.[1])));
     this.fallen = true;
     return this.fallback.open(opts);
   }
@@ -58,12 +67,19 @@ export class ElevenLabsBridge {
         else if (this.fallback && OUT_OF_CREDIT.test(`${m.message_type} ${m.error ?? ''}`)) {
           // Closing emits 'deepgram:closed'; the renderer reconnects, and open() goes to the fallback.
           console.warn(`[stt] ElevenLabs: ${m.message_type}; switching to the fallback`);
-          this.fallen = true;
+          this.giveUp(m.message_type, true);
           ws.close();
         } else if (/error|invalid|exceeded|throttled|limited|overflow|exhausted|unauthori[sz]ed|quota/.test(m.message_type ?? '')) this.emit('deepgram:message', JSON.stringify({ type: 'Error', description: `${m.message_type}: ${m.error ?? ''}` }));
       });
       ws.on('close', (code) => { if (this.ws === ws) { this.ws = null; this.emit('deepgram:closed', code); } });
     });
+  }
+
+  // A refused key or no credit is dead for 6 h (registry, or this session without one); anything else retries soon.
+  giveUp(why, dead) {
+    if (dead && this.dead) this.dead.mark('elevenlabs', `STT ${why}`);
+    else this.retryAt = Date.now() + (dead ? DEAD_MS : this.retryMs);
+    console.warn(`[stt] ElevenLabs unavailable (${why}); using the fallback`);
   }
 
   sendAudio(chunk) {

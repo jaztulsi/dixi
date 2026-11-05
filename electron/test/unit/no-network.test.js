@@ -17,3 +17,17 @@ test('gate: loopback still works (local ws/http fixtures)', async () => {
   server.close();
   assert.equal(got, 'ok');
 });
+
+test('gate: NODE_OPTIONS=--import no-network.js is live in Electron\'s main process: a dummy-key ElevenLabs STT and TTS are refused', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { createRequire } = await import('node:module');
+  const path = await import('node:path');
+  const root = path.resolve(import.meta.dirname, '../..');
+  const env = { ...process.env, NODE_OPTIONS: `--import=${path.join(root, 'test/no-network.js')}` };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const r = spawnSync(createRequire(import.meta.url)('electron'), [path.join(root, 'test/fixtures/electron-guard-main.mjs')], { env, encoding: 'utf8', timeout: 15000 });
+  const out = JSON.parse(r.stdout.trim().split('\n').at(-1) || '{}');
+  assert.match(out.probe ?? r.stderr, /no network in unit tests \(192\.0\.2\.1\)/);
+  assert.match(out.stt.error, /no network in unit tests \(api\.elevenlabs\.io\)/);
+  assert.equal(out.tts, 'ENETUNREACH no network in unit tests (api.elevenlabs.io)');
+});
