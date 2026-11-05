@@ -472,7 +472,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (!calls.length) { finished = true; break; }
       const results = [];
       state.said = said;   // what it says it's doing: "sending it" makes an unreadable button ask
-      for (const c of calls) if (!state.refusal) results.push(await perform(c, shot, ctx, sensitive, signal, rec, controls).catch((err) => ({ type: 'tool_result', tool_use_id: c.id, ...(c.name === 'press' ? {} : { toolset_name: 'computer' }), is_error: true, content: String(err.message ?? err).slice(0, 200) })));
+      for (const c of calls) if (!state.refusal) results.push(await perform(c, shot, ctx, sensitive, signal, rec, controls, target).catch((err) => ({ type: 'tool_result', tool_use_id: c.id, ...(c.name === 'press' ? {} : { toolset_name: 'computer' }), is_error: true, content: String(err.message ?? err).slice(0, 200) })));
       if (state.refusal) {   // refused: said here, in code, and the run stops (no second try, no model call)
         say(`I stopped there: ${state.refusal}.`);
         show({ state: 'error', title: task.slice(0, 80), text: `Stopped: ${state.refusal}.`, linger: 12000 });
@@ -499,7 +499,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     act.log({ kind: 'done', text: (last || 'Done.').slice(0, 200), app: ctx.name });
     show({ state: 'done', title: task.slice(0, 80), steps: steps.map((s) => ({ ...s, state: 'done' })).slice(-6), text: last || 'Done.' });
   }
-  async function perform(c, shot, ctx, sensitive, signal, rec = null, controls = []) {
+  async function perform(c, shot, ctx, sensitive, signal, rec = null, controls = [], target = '') {   // target: the app the step is for (keysBlocked)
     const tag = c.name === 'press' ? {} : { toolset_name: 'computer' };   // press is Dixi's own tool, not the toolset's
     const ok = (content = 'OK') => ({ type: 'tool_result', tool_use_id: c.id, ...tag, content });
     const no = (q) => {
