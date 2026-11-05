@@ -45,3 +45,17 @@ test('stt: insufficient_audio_activity is not a credit problem (stays on ElevenL
   b.close();
   s.close();
 });
+
+test('stt: a close while ElevenLabs is still connecting (Esc, mic denied) never opens the fallback', async () => {
+  const s = await server({ verifyClient: (_info, cb) => setTimeout(() => cb(true), 300) });
+  ENDPOINTS.elevenlabs.stt = `ws://127.0.0.1:${s.address().port}`;
+  const dg = fakeDeepgram();
+  const b = new ElevenLabsBridge('key', () => {}, { fallback: dg });
+  const opening = b.open();
+  await new Promise((r) => setTimeout(r, 50));
+  b.close();
+  assert.deepEqual(await opening, { ok: false, error: 'closed while connecting' });
+  s.close();
+  assert.equal(dg.opened, 0);
+  assert.equal(b.fallen, false, 'ElevenLabs is still the first choice next time');
+});
