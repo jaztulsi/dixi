@@ -220,14 +220,14 @@ test('W2: a bare "yes" counts only just after the question; later it takes "Dixi
 
 // ⌥Space is the one stop button: pressed while Dixi is doing anything at all, it stops; otherwise it listens.
 const press = async () => { toMain.length = 0; await keys['Alt+Space'](); await sleep(20); return [...toMain]; };
-test('⌥Space again stops Dixi: while it listens (even after a few seconds), while it works, and while its reply is about to play', mac, async () => {
+test('⌥Space again: while it listens (even after a few seconds) it finishes and sends (A1); while it works, or its reply is about to play, it stops Dixi', mac, async () => {
   const run = await harness;
   fakeMac();
   quiet();
   assert.ok((await press()).includes('everywhere:listen'), 'first press listens');
   await sleep(3200);
   const second = await press();
-  assert.ok(second.includes('everywhere:disarm') && !second.includes('everywhere:listen'), `still listening after 3 s: the second press stops, it doesn't listen again (${second})`);
+  assert.ok(second.includes('everywhere:finish') && !second.includes('everywhere:listen'), `still listening after 3 s: the second press finishes the session, it doesn't listen again (${second})`);
   // Working: a slow agent turn is under way.
   const slow = globalThis.fetch;
   globalThis.fetch = (...a) => sleep(400).then(() => slow(...a));

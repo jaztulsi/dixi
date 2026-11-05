@@ -29,6 +29,8 @@ import { createUndo } from './undo.js';
 import { BUILTIN_TOOLS } from './builtin-tools.js';
 import { grabSelection, pasteText, actOn } from './capture.js';
 import { IRREVERSIBLE, RECURRING } from '../renderer/ui/pagekit.js';
+import { execFile } from 'node:child_process';
+import { pttSession, hotkeyOwner } from './ptt.js';
 import { HERE, HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
 import { openMemory, factsLine, memoryTurn, openProfile, loadProfile, profileLine, masked, FORM, secretField, profileFocused } from './memory.js';
 import * as brief from './brief.js';
@@ -1188,7 +1190,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     say(on ? "Okay. I'll ask before every click and every bit of typing." : "Okay. I'll only ask before things like sending, paying or deleting.");
     show({ state: 'done', title: on ? 'Careful mode on' : 'Careful mode off', text: on ? 'Dixi asks before every step.' : 'Dixi asks before send, pay, buy, delete.', linger: 3500 });
   }
-  const listening = () => prefs.listening !== false;
+  // Always listening (wake word "Dixi") is experimental and OFF by default: otherwise the mic opens only for ⌥Space (A1).
+  const listening = () => prefs.listening === true;
   function setListening(on) {
     prefs.listening = on; savePrefs();
     toMain('everywhere:mic', on);
@@ -1210,7 +1213,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // Is Dixi doing anything at all: listening for you, working, asking, talking (or about to), watching, teaching?
   const active = () => busy() || Boolean(state.armed && Date.now() - state.armed.at < 20000) || isWatching() || Boolean(state.lesson) || Date.now() - (state.saidAt ?? 0) < 5000;
   // The one stop: ⌥Space again, or the menu-bar icon. Stops everything, a watch or a lesson too.
-  function stopAll() { const stopped = kill(); state.armed = null; state.saidAt = 0; toMain('everywhere:disarm'); if (!stopped) show({ state: 'idle' }); }
+  function stopAll() { ptt.end(); const stopped = kill(); state.armed = null; state.saidAt = 0; toMain('everywhere:disarm'); if (!stopped) show({ state: 'idle' }); }
   function kill(all = true) {
     const was = busy();
     jobs.stopAll();
@@ -1226,11 +1229,16 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   function trayTitle() { tray.setTitle(busy() ? '■ Stop Dixi' : state.watching ? '👁 Dixi' : listening() ? '◉ Dixi' : '◌ Dixi'); dashChanged(); }
 
   // ⌥Space: one press = listen (and take the picture now); pressed again while Dixi is doing anything = stop it all.
+  // A1: a ⌥Space session. Esc cancels it, but only while it's open; the renderer reports silence and the cap.
+  const ptt = pttSession({ register: (k, fn) => globalShortcut.register(k, fn), unregister: (k) => globalShortcut.unregister(k), onEsc: () => stopAll() });
+  ipcMain.on('everywhere:session-end', () => { ptt.end(); if (!busy()) show({ state: 'idle' }); });
   async function hotkey() {
+    if (ptt.open && !busy()) { ptt.end(); toMain('everywhere:finish'); return; }   // ⌥Space again: finish and send
     if (active()) return stopAll();
     overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
     show({ state: 'listening', text: listening() ? 'Listening…' : 'Listening, just for this…' });
     toMain('everywhere:listen');
+    if (!listening()) ptt.start();
     micAfter(20000);
     if (screenDenied()) return;
     const [shot, ctx] = await Promise.all([snapshot(), context()]);
@@ -1249,16 +1257,26 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     toMain('everywhere:listen');
     micAfter(20000);
   }
+  const label = (k) => k.replace('Command', '⌘').replace('Alt', '⌥').replace('Control', '⌃').replace('Shift', '⇧').replaceAll('+', '');
+  // A taken key is never silent: one dismissible note per launch, naming the app that probably holds it
+  // (read-only `ps`; the other app is never touched).
+  const taken = (k, envName) => {
+    console.warn(`[everywhere] ${k} is taken; set ${envName}`);
+    execFile('ps', ['-axco', 'comm='], (_err, out) => {
+      const owner = /^Alt\+Space$/.test(k) ? hotkeyOwner(out ?? '') : null;
+      new Notification({ title: `${label(k)} is taken`, body: `${owner ? `${owner} probably uses ${label(k)}` : `${label(k)} is taken by another app`}. Change it there, or set ${envName}.` }).show();
+    });
+  };
   const SEL_KEY = env.DIXI_SELECTION_KEY || 'Alt+Shift+Space';
-  if (!globalShortcut.register(SEL_KEY, selectionKey)) console.warn(`[everywhere] ${SEL_KEY} is taken; set DIXI_SELECTION_KEY`);
+  if (!globalShortcut.register(SEL_KEY, selectionKey)) taken(SEL_KEY, 'DIXI_SELECTION_KEY');
   const KEY = env.DIXI_EVERYWHERE_KEY || 'Alt+Space';
   const MIC_KEY = env.DIXI_MIC_KEY || 'Command+Alt+Space';
-  const label = (k) => k.replace('Command', '⌘').replace('Alt', '⌥').replace('Control', '⌃').replace('Shift', '⇧').replaceAll('+', '');
-  if (!globalShortcut.register(KEY, hotkey)) console.warn(`[everywhere] ${KEY} is taken by another app; set DIXI_EVERYWHERE_KEY`);
-  if (!globalShortcut.register(MIC_KEY, () => setListening(!listening()))) console.warn(`[everywhere] ${MIC_KEY} is taken; set DIXI_MIC_KEY`);
+  if (!globalShortcut.register(KEY, hotkey)) taken(KEY, 'DIXI_EVERYWHERE_KEY');
+  // ⌘⌥Space turns always-listening (experimental) off; with it off, it's the same as ⌥Space (a session), never an open mic.
+  if (!globalShortcut.register(MIC_KEY, () => (listening() ? setListening(false) : hotkey()))) taken(MIC_KEY, 'DIXI_MIC_KEY');
   // The kill key: stops everything from any app (the task, the Claude team, a question, the voice).
   const KILL_KEY = env.DIXI_KILL_KEY || 'Command+Shift+Escape';
-  if (!globalShortcut.register(KILL_KEY, () => kill())) console.warn(`[everywhere] ${KILL_KEY} is taken; set DIXI_KILL_KEY`);
+  if (!globalShortcut.register(KILL_KEY, () => kill())) taken(KILL_KEY, 'DIXI_KILL_KEY');
   powerMonitor.on('lock-screen', () => stopWatch());   // no watching a locked Mac
 
   // ---- first run: the permissions one at a time, in plain words (welcome.js); "Set up Dixi…" reopens it ----
