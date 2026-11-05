@@ -165,6 +165,16 @@ test('no questions: a risky step goes ahead only when the user asked for it, els
   assert.equal(userAsked(keyRisk('cmd+return', el('AXTextArea', ['Message body'])), said), true);   // ⌘-Enter "usually sends"
   assert.equal(userAsked(clickRisk(el('AXButton', ['Buy now'])), 'buy the blue one now'), true);
   assert.equal(userAsked(clickRisk(el('AXButton', ['Move to Trash'])), 'move it to the trash'), true);
+  // Verb families (Nov 5): the user's own verb, in any of its everyday words, names the button.
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Send'])), 'email Alex the photos'), true);
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Post'])), 'reply to Sam saying thanks'), true);
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Delete'])), 'remove that old file'), true);
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Move to Trash'])), 'trash it'), true);
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Delete Account'])), 'remove that photo'), false, 'the label\'s other words still count');
+  assert.equal(userAsked('Press “Place order” on a money page?', 'order the blue one'), true);
+  assert.equal(userAsked('Press “Pay now” on a money page?', 'buy it'), true);
+  assert.equal(userAsked('Press “Place order” on a money page?', 'check out the cart'), false, '"check out" alone never pays');
+  assert.equal(userAsked(clickRisk(el('AXButton', ['Delete'])), 'send it to Alex'), false, 'one family never stands for another');
   for (const [label, words] of [['Open Anyway', 'open Safari'], ['Always Allow', 'allow notifications'], ['Install', 'open the app'], ['Buy now', 'show me the price'],
     ['Empty Trash', 'open the trash'], ['Delete', 'rename the file'], ['Allow', 'turn on the camera'], ['Grant Access', 'open Photos']])
     assert.equal(userAsked(clickRisk(el('AXButton', [label])), words), false, label);
