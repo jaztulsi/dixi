@@ -285,6 +285,9 @@ test('never asks "which one?" (Nov 5): the first result is taken and said in one
   assert.deepEqual(heard, ['the other one', 'open the music site'], 'the same request runs again');
   assert.equal(await r.v.choose('Which one: Bykkar Music or EJ Music?', names), 'EJ Music');
   assert.equal(r.spoken.at(-1), 'Going with EJ Music instead.');
+  assert.equal(await r.v.choose('Open EJ Music?', ['EJ Music']), 'EJ Music', 'one option: taken, not asked');
+  assert.equal(r.v.clarify, null);
+  assert.equal(r.spoken.at(-1), 'Going with EJ Music.');
   assert.ok(r.spoken.every((t) => !t.includes('?')));
   assert.match((await import('node:fs')).readFileSync(new URL('../../src/renderer/app.js', import.meta.url), 'utf8'), /ask: \(q, options\) => voice\.choose\(q, options\)/, "the executor's choices go through choose()");
 });
