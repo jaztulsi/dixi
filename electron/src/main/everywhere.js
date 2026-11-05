@@ -568,8 +568,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // A click lands only on a control read back in the front app (its sheets, dialogs and menus too) or on a
       // menu bar extra; never on a blind point, and never on a system security prompt. Every refusal is logged,
       // and these come before any risk question, so nothing is asked and then refused. Front app unknown
-      // (pid 0) = every point is someone else's: it fails closed.
-      const front = await input.frontApp(), theirs = Boolean(el) && el.pid !== front.pid;
+      // (pid 0, even when AX says 0 too) = every point is someone else's: it fails closed.
+      const front = await input.frontApp(), theirs = Boolean(el) && (!front.pid || el.pid !== front.pid);
       const owner = !el ? '' : theirs ? await input.procName(el.pid) : `${front.name} ${front.bundle}`;
       const deny = (text, r) => { act.log({ kind: 'refused', text, app: front.name, role: el?.role, label: el?.labels?.[0] }); return r; };
       if (SYSTEM_PROMPT.test(owner)) return deny('a system security prompt', no('That is a system security prompt. The user answers it themselves'));
