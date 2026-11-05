@@ -135,24 +135,68 @@ export class VoiceAgent {
   // ---- lifecycle ----
   async start() {
     if (this.isListening || this.isStarting) return;
+    // Push-to-talk (A1): no microphone and no speech socket outside a ⌥Space session, unless the experimental
+    // always-listening wake word is on. Idle = zero audio sent anywhere.
+    if (!this.session && !this.requireWakeWord) return;
     this.isStarting = true;
     this.stopped = false;
     try {
-      const opened = await this.deepgram.open({ keyterms: this.keyterms() });
-      if (!opened.ok) throw new Error(opened.error);
-      // Paused while connecting: stay paused (the mic never opens).
-      if (this.stopped) { await this.deepgram.close(); return; }
-      await this.mic.start((chunk) => this.deepgram.sendAudio(chunk));
+      // The mic opens at once (the key press), alongside the socket; what it hears before the socket is
+      // open is held and sent after, so the first word isn't clipped. ~4 s at most (80 ms frames).
+      const held = [];
+      let open = false;
+      const send = (chunk) => { if (open) this.deepgram.sendAudio(chunk); else if (held.length < 50) held.push(chunk); };
+      // Both legs settle before any cleanup: closing a socket that's still connecting (the mic was denied
+      // mid-connect) would let the provider fall back and open another one after, live at idle.
+      const [o, m] = await Promise.allSettled([this.deepgram.open({ keyterms: this.keyterms() }), this.mic.start(send)]);
+      if (m.status === 'rejected') throw m.reason;
+      if (o.status === 'rejected') throw o.reason;
+      if (!o.value?.ok) throw new Error(o.value?.error ?? 'no speech connection');
+      // Paused while connecting: stay paused (the mic closes again, nothing is sent).
       if (this.stopped) { this.mic.stop(); await this.deepgram.close(); return; }
+      open = true;
+      for (const chunk of held.splice(0)) this.deepgram.sendAudio(chunk);
       this.set({ isListening: true, statusLine: '' });
     } catch (err) {
+      this.mic?.stop();
       await this.deepgram.close();
       this.set({ statusLine: `Voice unavailable: ${err.message}` });
       throw err;
     } finally { this.isStarting = false; }
   }
   async stop() { this.stopped = true; this.isListening = false; this.mic?.stop(); await this.deepgram?.close(); this.set({ liveTranscript: '', statusLine: '' }); }
-  async toggle() { return this.isListening ? this.stop() : this.start().catch(() => {}); }
+  async toggle() {
+    if (this.session) return this.endSession();
+    if (this.isListening) return this.stop();
+    return this.requireWakeWord ? this.start().catch(() => {}) : this.startSession();
+  }
+
+  // ---- push-to-talk session (A1): ⌥Space opens it, ⌥Space again finishes and sends, Esc cancels ----
+  // A forgotten session can't keep streaming: 60 s without words ends it, and so does the hard cap.
+  async startSession({ silenceMS = 60000, maxMS = 180000 } = {}) {
+    if (this.session) return;
+    const s = this.session = { at: Date.now(), heard: Date.now() };
+    this.sessionTimer = setInterval(() => {
+      if (this.session === s && (Date.now() - s.heard > silenceMS || Date.now() - s.at > maxMS)) this.endSession();
+    }, 1000);
+    await this.start().catch(() => {});
+    if (this.session === s && !this.isListening && !this.isStarting) this.endSession({ cancel: true });   // no mic or no socket
+  }
+  /** Close the mic now; the words still being transcribed get up to `waitMS` to arrive, then run. */
+  async endSession({ cancel = false, waitMS = 1500 } = {}) {
+    const s = this.session;
+    if (!s) return;
+    this.session = null;
+    clearInterval(this.sessionTimer);
+    this.mic?.stop();
+    const open = this.heard && !this.turnsDone.has(this.heard.turn) ? this.heard : null;
+    if (open && !cancel) {
+      for (const until = Date.now() + waitMS; Date.now() < until && !this.turnsDone.has(open.turn);) await new Promise((r) => setTimeout(r, 50));
+      if (!this.turnsDone.has(open.turn)) this.handleTurn({ event: 'EndOfTurn', transcript: this.heard.turn === open.turn ? this.heard.text : open.text, turn_index: open.turn });
+    }
+    await this.stop();
+    this.onSessionEnd?.();   // main releases Esc and clears the panel
+  }
   async handleClosed() {
     if (!this.isListening) return;
     this.isListening = false;
@@ -169,7 +213,8 @@ export class VoiceAgent {
     for (const t of this.turns.values()) { clearTimeout(t.timer); clearTimeout(t.specTimer); }
     this.turns.clear();
     this.set({ plan: [], statusLine: '', liveTranscript: '', answer: null, isAwake: false, awakeUntil: 0 });
-    if (this.isListening) { await this.stop(); await this.start().catch(() => {}); }
+    if (this.session) await this.endSession({ cancel: true });   // Esc cancels a ⌥Space session: the mic closes
+    else if (this.isListening) { await this.stop(); await this.start().catch(() => {}); }
   }
 
   /** Names to bias recognition toward: the wake word, sites you use, open tab titles. */
@@ -203,7 +248,8 @@ export class VoiceAgent {
 
   /** The command part of what was heard, or null if it wasn't for Dixi. Wake word alone → listen next. */
   addressed(text) {
-    if (!this.requireWakeWord) return text;
+    // (Never required in a ⌥Space session: a leading "Dixi" / "Dixie" / "Dixy" is just dropped.)
+    if (!this.requireWakeWord || this.session) return afterWakeWord(text) ?? text;
     const rest = afterWakeWord(text);
     if (rest != null) {
       this.isAwake = true;
@@ -241,6 +287,8 @@ export class VoiceAgent {
     if (json.event === 'TurnResumed') return;
     if (!text || this.turnsDone.has(turn)) return;
     this.lastTurn = turn;
+    this.heard = { turn, text };   // what a session's second ⌥Space sends if the final transcript is late
+    if (this.session) this.session.heard = Date.now();
     // Mostly another language (people talking nearby; Dixi listens for English): not for Dixi.
     if ((text.match(/[^\u0000-\u024f\s\d\p{P}\p{S}]/gu) ?? []).length > text.replace(/\s/g, '').length * 0.3) return;
     const final = json.event === 'EndOfTurn';
@@ -478,7 +526,7 @@ export class VoiceAgent {
       this.trace('interpret', { text, source: parsed.source, ms: parsed.ms, intent: parsed.intent, errors: parsed.errors, waitMs: Math.round(performance.now() - t0) });
       const intent = parsed.intent;
       if (!intent) return;
-      if (intent.clarify && !intent.steps.length) { this.say(intent.clarify); this.set({ statusLine: intent.clarify }); return; }
+      if (intent.clarify && !intent.steps.length) { this.say("Sorry, I didn't catch that."); this.set({ statusLine: "Didn't catch that" }); return; }   // never a question back (Nov 5)
       // Steps an earlier hearing of this sentence already started aren't done twice: a shorter version
       // ("go to Amazon" → "go to Amazon and search…"), or the same words written differently in the
       // final transcript ("256 gigabytes" while talking, "256 GB" at the end). Clauses run in order, so

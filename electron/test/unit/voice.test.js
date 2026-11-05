@@ -262,3 +262,12 @@ test('talking about Dixi is not talking to Dixi; a protest stops it', async () =
   r.turn(1, [['EndOfTurn', 'No. No. Not not that. Not that. Oh my god. Why did Dixi activate now?']]);
   assert.equal(stops, 1);
 });
+
+test('never asks (Nov 5): a parse that comes back as a question with no steps is never said as a question', async () => {
+  const r = rig({ reply: JSON.stringify({ clarify: 'Which Zentora do you mean?', steps: [] }) });
+  r.turn(1, [['Update', 'open zen'], ['EndOfTurn', 'Open zen.']]);
+  await sleep(1000);
+  assert.ok(r.spoken.length, 'it said something');
+  assert.ok(r.spoken.every((t) => !t.includes('?')), JSON.stringify(r.spoken));
+  assert.match((await import('node:fs')).readFileSync(new URL('../../src/renderer/core/interpret.js', import.meta.url), 'utf8'), /"clarify": always ""/);
+});

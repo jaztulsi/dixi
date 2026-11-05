@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('dixi', {
     confirmReply: (id, ok) => ipcRenderer.send('everywhere:confirm-reply', id, ok),
     onListen: (fn) => ipcRenderer.on('everywhere:listen', () => fn()),
     onDisarm: (fn) => ipcRenderer.on('everywhere:disarm', () => fn()),
+    onFinish: (fn) => ipcRenderer.on('everywhere:finish', () => fn()),
+    sessionEnded: () => ipcRenderer.send('everywhere:session-end'),
     onSay: (fn) => ipcRenderer.on('everywhere:say', (_e, text) => fn(text)),
     onConfirm: (fn) => ipcRenderer.on('everywhere:confirm', (_e, c) => fn(c)),
     onConfirmDone: (fn) => ipcRenderer.on('everywhere:confirm-done', (_e, id) => fn(id)),
