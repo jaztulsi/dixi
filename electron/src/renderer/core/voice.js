@@ -52,6 +52,8 @@ export function afterWakeWord(text) {
 }
 
 const STOP = /^(?:stop|cancel|never ?mind|stop (?:it|that|everything)|cancel (?:it|that))[.!]?$/i;
+// Right after Dixi chose between results: take the next one instead.
+const OTHER = /^(?:no[,.]? )?(?:(?:the )?(?:next|other)(?: one)?|not that one)[.!]?$/i;
 // "No, no, not that! Oh my god, why did Dixi do that?": nothing but a protest. It stops Dixi, never runs.
 const PROTEST_BIT = String.raw`(?:no+|nope|not(?: (?:that|this|now|yet|again))?|wait|stop|don'?t(?: do (?:that|it|this))?|oh (?:my )?(?:god|gosh|no)|what are you doing|why (?:did|are|is) (?:you|dixi)[^.!?]*)`;
 const PROTEST = new RegExp(String.raw`^${PROTEST_BIT}(?:[\s,.!?]+${PROTEST_BIT})*[\s,.!?]*$`, 'i');
@@ -514,6 +516,12 @@ export class VoiceAgent {
   handleText(text, { entry = null, turn = null, named = true } = {}) {
     if (this.clarify) { this.answerClarify(text, named); return Promise.resolve(); }
     if (STOP.test(text)) { this.cancelAll(); return Promise.resolve(); }
+    if (OTHER.test(text.trim()) && this.chosen?.text && Date.now() - this.chosen.at < 60000) {
+      const { options, pick, text: again } = this.chosen;
+      this.chosen.want = options[(options.indexOf(pick) + 1) % options.length];
+      return this.handleText(again, { entry, turn, named });   // the same request, now with the next choice
+    }
+    this.lastText = text;
     const gen = this.generation;
     const signal = this.ctrl.signal;
     const t0 = performance.now();
@@ -579,6 +587,17 @@ export class VoiceAgent {
       this.set({ statusLine: question });
       this.say(question);
     });
+  }
+  // Never a question back (Nov 5): a choice between results takes the first one and says which, in one
+  // short line; "next" / "the other one" just after runs the same request again with the next choice.
+  choose(question, options = []) {
+    if (options.length < 2) return this.ask(question, options);
+    const c = this.chosen, again = Boolean(c?.want) && c.options.join('\n') === options.join('\n');
+    const pick = again ? c.want : options[0];
+    this.chosen = { options, pick, text: this.lastText, at: Date.now() };
+    this.say(again ? `Going with ${pick} instead.` : `Going with the first one, ${pick}.`);
+    this.set({ statusLine: pick });
+    return Promise.resolve(pick);
   }
   async confirmAction(question) {
     this.confirmQ = { question };
