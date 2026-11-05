@@ -42,6 +42,17 @@ export function isEcho(heard, said) {
   for (const w of h) { const cur = [0]; for (let j = 1; j <= s.length; j++) cur[j] = w === s[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]); prev = cur; }
   return prev[s.length] / h.length >= 0.75;
 }
+/** "Added it to your cart at Zentora. Go home.": Dixi's own line (or its tail) came back joined to your
+ *  words. What follows the echo, or null when nothing does. The echo must end on one of the line's last
+ *  two words and be 3+ words, so a request that merely starts with a word Dixi said is kept whole. */
+export function afterEcho(heard, said) {
+  const words = String(heard).split(/\s+/).filter(Boolean), ends = new Set(tokens(said).slice(-2));
+  for (let k = words.length - 1; k >= 1; k--) {
+    const head = words.slice(0, k).join(' ');
+    if (ends.has(tokens(words[k - 1]).at(-1)) && tokens(head).length >= 3 && isEcho(head, said)) return words.slice(k).join(' ');
+  }
+  return null;
+}
 export function afterWakeWord(text) {
   const at = wakeEnd(text);
   if (at < 0) return null;
@@ -245,7 +256,20 @@ export class VoiceAgent {
     // Just one of the open question's choices ("EJ Music", "the EJ one") is you answering, even in its
     // words. Not for yes/no questions: the tail "do it for you" of "Want me to do it for you?" mustn't confirm itself.
     if (c && c.options[0] !== 'yes' && c.options.some((o) => { const ow = tokens(o); return t.some((w) => ow.includes(w)) && t.every((w) => ow.includes(w) || ORD_FILLER.has(w) || w in ORD); })) return false;
-    return tokens(text).length >= 2 && [sp.lastText, ...(sp.recentText ?? [])].some((s) => s && isEcho(text, s));
+    // One word is an echo only just after it stopped (its last word arriving late: the echo tail is short now).
+    const one = end != null && Date.now() - end < 1500;
+    return (tokens(text).length >= 2 || one) && [sp.lastText, ...(sp.recentText ?? [])].some((s) => s && isEcho(text, s));
+  }
+
+  /** Your words in a turn that began with Dixi's own (said in the last 20 s): the echo is cut, not the turn. */
+  ownWords(text) {
+    const sp = this.speaker, end = sp?.spans?.at(-1)?.end;
+    if (!sp?.lastText || (end != null && Date.now() - end > 20000)) return text;
+    for (const s of [sp.lastText, ...(sp.recentText ?? [])]) {
+      const r = s ? afterEcho(text, s) : null, t = r?.trim();
+      if (t && (tokens(t).length >= 2 || STOP.test(t) || OTHER.test(t) || afterWakeWord(t) != null)) return t;   // one stray word is its tail
+    }
+    return text;
   }
 
   /** The command part of what was heard, or null if it wasn't for Dixi. Wake word alone → listen next. */
@@ -265,7 +289,7 @@ export class VoiceAgent {
   }
 
   handleTurn(json) {
-    const text = (json.transcript ?? '').trim();
+    const text = this.ownWords((json.transcript ?? '').trim());
     const turn = json.turn_index ?? 0;
     // Which turns began while Dixi was still talking: a yes to "Press Send?" must start after the question.
     if (!this.bornTalking.has(turn)) { if (this.bornTalking.size > 50) this.bornTalking.clear(); this.bornTalking.set(turn, Boolean(this.speaker?.isBusy?.())); }

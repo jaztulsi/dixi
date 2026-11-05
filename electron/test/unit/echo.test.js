@@ -101,3 +101,27 @@ test("a question's own echo doesn't answer it, but a short reply that uses its w
   assert.equal(await yes, true);
   assert.deepEqual(r.sent, []);
 });
+
+test('not deaf after Dixi talks: one word 300 ms after it stops runs; its own last word arriving late does not', async () => {
+  const speaker = new Speaker({ synth: null, tts: null });
+  speaker.say(ANSWER);
+  await sleep(300);   // past the 250 ms echo tail (it was 1.2 s: this "Back." was dropped)
+  const r = rig(speaker, { wake: false, everywhere: false });
+  r.hear('right.');   // the tail of its own line, late
+  r.hear('Back.');
+  await sleep(150);
+  assert.deepEqual(r.handled, ['Back']);
+});
+
+test('your words joined to its echo in one turn are kept; only the echo is cut (and "Dixi" after it still wakes)', async () => {
+  const speaker = await spoke([EARLIER, ANSWER]);
+  const b = rig(speaker, { wake: false, everywhere: false });
+  b.hear(`${ANSWER} Go home.`);   // 92% its own words: the whole turn used to be dropped
+  b.hear("I'll tell you when they're done. Open my email.");
+  await sleep(150);
+  assert.deepEqual(b.handled, ['Go home', 'Open my email']);
+  const w = rig(speaker, { wake: true, everywhere: false });
+  w.hear(`${ANSWER} Dixi, scroll down.`);
+  await sleep(150);
+  assert.deepEqual(w.handled, ['scroll down']);
+});
