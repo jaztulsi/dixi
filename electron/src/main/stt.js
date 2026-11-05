@@ -22,12 +22,16 @@ export class ElevenLabsBridge {
     this.fallen = false;
     this.ws = null;
     this.turn = 1;
+    this.closes = 0;
   }
 
   async open(opts = {}) {
     if (this.fallen) return this.fallback.open(opts);
-    const r = await this.connect(opts);
+    const pending = this.connect(opts);
+    const closes = this.closes;   // connect() closes the old socket first; a close after this is the caller giving up
+    const r = await pending;
     if (r.ok || !this.fallback) return r;
+    if (this.closes !== closes) return { ok: false, error: 'closed while connecting' };   // never open the fallback after a cancel
     console.warn(`[stt] ElevenLabs unavailable (${r.error}); using the fallback`);
     this.fallen = true;
     return this.fallback.open(opts);
@@ -72,6 +76,7 @@ export class ElevenLabsBridge {
   sendControl(message) { if (this.fallen) this.fallback.sendControl(message); }
 
   close() {
+    this.closes++;
     if (this.fallen) this.fallback.close();
     const ws = this.ws;
     this.ws = null;
