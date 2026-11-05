@@ -59,3 +59,21 @@ test('stt: a close while ElevenLabs is still connecting (Esc, mic denied) never 
   assert.equal(dg.opened, 0);
   assert.equal(b.fallen, false, 'ElevenLabs is still the first choice next time');
 });
+
+test('stt: a 402 marks ElevenLabs dead in the registry file; after a relaunch the mic goes straight to Deepgram (0 EL round trips)', async () => {
+  const { Dead } = await import('../../src/main/providers.js');
+  const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-dead-')), 'dead-services.json');
+  let tries = 0;
+  const s = await server({ verifyClient: (_info, cb) => { tries++; cb(false, 402); } });
+  ENDPOINTS.elevenlabs.stt = `ws://127.0.0.1:${s.address().port}`;
+  const dg = fakeDeepgram();
+  assert.deepEqual(await new ElevenLabsBridge('key', () => {}, { fallback: dg, dead: new Dead(file) }).open(), { ok: true });
+  assert.equal(tries, 1);
+  const relaunch = new ElevenLabsBridge('key', () => {}, { fallback: dg, dead: new Dead(file) });   // a new process reads the file
+  assert.deepEqual(await relaunch.open(), { ok: true });
+  assert.deepEqual(await relaunch.open(), { ok: true });
+  assert.equal(tries, 1, 'a dead ElevenLabs is never dialed again');
+  assert.equal(dg.opened, 3);
+  s.close();
+});

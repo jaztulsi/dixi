@@ -136,6 +136,25 @@ export function keyStatus(config) {
   return Object.fromEntries(Object.keys(ENDPOINTS).map((p) => [p, Boolean(config.keys[p]) || !ENDPOINTS[p].key]));
 }
 
+// ---- dead services: a refused key or no credit marks a service dead for 6 h, kept in a file so a relaunch skips
+// it too. Callers check before they call, so a dead service costs 0 round trips; after 6 h it is tried again. ----
+export const DEAD_MS = 6 * 3600e3;
+/** A 401/402 or a quota/credit answer: retrying soon won't help. A 429 or a 5xx isn't one (those pass). */
+export const deadAnswer = (status, text = '') => status === 401 || status === 402 || /quota|credit|payment/i.test(text);
+export class Dead {
+  constructor(file, { ms = DEAD_MS, now = Date.now } = {}) {
+    this.file = file; this.ms = ms; this.now = now;
+    try { this.until = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { this.until = {}; }
+  }
+  is(name) { return (this.until[name] ?? 0) > this.now(); }
+  mark(name, why = '') {
+    if (this.is(name)) return;
+    this.until[name] = this.now() + this.ms;
+    console.warn(`[dead] ${name} until ${new Date(this.until[name]).toLocaleTimeString()}: ${String(why).slice(0, 120)}`);
+    try { fs.mkdirSync(path.dirname(this.file), { recursive: true }); fs.writeFileSync(this.file, JSON.stringify(this.until)); } catch {}
+  }
+}
+
 // ---- spend meter (stops calls past the cap: overall, and per provider with DIXI_CAP_<PROVIDER>) ----
 // One ledger file for the app and every test run (re-read before each write), so caps hold across both.
 export class Spend {
