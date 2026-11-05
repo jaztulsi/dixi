@@ -63,14 +63,29 @@ export const riskyLabel = (s) => Boolean(s) && (IRREVERSIBLE.test(s.trim()) || R
 const RISKY_ALL = new RegExp(`${IRREVERSIBLE.source}|${RECURRING.source}|${DESKTOP_RISKY.source}`, 'gi');
 const FILLER = new Set(['the', 'a', 'an', 'now', 'this', 'it', 'to', 'my', 'your', 'of', 'in', 'on', 'and', 'or']);
 const stems = (s) => (String(s ?? '').toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => !FILLER.has(w)).map((w) => w.replace(/(ing|ed|es|s|e)$/, ''));
+// Verb families: "text Alex" / "reply" mean Send or Post; "remove it" / "trash it" mean Delete or Move to
+// Trash; "buy", "order", "pay" mean Buy now, Place order, Pay, Checkout. "Check out" alone never means pay,
+// so a money page's buttons still need one of those words. [the user's word stems, the label's word stems]
+const FAMILY = [
+  ['send', /^(send|text|messag|reply|repli|email|e-mail|post|submit|submitt|dm)$/, /^(send|reply|repli|post|submit)$/],
+  ['delet', /^(delet|remov|trash|eras|discard)$/, /^(delet|remov|trash|eras|discard)$/],
+  ['buy', /^(buy|bought|order|pay|paid|purchas)$/, /^(buy|order|pay|purchas|checkout)$/],
+];
+const family = (w, side) => FAMILY.find((f) => f[side].test(w))?.[0] ?? w;
+const LABEL_FILLER = new Set(stems('move place complete confirm proceed continue with securely selected'));   // "Move to Trash", "Place order"
 /** The question Dixi would have asked (“Label” or a reason like "It may send or submit") → did the user's words ask for it? */
 export function userAsked(question, said) {
-  const mine = new Set(stems(said));
-  if (/\b(?:send|text|message|reply|email|post|submit)\b/i.test(said)) mine.add('send').add('submit');   // "text Alex…", "reply…": they mean send
+  const mine = new Set(stems(said).map((w) => family(w, 1)));
   const q = String(question ?? ''), label = q.match(/“([^”]+)”/)?.[1];
   const risky = [...(label ?? '').matchAll(RISKY_ALL)].map((m) => m[0]);
-  const need = label ? (GET.test(label) ? ['get', 'install', 'download'] : risky.length ? risky : [label]) : (q.match(/\b(send|submit|quit|delete)/gi) ?? []);   // no label: the reason's verbs
-  return need.some((p) => { const w = stems(p); return w.length > 0 && w.every((x) => mine.has(x)); });
+  // A label that reaches past the one thing ("Delete Account", "Delete All", "Erase permanently") needs all its words said.
+  const wide = /\b(account|all|everything|permanently|forever)\b/i.test(label ?? '');
+  const need = label ? (GET.test(label) ? ['get', 'install', 'download'] : risky.length && !wide ? risky : [label]) : (q.match(/\b(send|submit|quit|delete)/gi) ?? []);   // no label: the reason's verbs
+  return need.some((p) => {
+    const w = stems(p).map((x) => family(x, 2));
+    const core = w.some((x) => FAMILY.some((f) => f[0] === x)) ? w.filter((x) => !LABEL_FILLER.has(x)) : w;   // filler drops only around a family verb
+    return core.length > 0 && core.every((x) => mine.has(x));
+  });
 }
 const CONTROL = /^AX(Button|Link|MenuItem|MenuButton|PopUpButton|MenuBarItem|CheckBox|RadioButton|DisclosureTriangle)$/;
 /** Why a click must be approved first, or null. A risky name always asks. Something unreadable or
@@ -575,8 +590,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // A click lands only on a control read back in the front app (its sheets, dialogs and menus too) or on a
       // menu bar extra; never on a blind point, and never on a system security prompt. Every refusal is logged,
       // and these come before any risk question, so nothing is asked and then refused. Front app unknown
-      // (pid 0) = every point is someone else's: it fails closed.
-      const front = await input.frontApp(), theirs = Boolean(el) && el.pid !== front.pid;
+      // (pid 0, even when AX says 0 too) = every point is someone else's: it fails closed.
+      const front = await input.frontApp(), theirs = Boolean(el) && (!front.pid || el.pid !== front.pid);
       const owner = !el ? '' : theirs ? await input.procName(el.pid) : `${front.name} ${front.bundle}`;
       const deny = (text, r) => { act.log({ kind: 'refused', text, app: front.name, role: el?.role, label: el?.labels?.[0] }); return r; };
       if (SYSTEM_PROMPT.test(owner)) return deny('a system security prompt', no('That is a system security prompt. The user answers it themselves'));

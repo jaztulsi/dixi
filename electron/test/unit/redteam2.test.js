@@ -276,7 +276,9 @@ test('clicks: the front app and menu extras yes; another window or a system prom
   assert.ok(!done.some(([w]) => w === 'click'), 'front app unknown: still never a system prompt');
   await agentDoes(click, { front: 0, at: { role: 'AXButton', labels: ['OK'], pid: 96 }, owner: '/Applications/TextEdit.app/Contents/MacOS/TextEdit' }, 'click ok');
   assert.ok(!done.some(([w]) => w === 'click'), "front app unknown: an ordinary window's button isn't clicked either");
-  assert.equal(refusals(), 4, 'and each refusal logged');
+  await agentDoes(click, { front: 0, at: { role: 'AXButton', labels: ['Allow'], pid: 0 } }, 'click allow');
+  assert.ok(!done.some(([w]) => w === 'click'), 'both pids 0 (nothing known): not clicked');
+  assert.equal(refusals(), 5, 'and each refusal logged');
   assert.equal(asked.length, 0, 'nothing was asked');
 });
 
