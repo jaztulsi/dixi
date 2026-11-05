@@ -94,7 +94,7 @@ const appActions = {
 const executor = new Executor({
   tabs, llm, tiers: config.tiers, speaker, catalog, webSearch: config.webSearch, trace, app: appActions, registry,
   resolve: async (q) => { const r = await window.dixi.resolve(q); registry.refresh(); return r; },
-  ask: (q, options) => voice.ask(q, options), confirm: (q) => voice.confirmAction(q), onAnswer: (a) => voice.set({ answer: a }),
+  ask: (q, options) => voice.choose(q, options), confirm: (q) => voice.confirmAction(q), onAnswer: (a) => voice.set({ answer: a }),
 });
 const agent = new BrowserAgent({ tabs, llm, executor, onChange: () => render() });
 executor.agent = agent;

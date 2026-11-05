@@ -271,3 +271,20 @@ test('never asks (Nov 5): a parse that comes back as a question with no steps is
   assert.ok(r.spoken.every((t) => !t.includes('?')), JSON.stringify(r.spoken));
   assert.match((await import('node:fs')).readFileSync(new URL('../../src/renderer/core/interpret.js', import.meta.url), 'utf8'), /"clarify": always ""/);
 });
+
+test('never asks "which one?" (Nov 5): the first result is taken and said in one line; "the other one" switches', async () => {
+  const r = rig();
+  const names = ['Bykkar Music', 'EJ Music'];
+  r.v.lastText = 'open the music site';
+  assert.equal(await r.v.choose('Which one: Bykkar Music or EJ Music?', names), 'Bykkar Music');
+  assert.equal(r.v.clarify, null, 'no question is left open');
+  assert.deepEqual(r.spoken, ['Going with the first one, Bykkar Music.']);
+  const heard = [], handle = r.v.handleText.bind(r.v);
+  r.v.handleText = (t, o) => { heard.push(t); return handle(t, o); };
+  r.v.handleText('the other one');
+  assert.deepEqual(heard, ['the other one', 'open the music site'], 'the same request runs again');
+  assert.equal(await r.v.choose('Which one: Bykkar Music or EJ Music?', names), 'EJ Music');
+  assert.equal(r.spoken.at(-1), 'Going with EJ Music instead.');
+  assert.ok(r.spoken.every((t) => !t.includes('?')));
+  assert.match((await import('node:fs')).readFileSync(new URL('../../src/renderer/app.js', import.meta.url), 'utf8'), /ask: \(q, options\) => voice\.choose\(q, options\)/, "the executor's choices go through choose()");
+});
