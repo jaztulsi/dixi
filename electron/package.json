@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/unit/*.test.js",
+    "test": "node --test --test-timeout=20000 --import ./test/no-network.js test/unit/*.test.js",
     "test:e2e": "playwright test",
     "live": "node eval/live.js",
     "demo": "node eval/demo.js",
