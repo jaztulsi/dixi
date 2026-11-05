@@ -307,7 +307,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     ui('ew:state', data);
     if (data.state === 'done' || data.state === 'error' || data.state === 'idle') {
       clearTimeout(state.hideTimer);
-      state.hideTimer = setTimeout(() => { ui('ew:state', { state: 'idle' }); setTimeout(() => state.overlay?.hide(), 500); }, data.state === 'idle' ? 0 : data.linger ?? 9000);
+      // unref: a lingering card never keeps a plain-Node run (the unit tests) alive; Electron's loop runs regardless.
+      state.hideTimer = setTimeout(() => { ui('ew:state', { state: 'idle' }); setTimeout(() => state.overlay?.hide(), 500).unref?.(); }, data.state === 'idle' ? 0 : data.linger ?? 9000);
+      state.hideTimer.unref?.();
     }
   };
 
