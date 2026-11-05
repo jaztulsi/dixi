@@ -671,7 +671,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // ---- "click Send": found by its name in the Accessibility tree and pressed, with no picture and no model
   // (well under a second). The same gate as the agent's clicks. Anything unclear (no match, several,
   // careful mode, a guarded app, a scam warning) goes to the agent instead, which looks at the screen. ----
-  async function pressNamed(name, signal) {
+  async function pressNamed(name, said, signal) {
     if (!systemPreferences.isTrustedAccessibilityClient(false)) return false;
     const ctx = await context();
     if (prefs.careful || isGuarded(ctx) || guardian.held(state.guard, ctx) || guardian.checkContext(ctx).length) return false;
@@ -679,7 +679,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (hits.length !== 1 || signal.aborted) return false;
     const el = hits[0], shown = quoteLabel(el.labels[0] ?? name);
     const why = clickRisk(el) || (isMoney(ctx) && `Press “${shown}” on a money page?`);
-    if (why && !(await approve(why))) { say("Okay, I didn't press it."); show({ state: 'done', title: 'Not pressed', text: shown, linger: 2500 }); return true; }
+    if (why && !userAsked(why, said)) {   // never a question (careful mode went to the agent above): the user's words decide
+      act.log({ kind: 'refused', text: why, app: ctx.name, role: el.role, label: el.labels[0] });
+      say(`You didn't ask me to press “${shown}”, so I didn't.`); show({ state: 'done', title: 'Not pressed', text: shown, linger: 2500 }); return true;
+    }
     if (signal.aborted) return false;
     let pressed = await input.pressControl(el.path, el.labels);
     if (pressed === 'nopress' && el.frame) { await input.click({ x: Math.round(el.frame.x + el.frame.w / 2), y: Math.round(el.frame.y + el.frame.h / 2) }); pressed = 'ok'; }
@@ -1005,7 +1008,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (doIt) text = `${prev.q} (You explained: ${prev.a}) Now do it for me.`;
       const mode = forced === 'hive' ? 'hive' : doIt ? 'agent' : modeOf(text);
       if (mode === 'hive') return await hive(text, signal);
-      if (mode === 'agent' && pressTarget(t) && (await pressNamed(pressTarget(t), signal))) return;
+      if (mode === 'agent' && pressTarget(t) && (await pressNamed(pressTarget(t), t, signal))) return;
       // The time, sums, conversions, days until…, the weather (quick.js): no picture.
       if (mode === 'agent' || mode === 'talk') {
         const qa = await quickAnswer(t, { webAnswer });
