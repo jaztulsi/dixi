@@ -238,3 +238,14 @@ test('"play some music": Music carries on, else shuffles your library; an empty 
   assert.equal((await runDesktop(desktopIntent('play some music'), spot.deps)).say, 'Playing.', 'Spotify open: it carries on there');
   assert.ok(spot.calls.some((c) => c.includes('tell application "Spotify" to play')));
 });
+
+test('search on Apple Music: opens its search page, and says so only once results for the words show', async () => {
+  assert.deepEqual(desktopIntent('search lo-fi beats on Apple Music'), { verb: 'media', op: 'search', q: 'lo-fi beats', app: 'Music' });
+  assert.equal(desktopIntent('search Apple Music for chill jazz').q, 'chill jazz');
+  assert.equal(desktopIntent('search for chill jazz in Music').q, 'chill jazz');
+  const shown = rig(() => '', { texts: async () => ['Search', 'Home', 'Lo‑Fi Station', 'Study Beats'], wait: async () => {} });
+  assert.equal((await runDesktop(desktopIntent('search lo-fi beats on Apple Music'), shown.deps)).say, 'Here are the Apple Music results for lo-fi beats.');
+  assert.match(shown.calls[0].at(-1), /^music:\/\/music\.apple\.com\/[a-z]{2}\/search\?term=lo-fi%20beats$/);
+  const blank = rig(() => '', { texts: async () => ['Search', 'Home'], wait: async () => {} });
+  assert.equal((await runDesktop(desktopIntent('search lo-fi beats on Apple Music'), blank.deps)).say, 'I opened Music, but no results for lo-fi beats showed up.', 'never "Done." on nothing');
+});

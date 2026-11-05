@@ -196,6 +196,22 @@ export async function findControls(name) {
       JSON.stringify(hits);`, { name: String(name).slice(0, 80), pid: (await frontApp()).pid }, 4000));
   } catch { return []; }
 }
+/** The text showing in an app's first window, breadth first within a time budget: to check a page really
+ *  loaded (it needn't be in front). [] when it isn't running or can't be read. */
+export async function windowTexts(app, { max = 400, ms = 800 } = {}) {
+  try {
+    const pid = Number(String(await run(['pgrep', '-x', String(app)])).trim().split('\n')[0]);
+    return JSON.parse(await jxa(`${AX_HELPERS}
+      const w = kids($.AXUIElementCreateApplication(A.pid), 20).find((e) => str(e, 'AXRole') === 'AXWindow');
+      const out = []; const queue = w ? [w] : []; const t0 = Date.now();
+      while (queue.length && out.length < A.max && Date.now() - t0 < A.ms) {
+        const el = queue.shift();
+        if (str(el, 'AXRole') === 'AXStaticText') { const t = str(el, 'AXValue') || str(el, 'AXTitle'); if (t) out.push(t); }
+        queue.push(...kids(el, 400));
+      }
+      JSON.stringify(out);`, { pid, max, ms }, 3000));
+  } catch { return []; }
+}
 /** Press the control at `path`, only if it still carries the same labels (the screen can change between
  *  finding it and your yes). A text box is focused instead. 'ok'; 'gone' (changed or not there);
  *  'nopress' (it's there but won't take a press: click its centre instead). */
