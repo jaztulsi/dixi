@@ -8,7 +8,8 @@
 // under each click is read from the Accessibility API, in code, never asked of the model; unreadable or
 // unnamed controls ask too. Hard, many-part jobs go to your own Claude Code agents (hive.js).
 
-import electron from 'electron';   // the default import, so plain Node (the unit tests) can load the pure parts
+import electron from 'electron';
+import { readScreens, notchOf } from './notch.js';   // the default import, so plain Node (the unit tests) can load the pure parts
 const { BrowserWindow, Menu, Notification, Tray, clipboard, desktopCapturer, globalShortcut, ipcMain, nativeImage, powerMonitor, screen, shell, systemPreferences } = electron;
 import fs from 'node:fs';
 import path from 'node:path';
@@ -317,10 +318,20 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       state.ready = new Promise((r) => w.webContents.once('did-finish-load', () => { if (state.overlay === w) state.loaded = true; r(); }));
       w.loadFile(path.join(here, '../renderer/everywhere/overlay.html'));
       ui('ew:prefs', look());
+      state.bounds = bounds;
+      renotch();
   }
+  // The notch of the display the overlay is on (notch.js): read with each new overlay window and when displays change.
+  let screens = [];
+  const notchNow = () => ui('ew:notch', notchOf(screen.getDisplayMatching?.(state.bounds), screens));
+  const renotch = () => readScreens().then((s) => { screens = s; notchNow(); });
+  for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on?.(ev, renotch);
   function overlayOn(bounds) {
     if (!state.overlay || state.overlay.isDestroyed()) createOverlay(bounds);
-    else state.overlay.setBounds(bounds);
+    else {
+      state.overlay.setBounds(bounds);
+      if (bounds.x !== state.bounds?.x || bounds.y !== state.bounds?.y) { state.bounds = bounds; notchNow(); }   // another display
+    }
     clearTimeout(state.hideTimer);
     if (!state.overlay.isVisible()) state.overlay.showInactive();
   }
@@ -331,7 +342,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   };
   const show = (data) => {
     if (!state.overlay?.isVisible()) overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
-    ui('ew:state', data);
+    state.shown = data.state;
+    ui('ew:state', data.state === 'done' ? { undo: Date.now() - (state.fileChangeAt ?? 0) < 120000, ...data } : data);
     if (data.state === 'done' || data.state === 'error' || data.state === 'idle') {
       clearTimeout(state.hideTimer);
       // unref: a lingering card never keeps a plain-Node run (the unit tests) alive; Electron's loop runs regardless.
@@ -1054,7 +1066,6 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         prefs.noticed = true; savePrefs();
         say('One thing first: to answer, Dixi sends a picture of your screen to Claude. Nothing is saved.');
       }
-      ui('ew:backdrop', shot.b64);
       if (ri) await readAloud(await readOut({ intent: ri, shot, claude, image, signal, writeClipboard: (x) => clipboard.writeText(x), pid: ctx.pid }), signal);
       else if (SCAM_CHECK.test(t)) await checkScam(shot, ctx, signal, found);
       else if (CAL_ADD.test(t)) await addEvent(text, shot, ctx, signal);
@@ -1273,7 +1284,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (was || watched) show({ state: 'done', title: 'Stopped', text: 'Stopped.', linger: 1500 });
     return was || watched;
   }
-  function trayTitle() { tray.setTitle(busy() ? '■ Stop Dixi' : state.watching ? '👁 Dixi' : listening() ? '◉ Dixi' : '◌ Dixi'); dashChanged(); }
+  function trayTitle() { tray.setTitle(busy() ? 'Stop' : ''); dashChanged(); }   // the template icon is Dixi; text only to say a click stops it
 
   // ⌥Space: one press = listen (and take the picture now); pressed again while Dixi is doing anything = stop it all.
   // A1: a ⌥Space session. Esc cancels it, but only while it's open; the renderer reports silence and the cap.
@@ -1291,7 +1302,6 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (screenDenied()) return;
     const [shot, ctx] = await Promise.all([snapshot(), context()]);
     state.armed = shot ? { shot, ctx, at: Date.now() } : null;
-    if (shot) ui('ew:backdrop', shot.b64);
   }
   // ⌥⇧Space: take what's selected (text, a picture, files), then listen for what to do with it.
   async function selectionKey() {
@@ -1436,6 +1446,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   ipcMain.on('ew:approve', (e, id, ok) => { if (fromOverlay(e) && Date.now() - (state.lastSynthetic ?? 0) > 500) approvals.get(Number(id))?.(Boolean(ok)); });
   ipcMain.on('ew:stop', (e) => { if (fromOverlay(e)) kill(); });
   ipcMain.on('ew:mouse', (e, inside) => { if (fromOverlay(e)) state.overlay.setIgnoreMouseEvents(!inside, { forward: true }); });
+  ipcMain.on('ew:undo', (e) => { if (fromOverlay(e)) run('undo').catch(() => {}); });
 
   // ---- Claude Code ↔ Dixi (bridge.js): your Claude Code sessions talk and ask out loud; they never act ----
   if (env.DIXI_BRIDGE !== '0') {
@@ -1450,7 +1461,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   }
 
   // ---- menu bar: Dixi lives here even with its window closed ----
-  const tray = new Tray(nativeImage.createEmpty());
+  const trayIcon = nativeImage.createFromPath(path.join(here, '../renderer/assets/trayTemplate.png'));   // + @2x; black + alpha
+  trayIcon.setTemplateImage(true);   // macOS draws it white or black to match the menu bar
+  const tray = new Tray(trayIcon);
   let contextMenu = null;
   tray.on('click', () => { if (active()) stopAll(); else tray.popUpContextMenu(contextMenu); });
   tray.on('right-click', () => tray.popUpContextMenu(contextMenu));
@@ -1459,7 +1472,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     { label: `Stop Dixi now   ${label(KILL_KEY)}`, click: kill },
     { label: 'Open the Dixi dashboard', click: () => openDash() },
     { label: `Ask about my screen   ${label(KEY)}`, click: hotkey },
-    { label: `Listening (wake word “Dixi”)   ${label(MIC_KEY)}`, type: 'checkbox', checked: listening(), click: () => setListening(!listening()) },
+    { label: `Always listen for “Dixi” (experimental)   ${label(MIC_KEY)}`, type: 'checkbox', checked: listening(), click: () => setListening(!listening()) },
     { label: 'Ask before every step (careful mode)', type: 'checkbox', checked: Boolean(prefs.careful), click: () => setCareful(!prefs.careful) },
     { label: 'Open the Dixi browser', click: onShowMain },
     { label: 'My profile (for forms)…', click: editProfile },
@@ -1481,5 +1494,15 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // The dashboard is Dixi's front window; the browser listens out of sight (DIXI_START=browser for the old way).
   if (env.DIXI_START !== 'browser') { try { openDash(); } catch (err) { console.warn('[everywhere] dashboard:', err.message); } }
   setTimeout(() => { if (!state.overlay) createOverlay(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds); }, 2000).unref?.();
-  return { enabled: true, keepsRunning: true, stop, tray, showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
+  // Mic loudness for the island's waveform (main.js passes each 16-bit PCM chunk): ~15 Hz, only while it listens.
+  let levelAt = 0;
+  const level = (chunk) => {
+    if (state.shown !== 'listening' || Date.now() - levelAt < 66) return;
+    levelAt = Date.now();
+    const b = Buffer.from(chunk.buffer ?? chunk, chunk.byteOffset ?? 0, chunk.byteLength);
+    let sum = 0;
+    for (let i = 0; i + 1 < b.length; i += 2) sum += b.readInt16LE(i) ** 2;
+    ui('ew:level', Math.min(1, Math.sqrt(sum / Math.max(1, b.length >> 1)) / 5000));
+  };
+  return { enabled: true, keepsRunning: true, stop, tray, level, showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
 }
