@@ -28,7 +28,7 @@ register('data:text/javascript,' + encodeURIComponent(`
     return next(spec, ctx);
   }`));
 
-const keys = {}, toMain = [];   // the global shortcuts Dixi registered; what it sent the main window
+const keys = {}, toMain = [], appOn = {}, released = [];   // the global shortcuts Dixi registered; what it sent the main window
 const any = () => new Proxy(function () {}, { get: (_t, k) => (k === 'then' ? undefined : any()), apply: () => any(), construct: () => any() });
 const img = { isEmpty: () => false, getSize: () => ({ width: 1280, height: 800 }), toJPEG: () => Buffer.from('jpg'), crop: () => img, resize: () => img };
 class Win { constructor() { this.webContents = { on() {}, once: (_e, fn) => fn(), send() {}, setWindowOpenHandler() {} }; } isDestroyed() { return false; } isVisible() { return true; } }
@@ -38,7 +38,8 @@ globalThis.__electron = new Proxy({
   screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => ({ id: 1, bounds: { x: 0, y: 0, width: 1280, height: 800 }, scaleFactor: 1 }) },
   desktopCapturer: { getSources: async () => [{ display_id: '1', thumbnail: img }] },
   systemPreferences: { isTrustedAccessibilityClient: () => true, getMediaAccessStatus: () => 'granted' },
-  globalShortcut: { register: (k, fn) => { keys[k] = fn; return true; }, unregister() {} },
+  globalShortcut: { register: (k, fn) => { keys[k] = fn; return true; }, unregister: (k) => { released.push(k); } },
+  app: { on: (ev, fn) => { appOn[ev] = fn; } },
 }, { get: (t, k) => (k in t ? t[k] : any()) });
 
 const OTHER = 4242;   // the pid of the app in front (not Dixi)
@@ -72,13 +73,13 @@ const result = (id) => requests.flatMap((r) => r.messages ?? []).flatMap((m) => 
 
 // One Everywhere, set up the way main.js does; approvals are answered by `answer(question)` (true = yes).
 let answer = () => false, asked = [], spoken = [], events = [];
-let quiet = () => {};   // the renderer saying Dixi's voice has finished (there's no renderer here)
+let quiet = () => {}, mainWin = null;   // the renderer saying Dixi's voice has finished (there's no renderer here)
 const harness = (async () => {
   if (process.platform !== 'darwin') return null;
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   const handlers = {}, ons = {};
   quiet = () => ons['everywhere:speaking']?.(false);
-  const win = { webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:browse') { events.push(`browse ${d.text}`); setTimeout(() => { events.push(`done ${d.text}`); ons['everywhere:browsed'](d.id, true, ''); }, 30); } if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
+  const win = mainWin = { webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:browse') { events.push(`browse ${d.text}`); setTimeout(() => { events.push(`done ${d.text}`); ons['everywhere:browsed'](d.id, true, ''); }, 30); } if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
   setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
     userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
   return (text) => handlers['everywhere:run'](text);
@@ -242,5 +243,18 @@ test('⌥Space again: while it listens (even after a few seconds) it finishes an
   assert.ok(third.includes('everywhere:kill') && !third.includes('everywhere:listen'), `reply about to play: stopped, not a new question (${third})`);
   quiet();
   assert.ok((await press()).includes('everywhere:listen'), 'nothing going on now: it listens');
+  await press();
+});
+
+test('A1: a crashed Dixi window never leaves Esc held', mac, async () => {
+  await harness;
+  fakeMac();
+  quiet();
+  for (let i = 0; i < 3 && !(await press()).includes('everywhere:listen'); i++) await sleep(50);
+  released.length = 0;
+  appOn['render-process-gone']({}, { other: true });
+  assert.deepEqual(released, [], "another window's crash changes nothing");
+  appOn['render-process-gone']({}, mainWin.webContents);
+  assert.deepEqual(released, ['Escape'], 'the main window crashed mid-session: Esc is released');
   await press();
 });

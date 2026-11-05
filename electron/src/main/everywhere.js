@@ -1233,6 +1233,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // A1: a ⌥Space session. Esc cancels it, but only while it's open; the renderer reports silence and the cap.
   const ptt = pttSession({ register: (k, fn) => globalShortcut.register(k, fn), unregister: (k) => globalShortcut.unregister(k), onEsc: () => stopAll() });
   ipcMain.on('everywhere:session-end', () => { ptt.end(); if (!busy()) show({ state: 'idle' }); });
+  electron.app.on('render-process-gone', (_e, wc) => { if (wc === getMainWindow()?.webContents) ptt.end(); });   // a crashed window never leaves Esc held
   async function hotkey() {
     if (ptt.open && !busy()) { ptt.end(); toMain('everywhere:finish'); return; }   // ⌥Space again: finish and send
     if (active()) return stopAll();

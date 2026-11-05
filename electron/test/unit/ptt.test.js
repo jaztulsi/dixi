@@ -103,3 +103,18 @@ test('A1: Esc is a global key only during a session, released on every way out (
   assert.equal(hotkeyOwner('launchd\nRaycast\nFinder\n'), 'Raycast');
   assert.equal(hotkeyOwner('Finder\nRaycast Helper\n'), null, 'no guess: "taken by another app"');
 });
+
+test('A1: the mic denied while the socket is still connecting: 0 sockets and no fallback left open at idle', async () => {
+  let opening = false, closedEarly = false, sockets = 0, fallen = false;
+  const deepgram = {
+    // Like stt.js: a close while ElevenLabs is still connecting is missed, and its fallback then opens Deepgram.
+    open: async () => { opening = true; await new Promise((r) => setTimeout(r, 300)); opening = false; sockets = 1; if (closedEarly) fallen = true; return { ok: true }; },
+    close: async () => { if (opening) closedEarly = true; else sockets = 0; }, sendAudio() {}, onMessage() {}, onClosed() {},
+  };
+  const mic = { start: async () => { throw Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' }); }, stop() {} };
+  const v = new VoiceAgent({ deepgram, mic, tabs: { visibleTabs: [] }, llm: {}, tiers: {}, executor: {}, settings: { requireWakeWord: false } });
+  v.preconnect = () => {}; v.speculate = () => {};
+  await v.startSession();
+  await new Promise((r) => setTimeout(r, 400));   // the slow open finishes
+  assert.deepEqual({ sockets, fallen, session: v.session, listening: v.isListening }, { sockets: 0, fallen: false, session: null, listening: false });
+});

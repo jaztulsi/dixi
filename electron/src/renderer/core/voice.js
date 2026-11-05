@@ -146,8 +146,12 @@ export class VoiceAgent {
       const held = [];
       let open = false;
       const send = (chunk) => { if (open) this.deepgram.sendAudio(chunk); else if (held.length < 50) held.push(chunk); };
-      const [opened] = await Promise.all([this.deepgram.open({ keyterms: this.keyterms() }), this.mic.start(send)]);
-      if (!opened.ok) throw new Error(opened.error);
+      // Both legs settle before any cleanup: closing a socket that's still connecting (the mic was denied
+      // mid-connect) would let the provider fall back and open another one after, live at idle.
+      const [o, m] = await Promise.allSettled([this.deepgram.open({ keyterms: this.keyterms() }), this.mic.start(send)]);
+      if (m.status === 'rejected') throw m.reason;
+      if (o.status === 'rejected') throw o.reason;
+      if (!o.value?.ok) throw new Error(o.value?.error ?? 'no speech connection');
       // Paused while connecting: stay paused (the mic closes again, nothing is sent).
       if (this.stopped) { this.mic.stop(); await this.deepgram.close(); return; }
       open = true;
