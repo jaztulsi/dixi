@@ -2,7 +2,7 @@
 // on-device voice. While Dixi talks, and for a moment after, the voice agent treats what the mic hears
 // as a possible echo: otherwise Dixi hears itself and acts on it.
 
-const ECHO_TAIL_MS = 1200;  // speech-to-text delivers words ~1s late
+const ECHO_TAIL_MS = 250;   // echoCancellation does most of it; words of its own that arrive late are caught by heardSelf/ownWords (voice.js)
 
 export class Speaker {
   constructor({ synth = globalThis.speechSynthesis, tts = globalThis.window?.dixi?.tts } = {}) {
