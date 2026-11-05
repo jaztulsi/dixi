@@ -125,3 +125,15 @@ test('your words joined to its echo in one turn are kept; only the echo is cut (
   await sleep(150);
   assert.deepEqual(w.handled, ['scroll down']);
 });
+
+test('the short echo tail is only for audio played through the page; speechSynthesis (outside Chrome) keeps 1.2 s', async () => {
+  globalThis.SpeechSynthesisUtterance ??= class { constructor(t) { this.text = t; } };
+  const page = new Speaker({ synth: null, tts: async () => new Uint8Array(0) });   // no bytes, no synth: nothing played
+  const os = new Speaker({ synth: { speak: (u) => setTimeout(() => u.onend(), 5), cancel() {} }, tts: null });
+  await page.say('Opening the news.'); await os.say('Opening the news.');
+  await sleep(320);
+  assert.equal(page.isBusy(), false);
+  assert.equal(os.isBusy(), true, 'the system voice can still be coming back through the mic');
+  await sleep(1000);
+  assert.equal(os.isBusy(), false);
+});
