@@ -246,10 +246,86 @@ export async function listControls({ max = 120, ms = 1500 } = {}) {
   } catch { return []; }
 }
 
+// ---- A2: into a text box without guessing, and a paste that's checked ----
+const EDITABLE = /^AX(TextField|TextArea|SearchField|ComboBox)$/;
+export const isEditable = (el) => Boolean(el) && EDITABLE.test(el.role ?? '');
+// What a box is for, best first: where you write to someone or something, then a search. The browser's own
+// address bar is never "the box" (Cmd+L is for that).
+const BOX = [/\b(prompt|ask|message|chat|reply|write|type|compose)\b/i, /\b(search|query|comment|find)\b/i];
+const ADDRESS = /\b(address|url|location)\b/i;
+// Keys a site documents for "go to the box"; what worked on a site is tried first next time.
+const SITE_KEYS = { 'youtube.com': '/', 'github.com': '/', 'google.com': '/', 'chatgpt.com': 'shift+escape' };
+const learned = new Map();   // ponytail: per run of Dixi; save it to userData if relearning each run costs
+const siteOf = (where) => { try { return new URL(where).hostname.replace(/^www\./, ''); } catch { return String(where ?? ''); } };
+const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+/** The cheapest way to a text box in the front window, checked after each: already in one (no click) → the
+ *  box by role and name (AX focus, no pointer) → the app's AX tree switched on, read again → a key the site
+ *  answers to. At most 2 tries. → { ok, how, el } | { ok: false, why }. `skip`: ways already tried. */
+export async function focusField({ where = '', name = 'text', want = BOX, skip = [] } = {}, d = {}) {
+  const { now = focused, list = listControls, press = pressControl, enable = enableAX, send = key, front = frontApp, wait = nap } = d;
+  const f0 = await now();
+  if (!skip.length && isEditable(f0)) return { ok: true, how: 'focused', el: f0 };
+  const site = siteOf(where), seed = Object.entries(SITE_KEYS).find(([h]) => site === h || site.endsWith(`.${h}`))?.[1];
+  const landed = async () => { for (let i = 0; i < 4; i++) { const f = await now(); if (isEditable(f)) return f; await wait(80); } return null; };
+  let empty = false;
+  const ways = {
+    async ax() {
+      const all = await list({ max: 200, ms: 600 }); empty = !all.length;
+      const boxes = all.filter((b) => isEditable(b) && !b.labels.some((l) => ADDRESS.test(l)));
+      const rank = (b) => want.findIndex((re) => b.labels.some((l) => re.test(l)));
+      const named = boxes.filter((b) => rank(b) >= 0).sort((a, b) => rank(a) - rank(b));
+      const pick = boxes.length === 1 ? boxes[0] : named[0];
+      return pick && (await press(pick.path, pick.labels)) === 'ok' ? landed() : null;
+    },
+    async enable() {   // no tree: Chrome/Electron build it once asked; read until it's there (~1 s at most)
+      if (!empty) return undefined;
+      await enable((await front()).pid, { again: true });
+      for (let i = 0; i < 5; i++) { const el = await ways.ax(); if (el || !empty) return el; await wait(200); }
+      return null;
+    },
+    async key() { const k = learned.get(site)?.key ?? seed; if (!k) return undefined; await send(k); return landed(); },
+  };
+  const order = [learned.get(site)?.how, 'ax', 'enable', 'key'].filter((w, i, a) => w && ways[w] && a.indexOf(w) === i && !skip.includes(w));
+  let tries = 0;
+  for (const how of order) {
+    if (tries === 2) break;
+    const el = await ways[how]();
+    if (el === undefined) continue;   // that way doesn't apply here: no try spent
+    tries++;
+    if (el) { if (site) learned.set(site, { how, key: how === 'key' ? (learned.get(site)?.key ?? seed) : undefined }); return { ok: true, how, el }; }
+  }
+  return { ok: false, why: `Couldn't find the ${name} input.` };
+}
+/** The focused box's whole value, read for a check: { role, len, has } (has: `text` is in it). */
+export async function fieldHas(text) {
+  try {
+    return JSON.parse(await jxa(`${AX_HELPERS}
+      const el = elAttr($.AXUIElementCreateApplication(A.pid), 'AXFocusedUIElement'); let s = '';
+      try { const v = el && attr(el, 'AXValue'); s = v ? String(ObjC.unwrap(ObjC.castRefToObject(v))) : ''; } catch (e) {}
+      const flat = (x) => x.replace(/\\s+/g, ' ').trim();
+      JSON.stringify({ role: el ? str(el, 'AXRole') : '', read: Boolean(el && attr(el, 'AXValue') != null), len: s.length, has: Boolean(A.text) && flat(s).includes(flat(A.text).slice(0, 80)) });`, { pid: (await frontApp()).pid, text: String(text ?? '') }));
+  } catch { return { role: '', read: false, len: 0, has: false }; }
+}
+/** Paste into the box, then check it landed; nothing changed → one more way to the box, once. */
+export async function pasteChecked(text, { where, name, how = 'focused', before } = {}, d = {}) {
+  const { paste = type, has = fieldHas, focus = focusField } = d;
+  before ??= await has(text);   // (the caller can read it alongside focused(): one AX round trip fewer)
+  await paste(text);
+  let after = await has(text);
+  // A box with no readable value (a canvas, a custom control) can't be checked: said so, not claimed.
+  if (before.read === false && after.read === false) return { ok: true, checked: false };
+  const landed = () => after.has || after.len !== before.len;
+  if (!landed()) {
+    const r = await focus({ where, name, skip: [how] }, d);
+    if (r.ok) { await paste(text); after = await has(text); }
+    if (!landed()) return { ok: false, why: `The text didn't show up in the ${name} input.` };
+  }
+  return { ok: true, checked: true };
+}
 /** Chromium and Electron apps build their accessibility tree only when asked: ask, once per app. */
 const askedAX = new Set();
-export function enableAX(pid) {
-  if (!pid || askedAX.has(pid)) return Promise.resolve();
+export function enableAX(pid, { again = false } = {}) {
+  if (!pid || (askedAX.has(pid) && !again)) return Promise.resolve();
   askedAX.add(pid);
   return jxa('$.AXUIElementSetAttributeValue($.AXUIElementCreateApplication(A.pid), $("AXManualAccessibility"), $.kCFBooleanTrue);', { pid }).catch(() => {});
 }

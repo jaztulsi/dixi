@@ -560,6 +560,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (el?.pid === process.pid) return fail("That's Dixi's own window: Dixi doesn't press its own controls.");
       const why = clickRisk(el, strict) || moneyButton(el);
       if (why && !asked && !(await yes(why))) return no(why);
+      // A click lands only on a control read back inside the front app's window, never on a blind point.
+      const front = await input.frontApp();
+      if (!el || (front.pid && el.pid !== front.pid)) return fail(`That point isn't on anything in ${front.name || 'the front app'}'s window, so I didn't click there. Use the controls list, or bring that app to the front first.`);
       if (signal.aborted) return no('stopped');
       // A skill's replay: the control is read again just before the press, and must still be the recorded one.
       if (c.expect && !c.expect(await input.elementAt(at))) return { type: 'tool_result', tool_use_id: c.id, toolset_name: 'computer', is_error: true, content: 'The control there changed, so it was not pressed.' };
@@ -594,15 +597,23 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (front) return fail(`${front}, so no keys were sent. Stop and tell the user to bring the app they want to the front.`);
     }
     if (n === 'type') {
-      const f = await input.focused();
-      if (secretField(f)) return no('a password, card, SSN or code field: the user types that themselves');
-      if (!f && !asked && (sensitive || isGuarded(ctx)) && !(await yes('Type into a box I can’t read?'))) return no('an unreadable box');
+      const text = String(c.input.text ?? '').replace(/\s+$/, '');
+      let [f, before] = await Promise.all([input.focused(), input.fieldHas(text)]), how = 'focused';
       if (f?.pid === process.pid) return fail("That's Dixi's own window.");
       if (profileFocused()) return no('the profile window: the user types that themselves');
+      // A2: not in a text box → find it (AX by role and name, AX switched on, the site's key); never a blind paste.
+      const box = { where: ctx?.url, name: ctx?.title || ctx?.name || 'text' };
+      if (!input.isEditable(f)) {
+        const r = await input.focusField(box);
+        if (r.ok) { ({ el: f, how } = r); before = undefined; }
+        else if (!f) return fail(`${r.why} Click into it first, or say which box.`);
+      }
+      if (secretField(f)) return no('a password, card, SSN or code field: the user types that themselves');
       // A pasted newline can submit a one-line box or run a terminal command: those ask, like Enter.
-      const text = String(c.input.text ?? '').replace(/\s+$/, '');
       if (/\n/.test(text) && !asked && (f?.role === 'AXTextField' || isGuarded(ctx)) && !(await yes('Type text with line breaks? It may send or run.'))) return no('line breaks');
-      await input.type(text); await pause(200); return acted(ok(), f);
+      const r = await input.pasteChecked(text, { ...box, how, before });
+      if (!r.ok) return fail(r.why);
+      return acted(ok(r.checked ? 'Typed; the text is in the box.' : "Typed, but that box can't be read back, so look before going on."), f);
     }
     if (n === 'key' || n === 'hold_key') {
       const why = keyRisk(c.input.text, await input.focused(), { sensitive });

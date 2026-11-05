@@ -43,13 +43,15 @@ globalThis.__electron = new Proxy({
 
 const OTHER = 4242;   // the pid of the app in front (not Dixi)
 let done = [];        // what really happened to the Mac: clicks, presses, typing
-function fakeMac({ front = OTHER, controls = [], at = null, press = 'ok' } = {}) {
+function fakeMac({ front = OTHER, controls = [], at = null, press = 'ok', box = { role: 'AXTextArea', labels: [], pid: front }, found = { ok: false, why: "Couldn't find the TextEdit input." }, pasted = { ok: true, checked: true } } = {}) {
   done = [];
   const log = (what) => async (...a) => { done.push([what, ...a]); };
   globalThis.__input = new Proxy({
     frontApp: async () => ({ name: 'TextEdit', bundle: 'com.apple.TextEdit', pid: front }),
     browserTab: async () => null, enableAX: async () => {}, findControls: async () => [],
-    listControls: async () => controls, elementAt: async () => at, focused: async () => ({ role: 'AXTextArea', labels: [], pid: front }),
+    listControls: async () => controls, elementAt: async () => at, focused: async () => box,
+    isEditable: (el) => /^AX(TextField|TextArea)$/.test(el?.role ?? ''), fieldHas: async () => ({ read: true, len: 0, has: false }),
+    focusField: async () => found, pasteChecked: async (t) => { done.push(['type', t]); return pasted; },
     cursor: async () => ({ x: 0, y: 0 }), openApp: async () => false,
     pressControl: async (...a) => { done.push(['press', ...a]); return press; },
     click: log('click'), type: log('type'), key: log('key'), move: log('move'), mouseButton: log('mouseButton'), scroll: log('scroll'), drag: log('drag'),
@@ -243,4 +245,16 @@ test('⌥Space again stops Dixi: while it listens (even after a few seconds), wh
   quiet();
   assert.ok((await press()).includes('everywhere:listen'), 'nothing going on now: it listens');
   await press();
+});
+
+test('A2: the agent types only into a box it found, and its result says whether the text is really there', mac, async () => {
+  const typing = [{ name: 'type', input: { text: 'hello' } }];
+  await agentDoes(typing, { box: null });   // no box in focus, and none found
+  assert.ok(!done.some(([w]) => w === 'type'), 'nothing pasted blind');
+  assert.match(String(result('t0')), /Couldn't find the TextEdit input/);
+  await agentDoes(typing);
+  assert.match(String(result('t0')), /the text is in the box/);
+  await agentDoes(typing, { box: { role: 'AXButton', labels: [], pid: OTHER }, found: { ok: true, how: 'ax', el: { role: 'AXTextArea', labels: ['Message'], pid: OTHER } }, pasted: { ok: false, why: "The text didn't show up in the TextEdit input." } });
+  assert.match(String(result('t0')), /didn't show up/);
+  assert.equal(asked.length, 0, 'nothing was asked');
 });
