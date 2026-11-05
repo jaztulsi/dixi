@@ -1205,6 +1205,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     clearTimeout(micTimer);
     if (listening()) return;
     micTimer = setTimeout(() => { if (!state.ctrl && !approvals.size && !asks.size && !listening()) { state.armed = null; toMain('everywhere:mic', false); } }, ms);
+    micTimer.unref?.();   // never keeps the process alive (tests exit; the app has its own loop)
   }
 
   // The kill button: one click (menu bar, the panel's ✕, or ⌥Space while busy) stops everything: the
