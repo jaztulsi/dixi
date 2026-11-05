@@ -150,6 +150,23 @@ test('a form uses your profile without asking: said on the card, logged without 
   assert.doesNotMatch(log, /pat@example|Pat Example/, 'no profile values in the log');
 });
 
+test('the screen agent never asks in normal mode: told to pick the likeliest option, at most twice, then it stops', mac, async () => {
+  await agentDoes([], {}, 'tidy up my desktop');   // sets the fakes; the scripted turns follow
+  const ask = () => [{ type: 'text', text: 'Which folder do you mean?' }];
+  script = [ask(), [{ type: 'text', text: 'I picked Downloads.' }, { type: 'tool_use', id: 'k0', name: 'key', input: { text: 'cmd+n' } }], [{ type: 'text', text: 'Done.' }]];
+  requests = []; spoken = []; toMain.length = 0;
+  await (await harness)('tidy up my desktop');
+  assert.ok(!toMain.includes('everywhere:ask'), 'nothing was asked');
+  assert.ok(!spoken.some((x) => /\?$/.test(x)), `no question was said: ${spoken}`);
+  const agent = requests.filter((r) => r.tools);
+  assert.match(JSON.stringify(agent[1]?.messages?.at(-1)), /Pick the likeliest option/, 'it was told to pick');
+  assert.match(agent[0].system, /Never ask the user anything/);
+  script = [ask(), ask(), ask(), ask()]; requests = []; toMain.length = 0;
+  await (await harness)('tidy up my desktop');
+  assert.ok(!toMain.includes('everywhere:ask'), 'still nothing asked');
+  assert.equal(requests.filter((r) => r.tools).length, 3, 'one first try and two nudges, then it stops');
+});
+
 test('a risky named control is never asked about: refused unless the user said it, pressed when they did', mac, async () => {
   const SEND = { ...SAVE, labels: ['Send'] };
   answer = () => true;
