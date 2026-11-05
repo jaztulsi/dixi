@@ -522,7 +522,7 @@ export class VoiceAgent {
       this.trace('interpret', { text, source: parsed.source, ms: parsed.ms, intent: parsed.intent, errors: parsed.errors, waitMs: Math.round(performance.now() - t0) });
       const intent = parsed.intent;
       if (!intent) return;
-      if (intent.clarify && !intent.steps.length) { this.say(intent.clarify); this.set({ statusLine: intent.clarify }); return; }
+      if (intent.clarify && !intent.steps.length) { this.say("Sorry, I didn't catch that."); this.set({ statusLine: "Didn't catch that" }); return; }   // never a question back (Nov 5)
       // Steps an earlier hearing of this sentence already started aren't done twice: a shorter version
       // ("go to Amazon" → "go to Amazon and search…"), or the same words written differently in the
       // final transcript ("256 gigabytes" while talking, "256 GB" at the end). Clauses run in order, so

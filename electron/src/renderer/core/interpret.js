@@ -64,7 +64,7 @@ Rules:
 - Several requests: one step each, in the order spoken. Add nothing they did not ask for.
 - Unfamiliar names are normal (new or small sites): copy them into "said" and let the app look them up. Never ask about a name just because you don't know it.
 - Put the site in the same step as what to do there (search / find_item / order on it): no separate "open" step for that site.
-- "clarify": a short question only when the words are too garbled to act on at all; else "".
+- "clarify": always "". Never ask the user a question back: if the words could mean more than one thing, pick the likeliest reading and act.
 - Unused fields: "", 0 or [].`;
 
 // ---- words ----

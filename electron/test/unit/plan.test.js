@@ -232,3 +232,9 @@ test('QA youtube-search-play: one planned step over two clauses leaves the secon
   const r = await plan(said, {}, { model });
   assert.deepEqual(r.steps.map((s) => [s.do, s.clause]), [['open', said], ['computer', 'play the first video']]);
 });
+
+test('never asks: the planner has no "ask" step, its prompt forbids questions back, and an "ask" from the model is not a question', () => {
+  assert.match(SYSTEM, /Never ask anything back/);
+  const r = check([S({ do: 'ask', clause: 'play some music', say: 'Which playlist?' })], 'play some music', { apps });
+  assert.ok(r.steps.every((s) => !['ask', 'clarify'].includes(s.do) && !/\?/.test(s.say ?? '')), JSON.stringify(r.steps));
+});
