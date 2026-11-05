@@ -31,7 +31,9 @@ const spend = new Spend(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-be
 
 // ---- everywhere: recorded planner replies + code-only commands ----
 const { apps, fixtures } = createRequire(import.meta.url)('../test/fixtures/plan-live.json');
-const CODE_ONLY = ['open Safari', 'open Notes', 'open Music', 'open Calendar', 'turn the volume down', 'turn the volume up', 'open Messages', 'mute', 'go back'];
+// Mac-wide ⌥Space commands (user directive Nov 5): open app, switch window, type, volume, timer, find a file, read the screen, X and Y.
+const CODE_ONLY = ['open Notes', 'open Calendar', 'switch to Safari', 'type hello world', 'turn the volume down', 'mute',
+  'set a timer for 5 minutes', 'find my resume', "what's on my screen", 'open Notes and start a new note'];
 const A3 = ['search lo-fi beats on Apple Music', 'buy a bagel from Safeway', "couldn't find that on this page"];
 const everywhere = [];
 for (const said of [...new Set([...Object.keys(fixtures), ...CODE_ONLY, ...A3])]) {
@@ -54,6 +56,7 @@ for (const said of [...new Set([...Object.keys(fixtures), ...CODE_ONLY, ...A3])]
     miss: Boolean(called && !f), planMs, providerMs: called?.ms ?? 0, localMs: planMs - (called?.ms ?? 0),
     replyMs: wav ? Math.round(performance.now() - t1) : null, tts: 'say (local)',
     usd: called && f?.usage ? spend.add(PLANNER, f.usage) : 0, steps: (r.steps ?? []).map((s) => s.do).join('+'),
+    mayAsk: (r.steps ?? []).filter((s) => s.do === 'web' || s.do === 'computer').length,   // executors with an approve/askUser site (everywhere.js:444/466/642)
   });
 }
 
@@ -92,8 +95,8 @@ console.log([
   line('browser: speech end→done', br.map((r) => r.doneMs)),
   '', `Everywhere planner: ${ew.filter((r) => r.provider !== 'code' && !r.miss).length} via ${PLANNER}, ${ew.filter((r) => r.provider === 'code').length} by code; $${ew.reduce((a, r) => a + r.usd, 0).toFixed(4)} total as recorded (${(ew.reduce((a, r) => a + r.usd, 0) / Math.max(1, ew.filter((r) => r.usd).length)).toFixed(5)}/call)`,
   recorded ? `Browser: ${br.filter((r) => r.pass).length}/${br.length} pass, ${br.filter((r) => r.miss).length} stopped at a replay-cache miss (${recorded} recordings)` : 'Browser: not run: eval/.cache/llm is empty, and every browser command needs an LLM call (no code path). Needs one approved record run.',
-  '', '| command | mode | provider | plan ms | reply ms | $ |', '|---|---|---|---|---|---|',
-  ...ew.map((r) => `| ${r.a3 ? '**A3** ' : ''}${r.said} | everywhere | ${r.miss ? 'MISS' : r.provider} | ${r.planMs} | ${r.replyMs ?? '-'} | ${r.usd.toFixed(5)} |`),
-  ...br.map((r) => `| ${r.said} | browser | ${r.miss ? 'MISS' : r.llmCalls ? `${r.llmCalls} LLM (cache)` : 'code'} | ${r.firstActionMs ?? '-'} | - | 0 |`),
+  '', '| command | mode | provider | steps | plan ms | reply ms | $ | may ask |', '|---|---|---|---|---|---|---|---|',
+  ...ew.map((r) => `| ${r.a3 ? '**A3** ' : ''}${r.said} | everywhere | ${r.miss ? 'MISS' : r.provider} | ${r.steps || '-'} | ${r.planMs} | ${r.replyMs ?? '-'} | ${r.usd.toFixed(5)} | ${r.mayAsk} |`),
+  ...br.map((r) => `| ${r.said} | browser | ${r.miss ? 'MISS' : r.llmCalls ? `${r.llmCalls} LLM (cache)` : 'code'} | - | ${r.firstActionMs ?? '-'} | - | 0 | - |`),
   '', `raw: ${path.relative(root, file)}`,
 ].join('\n'));
