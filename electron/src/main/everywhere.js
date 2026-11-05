@@ -126,6 +126,9 @@ export const isSensitive = (ctx) => SENSITIVE_APPS.test(ctx?.name ?? '') || MESS
 // Where one ordinary-looking switch hands your Mac to someone (a scammer's "turn on AnyDesk here" in
 // Privacy & Security), or runs a program: every click and key asks.
 const GUARDED_APPS = /^(System Settings|System Preferences|Installer|Keychain Access|Terminal|iTerm2|Script Editor|Automator|Activity Monitor|Disk Utility)$/;
+// Never clicked by Dixi: the password, Touch ID and permission prompts macOS shows itself.
+const SYSTEM_PROMPT = /\b(SecurityAgent|UserNotificationCenter|coreautha)\b/i;
+const MENU_BAR = /\bAX(MenuBarItem|MenuExtra|MenuItem|Menu)\b/;   // menu extras and their menus live in other processes
 export const isGuarded = (ctx) => GUARDED_APPS.test(ctx?.name ?? '') || /^com\.apple\.(systempreferences|installer|keychainaccess|Terminal|ScriptEditor2)$/.test(ctx?.bundle ?? '');
 /** Words an approval question may quote from the screen, without the ones that would answer it. */
 // Keys and typed text never go to a terminal, a code editor or Dixi itself: one stray word plus Enter there runs a command.
@@ -309,7 +312,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     ui('ew:state', data);
     if (data.state === 'done' || data.state === 'error' || data.state === 'idle') {
       clearTimeout(state.hideTimer);
-      state.hideTimer = setTimeout(() => { ui('ew:state', { state: 'idle' }); setTimeout(() => state.overlay?.hide(), 500); }, data.state === 'idle' ? 0 : data.linger ?? 9000);
+      // unref: a lingering card never keeps a plain-Node run (the unit tests) alive; Electron's loop runs regardless.
+      state.hideTimer = setTimeout(() => { ui('ew:state', { state: 'idle' }); setTimeout(() => state.overlay?.hide(), 500).unref?.(); }, data.state === 'idle' ? 0 : data.linger ?? 9000);
+      state.hideTimer.unref?.();
     }
   };
 
@@ -474,7 +479,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (!calls.length) { finished = true; break; }
       const results = [];
       state.said = said;   // what it says it's doing: "sending it" makes an unreadable button ask
-      for (const c of calls) if (!state.refusal) results.push(await perform(c, shot, ctx, sensitive, signal, rec, controls).catch((err) => ({ type: 'tool_result', tool_use_id: c.id, ...(c.name === 'press' ? {} : { toolset_name: 'computer' }), is_error: true, content: String(err.message ?? err).slice(0, 200) })));
+      for (const c of calls) if (!state.refusal) results.push(await perform(c, shot, ctx, sensitive, signal, rec, controls, target).catch((err) => ({ type: 'tool_result', tool_use_id: c.id, ...(c.name === 'press' ? {} : { toolset_name: 'computer' }), is_error: true, content: String(err.message ?? err).slice(0, 200) })));
       if (state.refusal) {   // refused: said here, in code, and the run stops (no second try, no model call)
         say(`I stopped there: ${state.refusal}.`);
         show({ state: 'error', title: task.slice(0, 80), text: `Stopped: ${state.refusal}.`, linger: 12000 });
@@ -501,7 +506,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     act.log({ kind: 'done', text: (last || 'Done.').slice(0, 200), app: ctx.name });
     show({ state: 'done', title: task.slice(0, 80), steps: steps.map((s) => ({ ...s, state: 'done' })).slice(-6), text: last || 'Done.' });
   }
-  async function perform(c, shot, ctx, sensitive, signal, rec = null, controls = []) {
+  async function perform(c, shot, ctx, sensitive, signal, rec = null, controls = [], target = '') {   // target: the app the step is for (keysBlocked)
     const tag = c.name === 'press' ? {} : { toolset_name: 'computer' };   // press is Dixi's own tool, not the toolset's
     const ok = (content = 'OK') => ({ type: 'tool_result', tool_use_id: c.id, ...tag, content });
     const no = (q) => {
@@ -560,8 +565,18 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (/^(left|right|middle|double|triple)_click$/.test(n)) {
       const el = await input.elementAt(at);
       if (el?.pid === process.pid) return fail("That's Dixi's own window: Dixi doesn't press its own controls.");
+      // A click lands only on a control read back in the front app (its sheets, dialogs and menus too) or on a
+      // menu bar extra; never on a blind point, and never on a system security prompt. Every refusal is logged,
+      // and these come before any risk question, so nothing is asked and then refused. Front app unknown
+      // (pid 0) = every point is someone else's: it fails closed.
+      const front = await input.frontApp(), theirs = Boolean(el) && el.pid !== front.pid;
+      const owner = !el ? '' : theirs ? await input.procName(el.pid) : `${front.name} ${front.bundle}`;
+      const deny = (text, r) => { act.log({ kind: 'refused', text, app: front.name, role: el?.role, label: el?.labels?.[0] }); return r; };
+      if (SYSTEM_PROMPT.test(owner)) return deny('a system security prompt', no('That is a system security prompt. The user answers it themselves'));
+      if (theirs && !MENU_BAR.test(`${el.role} ${el.subrole ?? ''}`)) { const t = `That point is in another app's window, not ${front.name || 'the front app'}'s, so I didn't click there. Use the controls list, or bring that app to the front first.`; return deny(t, fail(t)); }
       const why = clickRisk(el, strict) || moneyButton(el);
       if (why && !asked && !(await yes(why))) return no(why);
+      if (!el) { const t = "That point isn't on anything I can read, so I didn't click there."; return deny(t, fail(t)); }
       if (signal.aborted) return no('stopped');
       // A skill's replay: the control is read again just before the press, and must still be the recorded one.
       if (c.expect && !c.expect(await input.elementAt(at))) return { type: 'tool_result', tool_use_id: c.id, toolset_name: 'computer', is_error: true, content: 'The control there changed, so it was not pressed.' };
@@ -596,15 +611,23 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (front) return fail(`${front}, so no keys were sent. Stop and tell the user to bring the app they want to the front.`);
     }
     if (n === 'type') {
-      const f = await input.focused();
-      if (secretField(f)) return no('a password, card, SSN or code field: the user types that themselves');
-      if (!f && !asked && (sensitive || isGuarded(ctx)) && !(await yes('Type into a box I can’t read?'))) return no('an unreadable box');
+      const text = String(c.input.text ?? '').replace(/\s+$/, '');
+      let [f, before] = await Promise.all([input.focused(), input.fieldHas(text)]), how = 'focused';
       if (f?.pid === process.pid) return fail("That's Dixi's own window.");
       if (profileFocused()) return no('the profile window: the user types that themselves');
+      // A2: not in a text box → find it (AX by role and name, AX switched on, the site's key); never a blind paste.
+      const box = { where: ctx?.url, name: ctx?.title || ctx?.name || 'text' };
+      if (!input.isEditable(f)) {
+        const r = await input.focusField(box);
+        if (r.ok) { ({ el: f, how } = r); before = undefined; }
+        else if (!f) return fail(`${r.why} Click into it first, or say which box.`);
+      }
+      if (secretField(f)) return no('a password, card, SSN or code field: the user types that themselves');
       // A pasted newline can submit a one-line box or run a terminal command: those ask, like Enter.
-      const text = String(c.input.text ?? '').replace(/\s+$/, '');
       if (/\n/.test(text) && !asked && (f?.role === 'AXTextField' || isGuarded(ctx)) && !(await yes('Type text with line breaks? It may send or run.'))) return no('line breaks');
-      await input.type(text); await pause(200); return acted(ok(), f);
+      const r = await input.pasteChecked(text, { ...box, how, before });
+      if (!r.ok) return fail(r.why);
+      return acted(ok(r.checked ? 'Typed; the text is in the box.' : "Typed, but that box can't be read back, so look before going on."), f);
     }
     if (n === 'key' || n === 'hold_key') {
       const why = keyRisk(c.input.text, await input.focused(), { sensitive });
@@ -1179,9 +1202,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (!clean || signal.aborted) return;
     if (profileFocused() || secretField(await input.focused())) { say("That box is for you to type, so I won't type there."); return; }
     if (/\n/.test(clean) && (await keysBlocked())) { say("That has line breaks, and a line break in a terminal or code editor can run something, so I didn't type it."); return; }
-    await input.type(clean);
+    const typed = await input.pasteChecked(clean, { name: (await input.frontApp()).name || 'that' });   // read back, like the agent's typing
+    if (!typed.ok) { show({ state: 'error', title: "Didn't type it", text: typed.why, linger: 5000 }); say(typed.why); return; }
     show({ state: 'done', title: 'Typed it', text: clean.slice(0, 260), linger: 5000 });
-    say('Done.');
+    say(typed.checked ? 'Done.' : "Typed it, but I can't read that box to check.");
   }
 
   // ---- settings by voice or menu: careful mode, and the microphone (⌘⌥Space) ----
