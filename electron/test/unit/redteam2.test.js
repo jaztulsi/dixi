@@ -1,7 +1,7 @@
 // Red team, round 2: the holes found in press-by-number, Dixi's own window, unreadable controls and the
 // wake word stay closed. perform() (the gate every click, key and press goes through) runs for real here:
 // only Electron, the mouse/keyboard (input.js) and Claude are stand-ins.
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -31,7 +31,7 @@ register('data:text/javascript,' + encodeURIComponent(`
 const keys = {}, toMain = [], appOn = {}, released = [];   // the global shortcuts Dixi registered; what it sent the main window
 const any = () => new Proxy(function () {}, { get: (_t, k) => (k === 'then' ? undefined : any()), apply: () => any(), construct: () => any() });
 const img = { isEmpty: () => false, getSize: () => ({ width: 1280, height: 800 }), toJPEG: () => Buffer.from('jpg'), crop: () => img, resize: () => img };
-class Win { constructor() { this.webContents = { on() {}, once: (_e, fn) => fn(), send() {}, setWindowOpenHandler() {} }; } isDestroyed() { return false; } isVisible() { return true; } }
+class Win { static made = 0; static last = null; constructor() { Win.made++; Win.last = this; this.sent = []; this.webContents = { on() {}, once: (_e, fn) => fn(), send: (ch, d) => this.sent.push([ch, d]), setWindowOpenHandler() {} }; } isDestroyed() { return false; } isVisible() { return true; } }
 for (const m of ['setAlwaysOnTop', 'setVisibleOnAllWorkspaces', 'setIgnoreMouseEvents', 'setContentProtection', 'loadFile', 'setBounds', 'showInactive', 'hide', 'show']) Win.prototype[m] = () => {};
 globalThis.__electron = new Proxy({
   BrowserWindow: Win,
@@ -291,4 +291,23 @@ test('A1: a crashed Dixi window never leaves Esc held', mac, async () => {
   appOn['render-process-gone']({}, mainWin.webContents);
   assert.deepEqual(released, ['Escape'], 'the main window crashed mid-session: Esc is released');
   await press();
+});
+
+test('A1: the overlay is made hidden at launch, so ⌥Space sends "listening" before any await (no cold window on the first press)', mac, async () => {
+  const { setupEverywhere } = await import('../../src/main/everywhere.js');
+  mock.timers.enable({ apis: ['setTimeout'] });
+  let p;
+  try {
+    setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+      userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => mainWin, handle() {}, on() {}, onShowMain() {} });
+    const start = Win.made;
+    mock.timers.tick(2000);
+    assert.equal(Win.made, start + 1, 'the overlay window exists before any press');
+    const overlay = Win.last;
+    p = keys['Alt+Space']();   // not awaited: what follows runs before the handler's first await
+    assert.equal(Win.made, start + 1, 'the press builds no window');
+    assert.deepEqual(overlay.sent.filter(([ch]) => ch === 'ew:state').map(([, d]) => d.state), ['listening'], "'listening' is already sent");
+  } finally { mock.timers.reset(); }
+  await p;
+  keys['Escape']?.();
 });

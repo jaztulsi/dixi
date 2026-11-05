@@ -591,11 +591,11 @@ export class VoiceAgent {
   // Never a question back (Nov 5): a choice between results takes the first one and says which, in one
   // short line; "next" / "the other one" just after runs the same request again with the next choice.
   choose(question, options = []) {
-    if (options.length < 2) return this.ask(question, options);
-    const c = this.chosen, again = Boolean(c?.want) && c.options.join('\n') === options.join('\n');
+    if (!options.length) return this.ask(question, options);
+    const c = this.chosen, again = options.length > 1 && Boolean(c?.want) && c.options.join('\n') === options.join('\n');
     const pick = again ? c.want : options[0];
     this.chosen = { options, pick, text: this.lastText, at: Date.now() };
-    this.say(again ? `Going with ${pick} instead.` : `Going with the first one, ${pick}.`);
+    this.say(again ? `Going with ${pick} instead.` : options.length > 1 ? `Going with the first one, ${pick}.` : `Going with ${pick}.`);
     this.set({ statusLine: pick });
     return Promise.resolve(pick);
   }
