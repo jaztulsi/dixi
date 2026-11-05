@@ -331,6 +331,8 @@ export function enableAX(pid, { again = false } = {}) {
 }
 
 // ---- which app you're in (no permission needed) and the page it shows (asks once per browser) ----
+/** The process behind a pid (its path), for who owns a point that isn't the front app's. */
+export async function procName(pid) { try { return (await run(['/bin/ps', '-p', String(pid), '-o', 'comm='])).trim(); } catch { return ''; } }
 export async function frontApp() {
   try {
     const out = await run(['/bin/sh', '-c', 'lsappinfo info -only name -only bundleid -only pid "$(lsappinfo front)"']);

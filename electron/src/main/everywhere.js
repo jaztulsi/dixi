@@ -124,6 +124,9 @@ export const isSensitive = (ctx) => SENSITIVE_APPS.test(ctx?.name ?? '') || MESS
 // Where one ordinary-looking switch hands your Mac to someone (a scammer's "turn on AnyDesk here" in
 // Privacy & Security), or runs a program: every click and key asks.
 const GUARDED_APPS = /^(System Settings|System Preferences|Installer|Keychain Access|Terminal|iTerm2|Script Editor|Automator|Activity Monitor|Disk Utility)$/;
+// Never clicked by Dixi: the password, Touch ID and permission prompts macOS shows itself.
+const SYSTEM_PROMPT = /\b(SecurityAgent|UserNotificationCenter|coreautha)\b/i;
+const MENU_BAR = /\bAX(MenuBarItem|MenuExtra|MenuItem|Menu)\b/;   // menu extras and their menus live in other processes
 export const isGuarded = (ctx) => GUARDED_APPS.test(ctx?.name ?? '') || /^com\.apple\.(systempreferences|installer|keychainaccess|Terminal|ScriptEditor2)$/.test(ctx?.bundle ?? '');
 /** Words an approval question may quote from the screen, without the ones that would answer it. */
 // Keys and typed text never go to a terminal, a code editor or Dixi itself: one stray word plus Enter there runs a command.
@@ -562,9 +565,15 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (el?.pid === process.pid) return fail("That's Dixi's own window: Dixi doesn't press its own controls.");
       const why = clickRisk(el, strict) || moneyButton(el);
       if (why && !asked && !(await yes(why))) return no(why);
-      // A click lands only on a control read back inside the front app's window, never on a blind point.
-      const front = await input.frontApp();
-      if (!el || (front.pid && el.pid !== front.pid)) return fail(`That point isn't on anything in ${front.name || 'the front app'}'s window, so I didn't click there. Use the controls list, or bring that app to the front first.`);
+      // A click lands only on a control read back in the front app (its sheets, dialogs and menus too) or on a
+      // menu bar extra; never on a blind point, and never on a system security prompt. Every refusal is logged.
+      const front = await input.frontApp(), theirs = el && front.pid && el.pid !== front.pid;
+      const owner = theirs ? await input.procName(el.pid) : `${front.name} ${front.bundle}`;
+      const refused = !el ? "That point isn't on anything I can read, so I didn't click there."
+        : SYSTEM_PROMPT.test(owner) ? null
+        : theirs && !MENU_BAR.test(`${el.role} ${el.subrole ?? ''}`) ? `That point is in another app's window, not ${front.name || 'the front app'}'s, so I didn't click there. Use the controls list, or bring that app to the front first.` : null;
+      if (el && SYSTEM_PROMPT.test(owner)) { act.log({ kind: 'refused', text: 'a system security prompt', app: front.name, role: el.role, label: el.labels?.[0] }); return no('That is a system security prompt. The user answers it themselves'); }
+      if (refused) { act.log({ kind: 'refused', text: refused, app: front.name, role: el?.role, label: el?.labels?.[0] }); return fail(refused); }
       if (signal.aborted) return no('stopped');
       // A skill's replay: the control is read again just before the press, and must still be the recorded one.
       if (c.expect && !c.expect(await input.elementAt(at))) return { type: 'tool_result', tool_use_id: c.id, toolset_name: 'computer', is_error: true, content: 'The control there changed, so it was not pressed.' };

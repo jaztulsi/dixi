@@ -43,7 +43,7 @@ globalThis.__electron = new Proxy({
 
 const OTHER = 4242;   // the pid of the app in front (not Dixi)
 let done = [];        // what really happened to the Mac: clicks, presses, typing
-function fakeMac({ front = OTHER, controls = [], at = null, press = 'ok', box = { role: 'AXTextArea', labels: [], pid: front }, found = { ok: false, why: "Couldn't find the TextEdit input." }, pasted = { ok: true, checked: true } } = {}) {
+function fakeMac({ front = OTHER, controls = [], at = null, press = 'ok', box = { role: 'AXTextArea', labels: [], pid: front }, found = { ok: false, why: "Couldn't find the TextEdit input." }, pasted = { ok: true, checked: true }, owner = '' } = {}) {
   done = [];
   const log = (what) => async (...a) => { done.push([what, ...a]); };
   globalThis.__input = new Proxy({
@@ -51,7 +51,7 @@ function fakeMac({ front = OTHER, controls = [], at = null, press = 'ok', box = 
     browserTab: async () => null, enableAX: async () => {}, findControls: async () => [],
     listControls: async () => controls, elementAt: async () => at, focused: async () => box,
     isEditable: (el) => /^AX(TextField|TextArea)$/.test(el?.role ?? ''), fieldHas: async () => ({ read: true, len: 0, has: false }),
-    focusField: async () => found, pasteChecked: async (t) => { done.push(['type', t]); return pasted; },
+    focusField: async () => found, procName: async () => owner, pasteChecked: async (t) => { done.push(['type', t]); return pasted; },
     cursor: async () => ({ x: 0, y: 0 }), openApp: async () => false,
     pressControl: async (...a) => { done.push(['press', ...a]); return press; },
     click: log('click'), type: log('type'), key: log('key'), move: log('move'), mouseButton: log('mouseButton'), scroll: log('scroll'), drag: log('drag'),
@@ -73,7 +73,7 @@ globalThis.fetch = async (_url, { body }) => {
 const result = (id) => requests.flatMap((r) => r.messages ?? []).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).find((c) => c.type === 'tool_result' && c.tool_use_id === id)?.content;
 
 // One Everywhere, set up the way main.js does; approvals are answered by `answer(question)` (true = yes).
-let answer = () => false, asked = [], spoken = [], events = [];
+let answer = () => false, asked = [], spoken = [], events = [], rt2Dir = '';
 let quiet = () => {};   // the renderer saying Dixi's voice has finished (there's no renderer here)
 const harness = (async () => {
   if (process.platform !== 'darwin') return null;
@@ -82,7 +82,7 @@ const harness = (async () => {
   quiet = () => ons['everywhere:speaking']?.(false);
   const win = { webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:browse') { events.push(`browse ${d.text}`); setTimeout(() => { events.push(`done ${d.text}`); ons['everywhere:browsed'](d.id, true, ''); }, 30); } if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
   setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
-    userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
+    userData: (rt2Dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-'))), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
   return (text) => handlers['everywhere:run'](text);
 })();
 async function agentDoes(calls, mac, said = 'organize these notes for me') {
@@ -256,5 +256,19 @@ test('A2: the agent types only into a box it found, and its result says whether 
   assert.match(String(result('t0')), /the text is in the box/);
   await agentDoes(typing, { box: { role: 'AXButton', labels: [], pid: OTHER }, found: { ok: true, how: 'ax', el: { role: 'AXTextArea', labels: ['Message'], pid: OTHER } }, pasted: { ok: false, why: "The text didn't show up in the TextEdit input." } });
   assert.match(String(result('t0')), /didn't show up/);
+  assert.equal(asked.length, 0, 'nothing was asked');
+});
+
+test('clicks: the front app and menu extras yes; another window or a system prompt no, each refusal logged', mac, async () => {
+  const click = [{ name: 'left_click', input: { coordinate: [640, 400] } }], said = 'click Send';
+  const refusals = () => fs.readFileSync(path.join(rt2Dir, 'activity.jsonl'), 'utf8').split('\n').filter((l) => l.includes('"refused"')).length;
+  await agentDoes(click, { at: { role: 'AXMenuBarItem', subrole: 'AXMenuExtra', labels: ['Wi-Fi'], pid: 99 } }, said);
+  assert.ok(done.some(([w]) => w === 'click'), 'a menu bar extra (another process) is clicked');
+  await agentDoes(click, { at: { role: 'AXButton', labels: ['Send'], pid: 99 } }, said);
+  assert.ok(!done.some(([w]) => w === 'click'), "not a button in another app's window");
+  assert.match(String(result('t0')), /another app's window/);
+  await agentDoes(click, { at: { role: 'AXButton', labels: ['Allow'], pid: 98 }, owner: '/System/Library/CoreServices/SecurityAgent.app/Contents/MacOS/SecurityAgent' }, 'click allow');
+  assert.ok(!done.some(([w]) => w === 'click'), 'never a system security prompt, even when the user said it');
+  assert.equal(refusals(), 2, 'both refusals logged');
   assert.equal(asked.length, 0, 'nothing was asked');
 });

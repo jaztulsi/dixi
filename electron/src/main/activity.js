@@ -32,7 +32,7 @@ export function stepEvent(c, ctx = {}, el = null) {
   return { ...base, verb, ...(el ? { role: role(el.role) } : {}), ...(label && n !== 'key' ? { label: plain(label, 60) } : {}) };
 }
 
-const FIELDS = { run: ['text', 'app'], step: ['verb', 'app', 'role', 'label', 'host', 'chars'], ask: ['q', 'a', 'app'], guardian: ['text', 'app'], done: ['text', 'app'] };
+const FIELDS = { run: ['text', 'app'], step: ['verb', 'app', 'role', 'label', 'host', 'chars'], ask: ['q', 'a', 'app'], guardian: ['text', 'app'], done: ['text', 'app'], refused: ['text', 'app', 'role', 'label'] };
 const LIMIT = { text: 200, q: 120, label: 60, app: 40, verb: 40, role: 40, host: 80, a: 12 };
 function clean(e, t) {
   const f = FIELDS[e?.kind];
