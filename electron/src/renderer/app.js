@@ -35,7 +35,8 @@ for (const k of Object.keys(localStorage)) {
 // listens only after "Dixi" again; the Settings switch still turns that off on purpose.
 const WAKE_KEY = 'dixi.wakeWordOnly';
 const settings = {
-  get requireWakeWord() { return localStorage.getItem(WAKE_KEY) !== 'false'; },
+  // Experimental always-listening + wake word "Dixi": OFF by default. Off = the mic opens only for ⌥Space (A1).
+  get requireWakeWord() { return localStorage.getItem(WAKE_KEY) === 'true'; },
   set requireWakeWord(v) { localStorage.setItem(WAKE_KEY, String(v)); },
 };
 
@@ -108,8 +109,9 @@ window.dixi.onPopup((url) => tabs.createTab(url));
 const ew = window.dixi.everywhere;
 let ewArmed = 0, ewUntil = 0, ewConfirm = null;
 ew?.enabled().then(({ listening = true, phrases = [] } = {}) => {
+  settings.requireWakeWord = listening;   // the Mac-wide "always listening" switch is the experimental wake-word mode
   if (!listening) voice.stop();   // microphone switched off (⌘⌥Space): nothing is heard until it's back on
-  ew.onMic((on) => { if (on) voice.start().catch(() => {}); else voice.stop(); });
+  ew.onMic((on) => { settings.requireWakeWord = on; if (on) voice.start().catch(() => {}); else if (!voice.session) voice.stop(); });
   // The Mac agent needs a word from you ("Which file?"): asked out loud, your answer goes back.
   ew.onAsk(async ({ id, question }) => ew.answer(id, await voice.ask(question, [], { raw: true })));
   // Your own commands (the dashboard): heard from any window. And with this window out of sight, everything
@@ -125,11 +127,14 @@ ew?.enabled().then(({ listening = true, phrases = [] } = {}) => {
   };
   speaker.onSpeaking = (on) => ew.speaking(on);   // the mascot in the glass panel talks while Dixi does
   ew.onListen(() => {
-    ewArmed = Date.now() + 15000;
+    ewArmed = Date.now() + (voice.requireWakeWord ? 15000 : 180000);   // a ⌥Space session: all of it is about the Mac
     voice.set({ isAwake: true, awakeUntil: ewArmed });
-    if (!voice.isListening) voice.start().catch(() => {});
+    if (!voice.requireWakeWord) voice.startSession();
+    else if (!voice.isListening) voice.start().catch(() => {});
   });
-  ew.onDisarm(() => { ewArmed = 0; voice.set({ awakeUntil: 0, isAwake: false }); });
+  ew.onDisarm(() => { ewArmed = 0; voice.set({ awakeUntil: 0, isAwake: false }); voice.endSession({ cancel: true }); });
+  ew.onFinish?.(() => voice.endSession());   // ⌥Space again: finish and send
+  voice.onSessionEnd = () => ew.sessionEnded?.();
   // (No listening window after Dixi speaks: a follow-up starts with "Dixi", so its own voice can't loop.)
   ew.onSay((t) => { speaker.say(t); ewUntil = Date.now() + 30000; });
   ew.onKill(() => { speaker.stop(); voice.cancelAll({ quiet: true }); });
