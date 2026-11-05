@@ -1,0 +1,3536 @@
+{
+ "at": "2026-10-31T08:11:03.406Z",
+ "stages": {
+  "unit": {
+   "summary": "324 tests × 3 runs",
+   "status": "pass",
+   "ms": 48688
+  },
+  "gate": {
+   "status": "pass",
+   "summary": "5 passed, 0 failed, 0 flaky",
+   "ms": 4141
+  },
+  "static": {
+   "status": "fail",
+   "summary": "8/16 checks pass",
+   "ms": 183
+  },
+  "secrets": {
+   "status": "pass",
+   "summary": "318 tracked + 8 untracked files, all history, 54 log files, 5 real keys checked · 0 findings",
+   "findings": [],
+   "ms": 3319
+  },
+  "idle": {
+   "status": "fail",
+   "summary": "5 processes · avg CPU 31.1% over 25 s · 478 MB",
+   "ms": 27375
+  }
+ },
+ "tests": [
+  {
+   "stage": "unit",
+   "id": "the regex matches the questions and not its neighbours",
+   "feature": "",
+   "status": "pass",
+   "ms": 10,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "intent: windows, app, risk, clear",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the file is 0600, one line per event, and never holds typed text",
+   "feature": "",
+   "status": "pass",
+   "ms": 8,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "nothing at all for password, card or code fields",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "rotates at about 2 MB, keeping one old file",
+   "feature": "",
+   "status": "pass",
+   "ms": 33,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "answers for today: counts runs, steps and yes answers",
+   "feature": "",
+   "status": "pass",
+   "ms": 8,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "\"did you send anything\" lists only yes answers that match",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "time windows with an injected clock",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "app filter keeps only that app",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "when a time rule runs next",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "what the model makes of a request is checked in code",
+   "feature": "",
+   "status": "pass",
+   "ms": 13,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a spoken rule: saved, said back, run when due (and once if the Mac slept through it), stopped by name",
+   "feature": "",
+   "status": "pass",
+   "ms": 165,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a file trigger: a new file in the folder runs the command once it has finished arriving",
+   "feature": "",
+   "status": "pass",
+   "ms": 5062,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a page monitor tells you only when the watched thing changes",
+   "feature": "",
+   "status": "pass",
+   "ms": 42,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "workflows: record what you say, or save it; replay in order; a failed step stops it and says which",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the socket and the token are owner-only; a wrong token is refused",
+   "feature": "",
+   "status": "pass",
+   "ms": 62,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "say goes through, capped and without the wake word; then the rate limit kicks in",
+   "feature": "",
+   "status": "pass",
+   "ms": 9,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the limit: one line per 2 s and 10 a minute",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "nothing is spoken while Dixi is busy for the user (an approval card must not hear Claude Code)",
+   "feature": "",
+   "status": "pass",
+   "ms": 18,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "notify shows a card and says the title",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "ask returns the spoken answer, matched to a choice",
+   "feature": "",
+   "status": "pass",
+   "ms": 15,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "ask with the microphone off: only a yes/no (the card has buttons)",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "ask: silence is null after the timeout",
+   "feature": "",
+   "status": "pass",
+   "ms": 112,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "answers: yes/no is strict, a choice must be said as a word, anything else comes back as said",
+   "feature": "",
+   "status": "pass",
+   "ms": 8,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "dixi-mcp answers initialize and tools/list, and tools/call reaches the bridge",
+   "feature": "",
+   "status": "pass",
+   "ms": 180,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "dixi-mcp: modern (2026-07-28) requests, and dixi_ask",
+   "feature": "",
+   "status": "pass",
+   "ms": 182,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "dixi-mcp with no Dixi running: a tool error, not a crash",
+   "feature": "",
+   "status": "pass",
+   "ms": 174,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "--notify (the Stop hook) shows a card and exits 0",
+   "feature": "",
+   "status": "pass",
+   "ms": 341,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "Calendar: today in time order, all-day first, repeating series worked out",
+   "feature": "",
+   "status": "pass",
+   "ms": 27,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "repeating rules: monthly by weekday or date, every other week, yearly",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "Reminders: due today or overdue, overdue first",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "Mail: not open is null; sender names",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "gather: each app is optional; denied and slow ones are skipped, Mail is never launched",
+   "feature": "",
+   "status": "pass",
+   "ms": 13,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "briefText: a busy day",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "briefText: a very busy day still fits in about 20 seconds",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "briefText: empty day, later in the day, Mail not open, skipped apps",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "nextText and tomorrowText",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "briefSteps: past done, current running, the rest queued",
+   "feature": "",
+   "status": "pass",
+   "ms": 72,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "spoken commands for the brief",
+   "feature": "",
+   "status": "pass",
+   "ms": 9,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "triggers match, near-misses do not",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "read-back uses an absolute date, never \"next Friday\"",
+   "feature": "",
+   "status": "pass",
+   "ms": 63,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "invalid, past and far dates are refused; no date asks",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "times: end before start becomes start + 1 hour; title and notes capped",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "\"tomorrow at 9\" overrides the screen and makes a reminder",
+   "feature": "",
+   "status": "pass",
+   "ms": 22,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "yes: created, and the values travel as JSON args, not spliced",
+   "feature": "",
+   "status": "pass",
+   "ms": 70,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "no: nothing is created",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "invalid date: refused, nothing asked or created",
+   "feature": "",
+   "status": "pass",
+   "ms": 9,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "no date: asks the user, then reads back the answer",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "errors in plain words",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "reminder goes to Reminders with the due time",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the selection: text, an image or files come back; your clipboard is put back; nothing selected → null",
+   "feature": "",
+   "status": "pass",
+   "ms": 239,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "paste puts the new text where the selection was, then restores the clipboard",
+   "feature": "",
+   "status": "pass",
+   "ms": 155,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "clipboard history: today’s copies, newest first and searchable; passwords and password managers are never kept",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "OCR reading order: rows top to bottom, pieces of one row left to right, unsure pieces dropped",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "acting on it: the model is told the selection is data; only text can be replaced; nothing there → no model call",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "OCR on this Mac: a picture and a scanned PDF page are read; a PDF with text uses its text layer",
+   "feature": "",
+   "status": "pass",
+   "ms": 11087,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "catalog: families match however they are spoken, including models not listed by name",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "catalog: generic words and look-alikes never trigger it",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "catalog: an accessory for a product, or one of Apple's own, is searched on Apple's store (Apple first)",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "catalog: a family with several current models and none named asks which; digits inside numbers never match",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "catalog: missing or old catalog",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the words that pick a command",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "commands are checked: known action, phrase, target, no control characters",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a phrase used twice is refused",
+   "feature": "",
+   "status": "pass",
+   "ms": 12,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "saved to a file only you can read, and read back",
+   "feature": "",
+   "status": "pass",
+   "ms": 8,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "files and folders stay inside your home folder",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "only complete, non-repeated commands are saved, trimmed",
+   "feature": "",
+   "status": "pass",
+   "ms": 46,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "typing a repeat above a saved command never knocks the saved one out",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "activity is grouped by day, newest first, with 12-hour times",
+   "feature": "",
+   "status": "pass",
+   "ms": 37,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "permission words and the status pill",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "demo: every DEMO.md line and follow-up needs no AI",
+   "feature": "",
+   "status": "pass",
+   "ms": 97,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "demo: a similar sentence is the same line",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "demo: another product, colour, number or site is never the demo",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "demo: \"iPhone 18\" is the iPhone 18 Pro, with what was said about it, and AirPods",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "demo: the start of a line waits for the rest; whole commands do not",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "demo: products open on their exact configuration page",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "your three scenarios need no AI to understand",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "back is a direction, never a site",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "phrasings match the right verb",
+   "feature": "",
+   "status": "pass",
+   "ms": 499,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "screen questions, general requests and things left out do not match",
+   "feature": "",
+   "status": "pass",
+   "ms": 347,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the voice regex catches the same lines",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "durations and sites",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "volume: reads the level first, clamps, and puts only a number in the script",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "media: asks whether the app is running first, and does nothing if it is not",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "open a website: only https and a valid host reach `open`",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "window layout: halves, maximize, centre and the other screen, from the screens it is given",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "window verb: reads the front window, then sets it; the numbers go in as JSON",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "timers: in memory, fire through say, list and cancel",
+   "feature": "",
+   "status": "pass",
+   "ms": 20,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "dark mode, lock, battery, screenshot",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "wifi: off asks first, on does not; no is respected",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "quit: only a running app, only after a yes, and the name is an argument",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a missing Automation permission is explained, not thrown",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "phrasings match the right topic",
+   "feature": "",
+   "status": "pass",
+   "ms": 522,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "must not match",
+   "feature": "",
+   "status": "pass",
+   "ms": 136,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "parsers read real output",
+   "feature": "",
+   "status": "pass",
+   "ms": 15,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "memory names the biggest app and offers to quit it",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "slow: a busy app, otherwise reassurance; never offers to quit macOS parts",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "space: rounded numbers, and where the space went",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "battery health",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "fan, model, uptime",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "network says where it breaks",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "read-only, never throws, no shell",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "its own words heard after it stopped talking do nothing (wake word off, Everywhere)",
+   "feature": "",
+   "status": "pass",
+   "ms": 1510,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "its own words heard after it stopped talking do nothing (wake word off, browser)",
+   "feature": "",
+   "status": "pass",
+   "ms": 1469,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "its own words heard after it stopped talking do nothing (wake word on, follow-up window open, Everywhere)",
+   "feature": "",
+   "status": "pass",
+   "ms": 1458,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "its own words heard after it stopped talking do nothing (wake word on, follow-up window open, browser)",
+   "feature": "",
+   "status": "pass",
+   "ms": 1459,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a line of its own that names Dixi is still an echo, not \"Dixi, …\"",
+   "feature": "",
+   "status": "pass",
+   "ms": 1464,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "you still get through right after Dixi talked: a new request, \"Dixi, stop\", plain \"stop\"",
+   "feature": "",
+   "status": "pass",
+   "ms": 1659,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a question's own echo doesn't answer it, but a short reply that uses its words does",
+   "feature": "",
+   "status": "pass",
+   "ms": 2629,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "clicks on send, pay, buy, delete wait for a yes; ordinary ones do not",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the click gate fails closed",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "Enter asks unless it is a search box; ⌘Enter, ⌘Q, ⌘⌫ always ask",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "red team (S8): the holes found in the gate stay closed",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "\"click Send\" is pressed by name with no model; vague targets go to the agent",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "unnamed controls ask only where it matters; unreadable and risky names always ask",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the controls list the agent presses by number",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "messaging and money apps are sensitive",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "what was said picks the mode",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "screen questions are recognised; browser commands are not",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "context line is written in code",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "screenshot pixels map back to the screen (second display, Retina)",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "key names parse to macOS key codes and modifiers",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "spoken settings and memory commands reach Everywhere from anywhere; ordinary commands do not",
+   "feature": "",
+   "status": "pass",
+   "ms": 62,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "cartCount: a badge going up counts; a page caught mid-load or prices never do",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "what you say becomes a file intent",
+   "feature": "",
+   "status": "pass",
+   "ms": 24,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "follow-ups point at the list",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "screen questions and plain app or button asks do not match",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the Spotlight query is escaped and typed",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "when ranges",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "paths: home only, no Library, hidden or node_modules",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "findFiles: argv only, filtered, newest first, max 5",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "find speaks a short result; open and reveal need no approval",
+   "feature": "",
+   "status": "pass",
+   "ms": 88,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "move and rename ask first, never overwrite, stay inside home",
+   "feature": "",
+   "status": "pass",
+   "ms": 48,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "hostile names are cleaned and capped; there is no delete",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "game words, and only game words",
+   "feature": "",
+   "status": "pass",
+   "ms": 10,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "casual games yes, anti-cheat games no (and says why)",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the tracker finds the player after it moves",
+   "feature": "",
+   "status": "pass",
+   "ms": 122,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "following lets go of every key when stopped or when the game is no longer in front",
+   "feature": "",
+   "status": "pass",
+   "ms": 150,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a timed move lets go too",
+   "feature": "",
+   "status": "pass",
+   "ms": 108,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "held keys: only game keys, and releaseAll lets go of all of them, any number of times",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "real sites pass",
+   "feature": "",
+   "status": "pass",
+   "ms": 27,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "look-alike addresses are stopped",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "other look-alike letters warn",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "remote-access apps and their download pages warn",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "scam text is caught",
+   "feature": "",
+   "status": "pass",
+   "ms": 41,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "ordinary text is not",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "stops come first, one finding per rule",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "cooling-off: a stop holds that site for 15 minutes, then lets go",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "no approval while a finding is open or a cooling-off runs",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "policy: narrowing is free, widening needs approval",
+   "feature": "",
+   "status": "pass",
+   "ms": 45,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "runs every task in its own folder, a few at a time, with only the safe tools",
+   "feature": "",
+   "status": "pass",
+   "ms": 1399,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "stopping ends every agent, including ones not started yet",
+   "feature": "",
+   "status": "pass",
+   "ms": 306,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a missing Claude Code says so",
+   "feature": "",
+   "status": "pass",
+   "ms": 19,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "retrieval check: each question finds its source in the top 3 (on-device meaning + words)",
+   "feature": "",
+   "status": "pass",
+   "ms": 16987,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "an answer cites its passages; weak evidence → \"I don't know\" with what was searched, and no model call",
+   "feature": "",
+   "status": "pass",
+   "ms": 63,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a changed file replaces its old passages; the same version is skipped; removed means gone",
+   "feature": "",
+   "status": "pass",
+   "ms": 14,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "long text is cut into passages on paragraph and sentence lines",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "secrets in a note never reach the model",
+   "feature": "",
+   "status": "pass",
+   "ms": 10,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a folder: text, Word and PDF are read; hidden folders and node_modules are not; gone files are forgotten",
+   "feature": "",
+   "status": "pass",
+   "ms": 2467,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the watch: a new or changed file is in the index a moment later; a deleted one leaves it",
+   "feature": "",
+   "status": "pass",
+   "ms": 1332,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "Notes, Mail, past requests and conversations become sources with their kind",
+   "feature": "",
+   "status": "pass",
+   "ms": 130,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "validate: a query that swallowed a particle or the name is rejected (the \"up classroom\" class)",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "validate: names and queries must be copied from what was said (no snapping to another name)",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "validate: required fields per act",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "findSpan: spacing and joined forms are the same words",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "fastPath: generic controls and ordinals need no AI; unknown names do",
+   "feature": "",
+   "status": "pass",
+   "ms": 23,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "interpret: fast path first, then the fast tier, escalates to strong when validation fails",
+   "feature": "",
+   "status": "pass",
+   "ms": 19,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a part of a site squeezed into \"open\" becomes open + click",
+   "feature": "",
+   "status": "pass",
+   "ms": 9,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "remove from the cart is its own act (\"remove it\", or a named item kept as said)",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a job runs in the background: steps with why and timing, short spoken updates, a notification at the end",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a failed job says why in plain words and can be retried in one click",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "stopping ends the job quietly: no failure notice",
+   "feature": "",
+   "status": "pass",
+   "ms": 14,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "hedged request: a slow first model is overtaken by the second; the loser is aborted",
+   "feature": "",
+   "status": "pass",
+   "ms": 129,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "rate-limited models cool down and are skipped",
+   "feature": "",
+   "status": "pass",
+   "ms": 96,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "agent chat: a model past its spend cap (402) falls through to the next (Cerebras out → Groq free tier)",
+   "feature": "",
+   "status": "pass",
+   "ms": 11,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "reasoning effort per provider/model family",
+   "feature": "",
+   "status": "pass",
+   "ms": 14,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "per-provider cap: one provider past its cap is skipped, the others still run",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "providers: spend cap stops calls; keys never needed in the renderer",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "providers: Anthropic replies come back in the same shape as the others",
+   "feature": "",
+   "status": "pass",
+   "ms": 67,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "cooldowns",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the text goes after \"--\", the bytes come back, the temp file is gone",
+   "feature": "",
+   "status": "pass",
+   "ms": 92,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a failed or timed-out voice rejects and leaves no file",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the real Mac voice makes a WAV",
+   "feature": "",
+   "status": "pass",
+   "ms": 7026,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "what you said becomes a fact",
+   "feature": "",
+   "status": "pass",
+   "ms": 21,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "secrets, profile details and screen-like text are never facts",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "remember → recall → supersede → forget, kept on disk",
+   "feature": "",
+   "status": "pass",
+   "ms": 76,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "health facts reach a prompt only for food or medicine",
+   "feature": "",
+   "status": "pass",
+   "ms": 112,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the profile: saved as typed, read back masked, given to the agent in full",
+   "feature": "",
+   "status": "pass",
+   "ms": 317,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "spoken memory commands, and how they sit beside the screen ones",
+   "feature": "",
+   "status": "pass",
+   "ms": 40,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "memoryTurn: what Dixi says",
+   "feature": "",
+   "status": "pass",
+   "ms": 101,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "page toolkit parses",
+   "feature": "",
+   "status": "pass",
+   "ms": 163,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "time and date",
+   "feature": "",
+   "status": "pass",
+   "ms": 103,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "math",
+   "feature": "",
+   "status": "pass",
+   "ms": 255,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "conversions",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "days until",
+   "feature": "",
+   "status": "pass",
+   "ms": 131,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "spelling",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "web questions use the injected answerer",
+   "feature": "",
+   "status": "pass",
+   "ms": 9,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "never matches the screen or an app",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "QUICK prefilter catches the real ones",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "intents match, and the neighbours do not",
+   "feature": "",
+   "status": "pass",
+   "ms": 240,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "chunks split at sentence ends, stay short, lose nothing",
+   "feature": "",
+   "status": "pass",
+   "ms": 8,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "private text: Luhn card, code, password; ordinary numbers pass",
+   "feature": "",
+   "status": "pass",
+   "ms": 15,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "selection comes first: Haiku is never called when AX had text",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "page: falls back to window text; long text says how long",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "secure field is never read, and nothing goes to the model",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "nothing in AX: one Haiku call; image intent copies to the clipboard",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "image text that looks private is refused and not copied",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "P1: when pressing by number falls back to a click, something covering the control is never clicked",
+   "feature": "",
+   "status": "pass",
+   "ms": 2951,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "P2: Dixi never presses, clicks or types in its own window (its safety switches live there)",
+   "feature": "",
+   "status": "pass",
+   "ms": 626,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "P4: a control nobody can read asks, even in an ordinary app; an unnamed one there does not",
+   "feature": "",
+   "status": "pass",
+   "ms": 331,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a risky named control asks, and only a yes presses it",
+   "feature": "",
+   "status": "pass",
+   "ms": 1363,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "W1: while Dixi waits for an answer, the TV can answer nothing and command nothing",
+   "feature": "",
+   "status": "pass",
+   "ms": 1535,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "W2: a bare \"yes\" counts only just after the question; later it takes \"Dixi, yes\"",
+   "feature": "",
+   "status": "pass",
+   "ms": 2608,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "⌥Space again stops Dixi: while it listens (even after a few seconds), while it works, and while its reply is about to play",
+   "feature": "",
+   "status": "pass",
+   "ms": 3781,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "evidence: every word of the name must be on the page; a shorter page name never counts for a longer one",
+   "feature": "",
+   "status": "pass",
+   "ms": 80,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "registry: a product page on a known site never takes over the site's own name",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "resolve: the model's guess is checked, the real site is found by search when the guess is wrong",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "resolve: exact name beats a longer one that contains it (no shadowing either way)",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "resolve: an invented name that exists nowhere is \"not found\", never the nearest known one",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "resolve: two different sites that fit a bare word equally → ambiguous (ask), not a guess",
+   "feature": "",
+   "status": "pass",
+   "ms": 8,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "registry: two failed landings invalidate an entry; registry removal degrades to lookup",
+   "feature": "",
+   "status": "pass",
+   "ms": 39,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "modes: hybrid splits the work, cerebras-only and claude-only use one provider each",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a missing or refused key is reported in words, and that provider is not used",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "model discovery: the benchmark ranking first (if still listed), then the provider order",
+   "feature": "",
+   "status": "pass",
+   "ms": 281,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "Claude requests: thinking off in the form each model takes, never a forced tool on Sonnet/Opus 5.5",
+   "feature": "",
+   "status": "pass",
+   "ms": 13,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "Claude agent history: tool calls and results become blocks; same-role turns merge",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "retries: 5xx and dropped connections back off and retry; a long 429 is returned at once",
+   "feature": "",
+   "status": "pass",
+   "ms": 386,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "schema check catches what a provider let through",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "router: a fast answer that fails a check goes to Claude; the reason is recorded",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "agent: a reply that is no call, a bad call, or a missing element is not acted on",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a question the page cannot answer goes to Claude with a web search, told which page you are on",
+   "feature": "",
+   "status": "pass",
+   "ms": 150,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "link text naming one site while the URL goes to another is flagged",
+   "feature": "",
+   "status": "pass",
+   "ms": 10,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "look-alike hosts, raw IPs, shorteners and punycode are caught; the real site is not",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "sender from a look-alike address: the reason names the company and the address",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a gift-card demand is a scam and says to call the number on the card",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "\"this is your bank calling, read me the code\" is a scam",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a clean page gets the hedged wording, never \"safe\"",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "at most 3 reasons; Guardian findings count",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "trigger phrases match; ordinary questions do not",
+   "feature": "",
+   "status": "pass",
+   "ms": 17,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "gatherLinks reads through an injected runner and survives failure",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "scamCheck: fake model, marks in display points, model failure still gives a verdict",
+   "feature": "",
+   "status": "pass",
+   "ms": 22,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "record → save → list → match with slots → delete",
+   "feature": "",
+   "status": "pass",
+   "ms": 251,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "only skills this Mac made load: a file from a link, another Mac or an edit is ignored",
+   "feature": "",
+   "status": "pass",
+   "ms": 84,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "nothing typed into a password, card or code box is recorded or saved",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "slots: only what was said; never a trigger made only of slots",
+   "feature": "",
+   "status": "pass",
+   "ms": 19,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "best match: a skill named exactly beats a trigger",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: labels match → each step goes through perform; slots typed; Enter asks",
+   "feature": "",
+   "status": "pass",
+   "ms": 109,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: the label changed → stops with ok:false, nothing clicked there",
+   "feature": "",
+   "status": "pass",
+   "ms": 21,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: the button moved → found by its label, checked, then clicked",
+   "feature": "",
+   "status": "pass",
+   "ms": 9,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: one click heals onto a control of the same role; the second failure stops",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: a healed click on a risky label still asks",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: a risky label asks; a no stops the run and is never healed",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: the label is read again just before the press (expect)",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: stops in another app or on another site",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "replay: password boxes, codes and stop are respected",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a click with nothing recorded to check is never made blind",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "spoken commands",
+   "feature": "",
+   "status": "pass",
+   "ms": 46,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "at most 6 runs of one skill an hour, 20 in all",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "speakable: numbers are said as words (what Dixi actually says in the demo)",
+   "feature": "",
+   "status": "pass",
+   "ms": 86,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "stt: ElevenLabs refusing the key (out of credit) hands the mic to Deepgram",
+   "feature": "",
+   "status": "pass",
+   "ms": 90,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "stt: quota_exceeded mid-session closes ElevenLabs; the reconnect goes to Deepgram",
+   "feature": "",
+   "status": "pass",
+   "ms": 203,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "stt: insufficient_audio_activity is not a credit problem (stays on ElevenLabs)",
+   "feature": "",
+   "status": "pass",
+   "ms": 76,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a tool is checked when it is added",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "what was said goes to the highest-priority tool that takes it; a broken matcher is skipped",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a tool runs directly, with no question, and every call is timed",
+   "feature": "",
+   "status": "pass",
+   "ms": 34,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a repeated lookup within cacheMs is answered from the cache",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "failures come back in plain words; a slow tool times out; stopping stops it",
+   "feature": "",
+   "status": "pass",
+   "ms": 75,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the agent sees only tools that have a schema, as Claude tool definitions",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "Dixi's own capabilities route by what was said, with no AI",
+   "feature": "",
+   "status": "pass",
+   "ms": 546,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "an MCP server: its tools join the registry and run, and it never sees Dixi’s keys",
+   "feature": "",
+   "status": "pass",
+   "ms": 335,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "mcp.json lists the servers; a missing or broken file means none",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "personal memory: an answer with its sources; nothing found passes to the next path unless you named your files",
+   "feature": "",
+   "status": "pass",
+   "ms": 27,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the fast model: Groq first, the next one when it fails, each try timed",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a whole lesson: it points, waits for you, and never acts on its own",
+   "feature": "",
+   "status": "pass",
+   "ms": 274,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the screen moving without your step: pointed at again, not said again",
+   "feature": "",
+   "status": "pass",
+   "ms": 164,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "\"repeat\" says it again with no new look; \"I'm stuck\" asks for a simpler way; \"do it for me\" hands one step to the agent",
+   "feature": "",
+   "status": "pass",
+   "ms": 169,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a scam on screen ends the lesson; stopping (the kill key) ends it at once",
+   "feature": "",
+   "status": "pass",
+   "ms": 35,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "nothing happening: one gentle nudge, then it stops for now",
+   "feature": "",
+   "status": "pass",
+   "ms": 405,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "what starts a lesson, and what steers it",
+   "feature": "",
+   "status": "pass",
+   "ms": 11,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "where the ring goes: on a listed control, at a point in the picture, or nowhere",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the planner asks for one step, with the controls as information and the history so far",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a clean-up is one group: undo puts every file back and removes the folders it made",
+   "feature": "",
+   "status": "pass",
+   "ms": 103,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "never overwrites, never deletes: a taken name gets a number; the Trash can be undone",
+   "feature": "",
+   "status": "pass",
+   "ms": 75,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "undo leaves alone what changed since, and bad names or paths are refused",
+   "feature": "",
+   "status": "pass",
+   "ms": 25,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "one turn → one execution, however many end-of-turn signals arrive",
+   "feature": "",
+   "status": "pass",
+   "ms": 192,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "TurnResumed aborts the early understanding; the final words are used",
+   "feature": "",
+   "status": "pass",
+   "ms": 156,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "nothing acts before the end of the turn (partial words never trigger an action)",
+   "feature": "",
+   "status": "pass",
+   "ms": 115,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "wake word: only at the start of what was said",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "casual mention of the wake word mid-sentence does nothing",
+   "feature": "",
+   "status": "pass",
+   "ms": 87,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "\"stop\" cancels queued steps at once (barge-in mid-task)",
+   "feature": "",
+   "status": "pass",
+   "ms": 327,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a clarifying question captures the next answer (by ordinal or name)",
+   "feature": "",
+   "status": "pass",
+   "ms": 15,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a question asked mid-sentence is answered by what is said next, not by the end of that sentence",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "half-heard buying words are never bought; the final words are",
+   "feature": "",
+   "status": "pass",
+   "ms": 1015,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the final words, written differently, never repeat what was already done",
+   "feature": "",
+   "status": "pass",
+   "ms": 624,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a failed step stops the rest quietly (no spoken error); failed parses are not cached",
+   "feature": "",
+   "status": "pass",
+   "ms": 56,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "acts while you speak: a finished clause runs before the sentence ends",
+   "feature": "",
+   "status": "pass",
+   "ms": 557,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "clauses split only where a new command starts",
+   "feature": "",
+   "status": "pass",
+   "ms": 4,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "wake word by sound, at the start or after a sentence break; alone it opens a listening window",
+   "feature": "",
+   "status": "pass",
+   "ms": 156,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "after a command, the next words without \"Dixi\" are not a command",
+   "feature": "",
+   "status": "pass",
+   "ms": 317,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "understanding starts at a short pause and is reused when the turn ends (one model call)",
+   "feature": "",
+   "status": "pass",
+   "ms": 508,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "talking over Dixi: its own words are an echo, a new command is not",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a turn cut off mid-sentence is finished by the next one; a whole question ending on \"about\" is answered",
+   "feature": "",
+   "status": "pass",
+   "ms": 353,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a site never used before waits for its whole name (\"Maya\" is not \"Maya Indian Kitchen\")",
+   "feature": "",
+   "status": "pass",
+   "ms": 967,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "mic paused while it is still connecting stays paused (no live mic after stop)",
+   "feature": "",
+   "status": "pass",
+   "ms": 33,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a new command while \"which one?\" is open is not read as an answer (\"make the iPhone two\" ≠ the second one)",
+   "feature": "",
+   "status": "pass",
+   "ms": 106,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "\"stop and listen\": nothing runs until \"go\", then it all goes as one request (to Everywhere when it wants it)",
+   "feature": "",
+   "status": "pass",
+   "ms": 250,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "talking about Dixi is not talking to Dixi; a protest stops it",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "watchIntent parses",
+   "feature": "",
+   "status": "pass",
+   "ms": 17,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "prompt and schema",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "unchanged screen: one baseline check, then only the 60 s recheck",
+   "feature": "",
+   "status": "pass",
+   "ms": 7,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "unchanged screen is rechecked after 60 s",
+   "feature": "",
+   "status": "pass",
+   "ms": 5,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a change calls check; stops when met; why is cleaned",
+   "feature": "",
+   "status": "pass",
+   "ms": 9,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "why is capped at 80 characters",
+   "feature": "",
+   "status": "pass",
+   "ms": 6,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "times out at maxMs",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "stop and abort end it once",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a second watch replaces the first",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the welcome walks the steps in order: microphone, screen, accessibility, then the optional one",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "a step out of order is still checked off; skipping moves on; denied is not done",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the try-it card uses the real shortcuts, and Dixi says them in words",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "every earcon is short (200 ms at most), and the card and done ones are two notes",
+   "feature": "",
+   "status": "pass",
+   "ms": 3,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "earcons play on a change of state only, and never over Dixi or its echo window",
+   "feature": "",
+   "status": "pass",
+   "ms": 52,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "card keys: Y or Enter is yes, N or Esc is no; a yes right after typing does not count",
+   "feature": "",
+   "status": "pass",
+   "ms": 1,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "the ⌥Return yes is ignored right after the agent types or a card opens",
+   "feature": "",
+   "status": "pass",
+   "ms": 0,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "unit",
+   "id": "permStatus normalizes what macOS says",
+   "feature": "",
+   "status": "pass",
+   "ms": 2,
+   "runs": 3,
+   "fails": 0,
+   "loc": ""
+  },
+  {
+   "stage": "gate",
+   "id": "a bare \"Buy now\" and a priced \"Rent\" ask first; add to cart, \"Order now\" and a product link do not",
+   "feature": "guardian",
+   "status": "pass",
+   "ms": 249
+  },
+  {
+   "stage": "gate",
+   "id": "a repeating purchase option is never chosen without a yes",
+   "feature": "guardian",
+   "status": "pass",
+   "ms": 447
+  },
+  {
+   "stage": "gate",
+   "id": "an offer box with a price is not dismissed like a cookie banner",
+   "feature": "guardian",
+   "status": "pass",
+   "ms": 65
+  },
+  {
+   "stage": "gate",
+   "id": "Enter and submit in a search box still go through; Enter in a frame Dixi can't read asks",
+   "feature": "guardian",
+   "status": "pass",
+   "ms": 182
+  },
+  {
+   "stage": "gate",
+   "id": "on a payment page: Enter, the form submit, an unnamed button, \"Continue\" and \"Order now\" all ask, and nothing is sent",
+   "feature": "guardian",
+   "status": "pass",
+   "ms": 170
+  },
+  {
+   "stage": "static",
+   "id": "electron-window-prefs",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "electron-unsafe-flags",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "electron-webview-hardened",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "electron-window-open",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "shell-exec",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "dynamic-code",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "crash-handler",
+   "feature": "production",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "error-log",
+   "feature": "production",
+   "status": "fail",
+   "error": "errors persisted by default (traces only exist with DIXI_DEBUG=1)"
+  },
+  {
+   "stage": "static",
+   "id": "keychain",
+   "feature": "production",
+   "status": "fail",
+   "error": "API keys come from .env in plain text, not the macOS Keychain"
+  },
+  {
+   "stage": "static",
+   "id": "auto-update",
+   "feature": "production",
+   "status": "fail",
+   "error": "no update path"
+  },
+  {
+   "stage": "static",
+   "id": "packaging",
+   "feature": "production",
+   "status": "fail",
+   "error": "no electron-builder / forge config: no .app or DMG can be built"
+  },
+  {
+   "stage": "static",
+   "id": "signing-identity",
+   "feature": "production",
+   "status": "blocked",
+   "error": "no \"Developer ID Application\" certificate in the keychain: signing + notarization need the founder's Apple Developer account"
+  },
+  {
+   "stage": "static",
+   "id": "changelog",
+   "feature": "production",
+   "status": "fail",
+   "error": "no CHANGELOG.md"
+  },
+  {
+   "stage": "static",
+   "id": "ci",
+   "feature": "production",
+   "status": "fail",
+   "error": "no .github/workflows: nothing runs the suite on commit"
+  },
+  {
+   "stage": "static",
+   "id": "privacy-export-delete",
+   "feature": "production",
+   "status": "fail",
+   "error": "no \"export my data\" / \"delete everything\" path"
+  },
+  {
+   "stage": "static",
+   "id": "env-untracked",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "secrets",
+   "id": "secrets-scan",
+   "feature": "secrets",
+   "status": "pass"
+  },
+  {
+   "stage": "idle",
+   "id": "idle-resources",
+   "feature": "resources",
+   "status": "fail",
+   "error": "idle CPU 31.1% (budget 2%), memory 478 MB (budget 800 MB)"
+  }
+ ],
+ "latency": [],
+ "checks": [
+  {
+   "id": "electron-window-prefs",
+   "area": "security",
+   "status": "pass",
+   "detail": "6 windows: contextIsolation + sandbox, no nodeIntegration"
+  },
+  {
+   "id": "electron-unsafe-flags",
+   "area": "security",
+   "status": "pass",
+   "detail": "none"
+  },
+  {
+   "id": "electron-webview-hardened",
+   "area": "security",
+   "status": "pass",
+   "detail": "will-attach-webview forces isolation on every <webview>"
+  },
+  {
+   "id": "electron-window-open",
+   "area": "security",
+   "status": "pass",
+   "detail": "7 window-open handlers for 6 windows"
+  },
+  {
+   "id": "shell-exec",
+   "area": "security",
+   "status": "pass",
+   "detail": "only execFile/spawn with argument lists"
+  },
+  {
+   "id": "dynamic-code",
+   "area": "security",
+   "status": "pass",
+   "detail": "none (the control hook eval exists only with DIXI_CONTROL_PORT + token, test-only)"
+  },
+  {
+   "id": "crash-handler",
+   "area": "production",
+   "status": "pass",
+   "detail": "uncaughtException/unhandledRejection: yes · render/child-process-gone or crashReporter: yes"
+  },
+  {
+   "id": "error-log",
+   "area": "production",
+   "status": "fail",
+   "detail": "errors persisted by default (traces only exist with DIXI_DEBUG=1)"
+  },
+  {
+   "id": "keychain",
+   "area": "production",
+   "status": "fail",
+   "detail": "API keys come from .env in plain text, not the macOS Keychain"
+  },
+  {
+   "id": "auto-update",
+   "area": "production",
+   "status": "fail",
+   "detail": "no update path"
+  },
+  {
+   "id": "packaging",
+   "area": "production",
+   "status": "fail",
+   "detail": "no electron-builder / forge config: no .app or DMG can be built"
+  },
+  {
+   "id": "signing-identity",
+   "area": "production",
+   "status": "blocked",
+   "detail": "no \"Developer ID Application\" certificate in the keychain: signing + notarization need the founder's Apple Developer account"
+  },
+  {
+   "id": "changelog",
+   "area": "production",
+   "status": "fail",
+   "detail": "no CHANGELOG.md"
+  },
+  {
+   "id": "ci",
+   "area": "production",
+   "status": "fail",
+   "detail": "no .github/workflows: nothing runs the suite on commit"
+  },
+  {
+   "id": "privacy-export-delete",
+   "area": "production",
+   "status": "fail",
+   "detail": "no \"export my data\" / \"delete everything\" path"
+  },
+  {
+   "id": "env-untracked",
+   "area": "security",
+   "status": "pass",
+   "detail": ".env is not tracked by git"
+  }
+ ],
+ "retrieval": null,
+ "errors": [],
+ "crashes": 0,
+ "sha": "51c7da6",
+ "dirtyFiles": 10,
+ "mac": "Darwin 25.6.0 arm64",
+ "idle": {
+  "cpu": 31.07,
+  "rssMB": 478,
+  "procs": 5
+ },
+ "perf": {}
+}

@@ -1,0 +1,252 @@
+{
+ "at": "2026-10-31T04:43:35.778Z",
+ "stages": {
+  "static": {
+   "status": "fail",
+   "summary": "7/16 checks pass",
+   "ms": 110
+  },
+  "secrets": {
+   "status": "pass",
+   "summary": "316 tracked + 6 untracked files, all history, 52 log files, 5 real keys checked · 0 findings",
+   "findings": [],
+   "ms": 819
+  },
+  "idle": {
+   "status": "fail",
+   "summary": "7 processes · avg CPU 6.1% over 25 s · 553 MB",
+   "ms": 25321
+  }
+ },
+ "tests": [
+  {
+   "stage": "static",
+   "id": "electron-window-prefs",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "electron-unsafe-flags",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "electron-webview-hardened",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "electron-window-open",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "shell-exec",
+   "feature": "security",
+   "status": "fail",
+   "error": "shell-string exec at src/main/desktop.js:157, src/main/desktop.js:158, src/main/desktop.js:194, src/main/desktop.js:234, src/main/desktop.js:238, src/main/desktop.js:242, src/main/desktop.js:247, src/main/desktop.js:249, src/main/doctor.js:181, src/main/index.js:48, src/main/index.js:66, src/main/index.js:74, src/main/index.js:75, src/main/memory.js:79, src/main/memory.js:117"
+  },
+  {
+   "stage": "static",
+   "id": "dynamic-code",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "crash-handler",
+   "feature": "production",
+   "status": "pass"
+  },
+  {
+   "stage": "static",
+   "id": "error-log",
+   "feature": "production",
+   "status": "fail",
+   "error": "errors persisted by default (traces only exist with DIXI_DEBUG=1)"
+  },
+  {
+   "stage": "static",
+   "id": "keychain",
+   "feature": "production",
+   "status": "fail",
+   "error": "API keys come from .env in plain text, not the macOS Keychain"
+  },
+  {
+   "stage": "static",
+   "id": "auto-update",
+   "feature": "production",
+   "status": "fail",
+   "error": "no update path"
+  },
+  {
+   "stage": "static",
+   "id": "packaging",
+   "feature": "production",
+   "status": "fail",
+   "error": "no electron-builder / forge config: no .app or DMG can be built"
+  },
+  {
+   "stage": "static",
+   "id": "signing-identity",
+   "feature": "production",
+   "status": "blocked",
+   "error": "no \"Developer ID Application\" certificate in the keychain: signing + notarization need the founder's Apple Developer account"
+  },
+  {
+   "stage": "static",
+   "id": "changelog",
+   "feature": "production",
+   "status": "fail",
+   "error": "no CHANGELOG.md"
+  },
+  {
+   "stage": "static",
+   "id": "ci",
+   "feature": "production",
+   "status": "fail",
+   "error": "no .github/workflows: nothing runs the suite on commit"
+  },
+  {
+   "stage": "static",
+   "id": "privacy-export-delete",
+   "feature": "production",
+   "status": "fail",
+   "error": "no \"export my data\" / \"delete everything\" path"
+  },
+  {
+   "stage": "static",
+   "id": "env-untracked",
+   "feature": "security",
+   "status": "pass"
+  },
+  {
+   "stage": "secrets",
+   "id": "secrets-scan",
+   "feature": "secrets",
+   "status": "pass"
+  },
+  {
+   "stage": "idle",
+   "id": "idle-resources",
+   "feature": "resources",
+   "status": "fail",
+   "error": "idle CPU 6.1% (budget 2%), memory 553 MB (budget 800 MB)"
+  }
+ ],
+ "latency": [],
+ "checks": [
+  {
+   "id": "electron-window-prefs",
+   "area": "security",
+   "status": "pass",
+   "detail": "6 windows: contextIsolation + sandbox, no nodeIntegration"
+  },
+  {
+   "id": "electron-unsafe-flags",
+   "area": "security",
+   "status": "pass",
+   "detail": "none"
+  },
+  {
+   "id": "electron-webview-hardened",
+   "area": "security",
+   "status": "pass",
+   "detail": "will-attach-webview forces isolation on every <webview>"
+  },
+  {
+   "id": "electron-window-open",
+   "area": "security",
+   "status": "pass",
+   "detail": "7 window-open handlers for 6 windows"
+  },
+  {
+   "id": "shell-exec",
+   "area": "security",
+   "status": "fail",
+   "detail": "shell-string exec at src/main/desktop.js:157, src/main/desktop.js:158, src/main/desktop.js:194, src/main/desktop.js:234, src/main/desktop.js:238, src/main/desktop.js:242, src/main/desktop.js:247, src/main/desktop.js:249, src/main/doctor.js:181, src/main/index.js:48, src/main/index.js:66, src/main/index.js:74, src/main/index.js:75, src/main/memory.js:79, src/main/memory.js:117"
+  },
+  {
+   "id": "dynamic-code",
+   "area": "security",
+   "status": "pass",
+   "detail": "none (the control hook eval exists only with DIXI_CONTROL_PORT + token, test-only)"
+  },
+  {
+   "id": "crash-handler",
+   "area": "production",
+   "status": "pass",
+   "detail": "uncaughtException/unhandledRejection: yes · render/child-process-gone or crashReporter: yes"
+  },
+  {
+   "id": "error-log",
+   "area": "production",
+   "status": "fail",
+   "detail": "errors persisted by default (traces only exist with DIXI_DEBUG=1)"
+  },
+  {
+   "id": "keychain",
+   "area": "production",
+   "status": "fail",
+   "detail": "API keys come from .env in plain text, not the macOS Keychain"
+  },
+  {
+   "id": "auto-update",
+   "area": "production",
+   "status": "fail",
+   "detail": "no update path"
+  },
+  {
+   "id": "packaging",
+   "area": "production",
+   "status": "fail",
+   "detail": "no electron-builder / forge config: no .app or DMG can be built"
+  },
+  {
+   "id": "signing-identity",
+   "area": "production",
+   "status": "blocked",
+   "detail": "no \"Developer ID Application\" certificate in the keychain: signing + notarization need the founder's Apple Developer account"
+  },
+  {
+   "id": "changelog",
+   "area": "production",
+   "status": "fail",
+   "detail": "no CHANGELOG.md"
+  },
+  {
+   "id": "ci",
+   "area": "production",
+   "status": "fail",
+   "detail": "no .github/workflows: nothing runs the suite on commit"
+  },
+  {
+   "id": "privacy-export-delete",
+   "area": "production",
+   "status": "fail",
+   "detail": "no \"export my data\" / \"delete everything\" path"
+  },
+  {
+   "id": "env-untracked",
+   "area": "security",
+   "status": "pass",
+   "detail": ".env is not tracked by git"
+  }
+ ],
+ "retrieval": null,
+ "errors": [],
+ "crashes": 0,
+ "sha": "b550048",
+ "dirtyFiles": 9,
+ "mac": "Darwin 25.6.0 arm64",
+ "idle": {
+  "cpu": 6.1,
+  "rssMB": 553,
+  "procs": 7
+ },
+ "perf": {}
+}

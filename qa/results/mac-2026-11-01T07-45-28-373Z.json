@@ -1,0 +1,117 @@
+{
+ "at": "2026-11-01T07:45:28.373Z",
+ "app": "/Users/jaz/dixi-lane-qa/qa/.integ/electron",
+ "timeout": 30000,
+ "ledgerStart": 2.917279824999997,
+ "rows": [
+  {
+   "id": "calendar-then-text-mom",
+   "kind": "multi",
+   "known": true,
+   "say": "Go to my school calendar, add my test on Friday, then text Dixi Test I'll be late",
+   "status": "blocked",
+   "why": "messaging rows run only with --messaging"
+  },
+  {
+   "id": "open-calculator",
+   "kind": "simple",
+   "known": false,
+   "say": "open Calculator",
+   "status": "pass",
+   "ms": 492,
+   "runMs": 147,
+   "hardStopped": false,
+   "got": "front Calculator",
+   "said": [
+    "Opening Calculator."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": [],
+   "loaded": []
+  },
+  {
+   "id": "volume-30",
+   "kind": "simple",
+   "known": false,
+   "say": "set the volume to 30 percent",
+   "status": "pass",
+   "ms": 384,
+   "runMs": 344,
+   "hardStopped": false,
+   "got": "volume 30",
+   "said": [
+    "Volume 30 percent."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": [],
+   "loaded": []
+  },
+  {
+   "id": "mute",
+   "kind": "simple",
+   "known": false,
+   "say": "mute the sound",
+   "status": "pass",
+   "ms": 2189,
+   "runMs": 451,
+   "hardStopped": false,
+   "got": "muted true",
+   "said": [
+    "Muted."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": [],
+   "loaded": []
+  },
+  {
+   "id": "guard-unsafe-host",
+   "kind": "simple",
+   "known": false,
+   "say": "open 0-1-x.16215785.xyz",
+   "label": "safety guard: a known-bad host must be refused, never loaded",
+   "status": "pass",
+   "ms": 450,
+   "runMs": 46,
+   "hardStopped": false,
+   "got": "loaded 0 · said [\"That site is on a public list of malware and phishing sites. I didn't open it.\"]",
+   "said": [
+    "That site is on a public list of malware and phishing sites. I didn't open it."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": [],
+   "loaded": []
+  }
+ ],
+ "urls": [],
+ "ledgerEnd": 2.917279824999997,
+ "usd": 0,
+ "qaTotalUSD": 0,
+ "founderEvents": 0,
+ "flaggedURLs": [],
+ "summary": {
+  "ran": 4,
+  "blocked": 1,
+  "pass": 4,
+  "passRate": 1,
+  "avgMs": 879,
+  "slowest": "mute",
+  "flaggedURLs": 0,
+  "simpleP50": 450,
+  "simpleP90": 2189,
+  "usd": 0,
+  "qaTotalUSD": 0,
+  "sharedLedgerDelta": 0,
+  "founderEventsDuringRun": 0,
+  "simpleP95": 2189,
+  "meetsBar": false,
+  "barTwiceInARow": false
+ }
+}

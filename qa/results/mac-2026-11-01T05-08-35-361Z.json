@@ -1,0 +1,267 @@
+{
+ "at": "2026-11-01T05:08:35.361Z",
+ "app": "/Users/jaz/dixi-lane-qa/electron",
+ "timeout": 30000,
+ "ledgerStart": 2.7682539249999962,
+ "rows": [
+  {
+   "id": "music-search",
+   "kind": "simple",
+   "known": true,
+   "say": "search lo-fi beats on Apple Music",
+   "status": "fail",
+   "ms": 16211,
+   "runMs": 14194,
+   "hardStopped": false,
+   "got": "front Electron; fields []; browser https://events.ycombinator.com/naive-autonomous-companies-hackathon",
+   "said": [
+    "One thing first: to answer, Dixi sends a picture of your screen to Claude. Nothing is saved.",
+    "I'll open Apple Music via Spotlight and search for lo-fi beats."
+   ],
+   "asked": [
+    "I can't tell what that button does. Press it?"
+   ],
+   "steps": [
+    "pressed a key",
+    "typed text box",
+    "pressed a key"
+   ],
+   "usd": 0.0224,
+   "errs": []
+  },
+  {
+   "id": "safeway-bagel",
+   "kind": "simple",
+   "known": true,
+   "say": "buy a bagel from Safeway",
+   "note": "lenient: a Safeway bagel page, search or cart counts",
+   "status": "fail",
+   "ms": 3982,
+   "runMs": 1980,
+   "hardStopped": false,
+   "got": "https://events.ycombinator.com/naive-autonomous-companies-hackathon",
+   "said": [],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  },
+  {
+   "id": "page-first-video",
+   "kind": "simple",
+   "known": true,
+   "say": "play the first video",
+   "label": "approximation of \"couldn't find that on this page\"",
+   "status": "fail",
+   "ms": 3923,
+   "runMs": 2037,
+   "hardStopped": false,
+   "got": "https://events.ycombinator.com/naive-autonomous-companies-hackathon",
+   "said": [],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  },
+  {
+   "id": "calendar-school-test",
+   "kind": "multi",
+   "known": true,
+   "say": "Go to my school calendar and add my test on Friday",
+   "note": "the text-mom half is its own blocked row",
+   "status": "fail",
+   "ms": 35666,
+   "runMs": 28468,
+   "hardStopped": false,
+   "got": "[]",
+   "said": [],
+   "asked": [],
+   "steps": [],
+   "usd": 0.0212,
+   "errs": []
+  },
+  {
+   "id": "calendar-then-text-mom",
+   "kind": "multi",
+   "known": true,
+   "say": "Go to my school calendar, add my test on Friday, then text my mom I'll be late",
+   "status": "blocked",
+   "why": "needs Dixi Test contact (never message a real person)"
+  },
+  {
+   "id": "music-search-play",
+   "kind": "multi",
+   "known": true,
+   "say": "Open Apple Music, search lo-fi beats, and play it",
+   "status": "fail",
+   "ms": 2819,
+   "runMs": 704,
+   "hardStopped": false,
+   "got": "stopped · ",
+   "said": [
+    "I didn't find anything like that."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  },
+  {
+   "id": "pdf-rename-move",
+   "kind": "multi",
+   "known": true,
+   "say": "Find the PDF I downloaded yesterday, rename it, and move it to my Documents folder",
+   "status": "fail",
+   "ms": 2328,
+   "runMs": 549,
+   "hardStopped": false,
+   "got": "/Users/jaz/Downloads/QA Dixi receipt mvxdfgvo.pdf",
+   "said": [
+    "I didn't find anything like that."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": [],
+   "restored": []
+  },
+  {
+   "id": "volume-notes-new",
+   "kind": "multi",
+   "known": true,
+   "say": "Turn the volume down, open my notes, and start a new note",
+   "status": "fail",
+   "ms": 31043,
+   "runMs": null,
+   "hardStopped": true,
+   "got": "volume 13→13 · front Cursor · notes 106→106",
+   "said": [
+    "I'll turn the volume down first, then open Notes.",
+    "Spotlight didn't open Notes; my typing went into the Claude terminal (\"n\" is sitting in the prompt). I'll clear that and try opening Notes from the Dock instead.",
+    "Notes is open. I'll press New Note to start a blank one.",
+    "The window switched back to Cursor and the Claude prompt now has stray text in it. I'll take a screenshot to see where things stand."
+   ],
+   "asked": [
+    "Press Enter? It may send or submit."
+   ],
+   "steps": [
+    "pressed a key",
+    "pressed a key",
+    "typed text box",
+    "pressed a key",
+    "pressed a key",
+    "pressed a key",
+    "clicked dock item Notes"
+   ],
+   "usd": 0.0569,
+   "errs": [],
+   "restored": "ok"
+  },
+  {
+   "id": "open-calculator",
+   "kind": "simple",
+   "known": false,
+   "say": "open Calculator",
+   "status": "pass",
+   "ms": 448,
+   "runMs": 80,
+   "hardStopped": false,
+   "got": "front Calculator",
+   "said": [
+    "Opening Calculator."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  },
+  {
+   "id": "quit-calculator",
+   "kind": "simple",
+   "known": false,
+   "say": "quit Calculator",
+   "status": "fail",
+   "ms": 26737,
+   "runMs": 25099,
+   "hardStopped": false,
+   "got": "running true",
+   "said": [
+    "Okay, I didn't quit Calculator."
+   ],
+   "asked": [
+    "Quit Calculator? Unsaved work may be lost."
+   ],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  },
+  {
+   "id": "volume-30",
+   "kind": "simple",
+   "known": false,
+   "say": "set the volume to 30 percent",
+   "status": "pass",
+   "ms": 551,
+   "runMs": 163,
+   "hardStopped": false,
+   "got": "volume 30",
+   "said": [
+    "Volume 30 percent."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  },
+  {
+   "id": "open-downloads",
+   "kind": "simple",
+   "known": false,
+   "say": "open my Downloads folder",
+   "status": "fail",
+   "ms": 5779,
+   "runMs": 3678,
+   "hardStopped": false,
+   "got": "front Finder · /Users/jaz/dixi-lane-qa/qa/",
+   "said": [
+    "Opening qa."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  },
+  {
+   "id": "open-youtube",
+   "kind": "simple",
+   "known": false,
+   "say": "open youtube.com",
+   "status": "pass",
+   "ms": 12,
+   "runMs": 102,
+   "hardStopped": false,
+   "got": "https://youtube.com/",
+   "said": [
+    "Opening youtube.com."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": []
+  }
+ ],
+ "ledgerEnd": 2.8868565249999962,
+ "founderEvents": 3,
+ "summary": {
+  "ran": 12,
+  "blocked": 1,
+  "pass": 3,
+  "passRate": 0.25,
+  "avgMs": 10792,
+  "slowest": "calendar-school-test",
+  "simpleP50": 3923,
+  "simpleP90": 26737,
+  "usd": 0.1186,
+  "founderEventsDuringRun": 3
+ }
+}

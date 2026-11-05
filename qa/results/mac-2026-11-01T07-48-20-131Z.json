@@ -1,0 +1,225 @@
+{
+ "at": "2026-11-01T07:48:20.131Z",
+ "app": "/Users/jaz/dixi-lane-qa/qa/.integ/electron",
+ "timeout": 30000,
+ "ledgerStart": 2.917279824999997,
+ "rows": [
+  {
+   "id": "music-search",
+   "kind": "simple",
+   "known": true,
+   "say": "search lo-fi beats on Apple Music",
+   "status": "fail",
+   "ms": 31654,
+   "runMs": null,
+   "hardStopped": true,
+   "got": "front Music; fields []; browser https://claude.ai/chat/c4b826bf-42b4-43a9-b7fd-ccb44c041a02",
+   "said": [
+    "One thing first: to answer, Dixi sends a picture of your screen to Claude. Nothing is saved.",
+    "There's a permission dialog on screen that I didn't trigger and that isn't part of your request, so I'll leave it alone. I'll open the Music app with Spotlight.",
+    "Music doesn't seem to have opened yet, and the screen still shows the same apps. I'll click the Music icon in the Dock.",
+    "The click on the Dock was blocked, and Music still isn't in front. I'll try Spotlight again and check the result before doing anything else."
+   ],
+   "asked": [
+    "Press Enter? It may send or submit."
+   ],
+   "steps": [
+    "pressed a key",
+    "typed text box",
+    "pressed a key",
+    "pressed a key"
+   ],
+   "usd": 0.039,
+   "errs": [],
+   "loaded": []
+  },
+  {
+   "id": "safeway-bagel",
+   "kind": "simple",
+   "known": true,
+   "say": "buy a bagel from Safeway",
+   "note": "lenient: a Safeway bagel page, search or cart counts",
+   "status": "fail",
+   "ms": 31235,
+   "runMs": null,
+   "hardStopped": true,
+   "got": "https://claude.ai/chat/c4b826bf-42b4-43a9-b7fd-ccb44c041a02",
+   "said": [
+    "I'll open Safeway's website in Chrome to look for a bagel."
+   ],
+   "asked": [
+    "Press Enter? It may send or submit."
+   ],
+   "steps": [
+    "pressed a key",
+    "typed text box",
+    "pressed a key",
+    "pressed a key",
+    "typed text box"
+   ],
+   "usd": 0.0198,
+   "errs": [],
+   "loaded": []
+  },
+  {
+   "id": "page-first-video",
+   "kind": "simple",
+   "known": true,
+   "say": "play the first video",
+   "label": "approximation of \"couldn't find that on this page\"",
+   "status": "pass",
+   "ms": 8682,
+   "runMs": null,
+   "hardStopped": true,
+   "got": "https://www.youtube.com/watch?v=rFZHOHl-L8A",
+   "said": [
+    "The first result is a sponsored ad, so I'll scroll down to find the first actual video in the results.",
+    "The first real video result is \"lofi hip hop radio\" by Lofi Girl, so I'll open it.",
+    "An ad is playing before the video (0:15 long). I'll wait a bit for it to finish and then check.",
+    "Cursor, a code editor, has come to the front instead of Chrome. I'll switch back to Chrome with cmd+tab to check on the video.",
+    "Cursor is still in front, so I'll click the Chrome icon in the Dock to return to the video."
+   ],
+   "asked": [],
+   "steps": [
+    "scrolled",
+    "pressed link lofi hip hop radio \ud83d\udcda beats to relax/study to"
+   ],
+   "usd": 0.0587,
+   "errs": [],
+   "loaded": [
+    "https://www.youtube.com/watch?v=rFZHOHl-L8A"
+   ]
+  },
+  {
+   "id": "calendar-school-test",
+   "kind": "multi",
+   "known": true,
+   "say": "Go to my school calendar and add my test on Friday",
+   "note": "the text-mom half is its own blocked row",
+   "status": "fail",
+   "ms": 32485,
+   "runMs": null,
+   "hardStopped": true,
+   "got": "[]",
+   "said": [
+    "I'll open the Calendar app with Spotlight to find your school calendar."
+   ],
+   "asked": [
+    "Press Enter? It may send or submit."
+   ],
+   "steps": [
+    "pressed a key",
+    "typed text box"
+   ],
+   "usd": 0.0193,
+   "errs": [],
+   "loaded": []
+  },
+  {
+   "id": "calendar-then-text-mom",
+   "kind": "multi",
+   "known": true,
+   "say": "Go to my school calendar, add my test on Friday, then text Dixi Test I'll be late",
+   "status": "blocked",
+   "why": "messaging rows run only with --messaging"
+  },
+  {
+   "id": "music-search-play",
+   "kind": "multi",
+   "known": true,
+   "say": "Open Apple Music, search lo-fi beats, and play it",
+   "status": "fail",
+   "ms": 3207,
+   "runMs": 722,
+   "hardStopped": false,
+   "got": "stopped \u00b7 ",
+   "said": [
+    "I didn't find anything like that."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": [],
+   "loaded": []
+  },
+  {
+   "id": "pdf-rename-move",
+   "kind": "multi",
+   "known": true,
+   "say": "Find the PDF I downloaded yesterday, rename it, and move it to my Documents folder",
+   "status": "fail",
+   "ms": 2674,
+   "runMs": 665,
+   "hardStopped": false,
+   "got": "/Users/jaz/Downloads/QA Dixi receipt mvxj6jtk.pdf",
+   "said": [
+    "I didn't find anything like that."
+   ],
+   "asked": [],
+   "steps": [],
+   "usd": 0,
+   "errs": [],
+   "loaded": [],
+   "restored": []
+  },
+  {
+   "id": "volume-notes-new",
+   "kind": "multi",
+   "known": true,
+   "say": "Turn the volume down, open my notes, and start a new note",
+   "status": "fail",
+   "ms": 31266,
+   "runMs": null,
+   "hardStopped": true,
+   "got": "volume 13\u219213 \u00b7 front Cursor \u00b7 notes 107\u2192107",
+   "said": [
+    "I'll turn the volume down first with the keyboard, then open Notes.",
+    "Spotlight didn't open; the typed text \"Notes\" went into a Cursor terminal prompt instead. I'll clear that text and then use the menu bar volume control and launch Notes properly."
+   ],
+   "asked": [
+    "Press Enter? It may send or submit."
+   ],
+   "steps": [
+    "pressed a key",
+    "typed text box",
+    "pressed a key",
+    "pressed a key"
+   ],
+   "usd": 0.0293,
+   "errs": [],
+   "loaded": [],
+   "restored": "ok"
+  }
+ ],
+ "urls": [
+  {
+   "row": "page-first-video",
+   "url": "https://www.youtube.com/watch?v=rFZHOHl-L8A",
+   "allowed": true
+  }
+ ],
+ "ledgerEnd": 3.0834919249999975,
+ "usd": 0.1662,
+ "qaTotalUSD": 0.1662,
+ "founderEvents": 0,
+ "flaggedURLs": [],
+ "summary": {
+  "ran": 7,
+  "blocked": 1,
+  "pass": 1,
+  "passRate": 0.14285714285714285,
+  "avgMs": 20172,
+  "slowest": "calendar-school-test",
+  "flaggedURLs": 0,
+  "simpleP50": 31235,
+  "simpleP90": 31654,
+  "usd": 0.1662,
+  "qaTotalUSD": 0.1662,
+  "sharedLedgerDelta": 0.1662,
+  "founderEventsDuringRun": 0,
+  "simpleP95": 31654,
+  "meetsBar": false,
+  "barTwiceInARow": false
+ },
+ "partial": "paused by the orchestrator after 8 of 50 rows (stop set via the spend guard; +1000 marker removed)"
+}
