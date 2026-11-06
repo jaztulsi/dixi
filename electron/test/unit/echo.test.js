@@ -35,7 +35,7 @@ function rig(speaker, { wake, everywhere = true }) {
   const llm = { json: async () => JSON.stringify({ clarify: '', steps: [] }) };
   const tabs = { getCurrentURL: () => 'about:blank', activeTab: null, visibleTabs: [], tabList: () => '', dx: async () => '' };
   const executor = { run: async () => ({ ok: true, message: 'ok' }) };
-  const v = new VoiceAgent({ deepgram: null, tabs, llm, tiers: { fast: ['m'], strong: [] }, executor, speaker, settings: { requireWakeWord: wake }, settleMS: 20, specMS: 10 });
+  const v = new VoiceAgent({ deepgram: null, tabs, llm, tiers: { fast: ['m'], strong: [] }, executor, speaker, settings: { requireWakeWord: wake }, settleMS: 20, specMS: 10, holdMS: 0 });
   const handleText = v.handleText.bind(v), cancelAll = v.cancelAll.bind(v);
   v.handleText = (t, o) => { handled.push(t); return handleText(t, o); };
   v.cancelAll = (o) => { cancels.push(o); return cancelAll(o); };
@@ -100,4 +100,40 @@ test("a question's own echo doesn't answer it, but a short reply that uses its w
   r.hear('yes');
   assert.equal(await yes, true);
   assert.deepEqual(r.sent, []);
+});
+
+test('not deaf after Dixi talks: one word 300 ms after it stops runs; its own last word arriving late does not', async () => {
+  const speaker = new Speaker({ synth: null, tts: null });
+  speaker.say(ANSWER);
+  await sleep(300);   // past the 250 ms echo tail (it was 1.2 s: this "Back." was dropped)
+  const r = rig(speaker, { wake: false, everywhere: false });
+  r.hear('right.');   // the tail of its own line, late
+  r.hear('Back.');
+  await sleep(150);
+  assert.deepEqual(r.handled, ['Back']);
+});
+
+test('your words joined to its echo in one turn are kept; only the echo is cut (and "Dixi" after it still wakes)', async () => {
+  const speaker = await spoke([EARLIER, ANSWER]);
+  const b = rig(speaker, { wake: false, everywhere: false });
+  b.hear(`${ANSWER} Go home.`);   // 92% its own words: the whole turn used to be dropped
+  b.hear("I'll tell you when they're done. Open my email.");
+  await sleep(150);
+  assert.deepEqual(b.handled, ['Go home', 'Open my email']);
+  const w = rig(speaker, { wake: true, everywhere: false });
+  w.hear(`${ANSWER} Dixi, scroll down.`);
+  await sleep(150);
+  assert.deepEqual(w.handled, ['scroll down']);
+});
+
+test('the short echo tail is only for audio played through the page; speechSynthesis (outside Chrome) keeps 1.2 s', async () => {
+  globalThis.SpeechSynthesisUtterance ??= class { constructor(t) { this.text = t; } };
+  const page = new Speaker({ synth: null, tts: async () => new Uint8Array(0) });   // no bytes, no synth: nothing played
+  const os = new Speaker({ synth: { speak: (u) => setTimeout(() => u.onend(), 5), cancel() {} }, tts: null });
+  await page.say('Opening the news.'); await os.say('Opening the news.');
+  await sleep(320);
+  assert.equal(page.isBusy(), false);
+  assert.equal(os.isBusy(), true, 'the system voice can still be coming back through the mic');
+  await sleep(1000);
+  assert.equal(os.isBusy(), false);
 });

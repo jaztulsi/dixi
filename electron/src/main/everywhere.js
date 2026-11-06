@@ -302,8 +302,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   if (index) { for (const dir of prefs.indexFolders ?? []) learnFolder(dir); indexActivity(index, act, { since: Date.now() - 30 * 864e5 }).catch(() => {}); }
 
   // ---- the glass overlay: one transparent, click-through window over the screen you're on ----
-  function overlayOn(bounds) {
-    if (!state.overlay || state.overlay.isDestroyed()) {
+  // Made once, hidden, ~2 s after launch, so the first ⌥Space never waits for a window to load.
+  function createOverlay(bounds) {
       const w = new BrowserWindow({ ...bounds, type: 'panel', frame: false, transparent: true, hasShadow: false, focusable: false, resizable: false, movable: false,
         minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, show: false, enableLargerThanScreen: true, backgroundColor: '#00000000',
         webPreferences: { preload: path.join(here, '../preload/everywhere.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } });   // (earcons: the panel never gets a click)
@@ -313,15 +313,22 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       w.setContentProtection(true);   // never in Dixi's own screenshots of your screen
       w.webContents.on('will-navigate', (e) => e.preventDefault());
       w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-      state.ready = new Promise((r) => w.webContents.once('did-finish-load', r));
+      state.overlay = w; state.loaded = false;
+      state.ready = new Promise((r) => w.webContents.once('did-finish-load', () => { if (state.overlay === w) state.loaded = true; r(); }));
       w.loadFile(path.join(here, '../renderer/everywhere/overlay.html'));
-      state.overlay = w;
       ui('ew:prefs', look());
-    } else state.overlay.setBounds(bounds);
+  }
+  function overlayOn(bounds) {
+    if (!state.overlay || state.overlay.isDestroyed()) createOverlay(bounds);
+    else state.overlay.setBounds(bounds);
     clearTimeout(state.hideTimer);
     if (!state.overlay.isVisible()) state.overlay.showInactive();
   }
-  const ui = async (channel, data) => { if (!state.overlay) return; await state.ready; if (!state.overlay.isDestroyed()) state.overlay.webContents.send(channel, data); };
+  const ui = (channel, data) => {   // sent at once when the page is loaded (⌥Space's 'listening' goes out before any await)
+    if (!state.overlay) return;
+    const send = () => { if (!state.overlay.isDestroyed()) state.overlay.webContents.send(channel, data); };
+    return state.loaded ? send() : state.ready.then(send);
+  };
   const show = (data) => {
     if (!state.overlay?.isVisible()) overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
     ui('ew:state', data);
@@ -1492,5 +1499,6 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   if (!prefs.welcomed && env.DIXI_WELCOME !== '0') { try { welcome(); } catch (err) { console.warn('[everywhere] welcome:', err.message); } }   // never stops Dixi starting
   // The dashboard is Dixi's front window; the browser listens out of sight (DIXI_START=browser for the old way).
   if (env.DIXI_START !== 'browser') { try { openDash(); } catch (err) { console.warn('[everywhere] dashboard:', err.message); } }
+  setTimeout(() => { if (!state.overlay) createOverlay(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds); }, 2000).unref?.();
   return { enabled: true, keepsRunning: true, stop, tray, showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
 }
