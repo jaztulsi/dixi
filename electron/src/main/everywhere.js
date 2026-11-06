@@ -21,7 +21,8 @@ import { unsafe } from './safesite.js';
 import { exec as macExec, openTarget, runScript, check as checkScript, installedApps } from './mac.js';
 import { mark } from './timing.js';
 import { plan, split } from './plan.js';
-import { ENDPOINTS, chat, fastChat } from './providers.js';
+import { ENDPOINTS, chat, fastChat, prewarm } from './providers.js';
+import { plainError } from './tools.js';
 import { makeAsk } from './ask.js';
 import { openIndex } from './index.js';
 import { indexFolder, watchFolder, indexActivity, addTurn } from './ingest.js';
@@ -398,11 +399,14 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (spend.overFor('anthropic')) throw new Error("Dixi's spending cap is reached.");
     if (/sonnet-5-5|opus-5|fable-5/.test(body.model) && !body.thinking) { body = { ...body, fallbacks: 'default' }; betas = [...betas, 'server-side-fallback-2026-07-01']; }
     const ws = env.ANTHROPIC_WORKSPACE_ID;
-    const res = await fetch(ENDPOINTS.anthropic.url, {
+    const req = () => fetch(ENDPOINTS.anthropic.url, {
       method: 'POST', signal: AbortSignal.any([signal, AbortSignal.timeout(60000)]),
       headers: { 'x-api-key': config.keys.anthropic, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', ...(betas.length ? { 'anthropic-beta': betas.join(',') } : {}), ...(ws ? { 'anthropic-workspace-id': ws } : {}) },
       body: JSON.stringify(partial ? { ...body, stream: true } : body),
     });
+    // "[everywhere] fetch failed" (DIAGNOSIS 4): undici throws a TypeError on a stale keep-alive socket or a blip.
+    // One immediate retry on a fresh socket; a timeout or a cancel is never retried.
+    const res = await req().catch((err) => { if (signal?.aborted || err?.name !== 'TypeError') throw err; return req(); });
     let j = {};
     if (!partial || !res.ok) j = await res.json();
     else j = await readStream(res.body, partial);
@@ -1165,8 +1169,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     } catch (err) {
       if (signal.aborted) return;
       console.warn('[everywhere]', err.message);
-      show({ state: 'error', title: 'Something went wrong', text: err.message });
-      say(err.message);
+      const line = plainError(err); const text = line[0].toUpperCase() + line.slice(1) + (/[.!?]$/.test(line) ? '' : '.');
+      show({ state: 'error', title: 'Something went wrong', text });
+      say(text);
     } finally { head?.ctrl.abort(); mark(runId, 'done'); if (state.ctrl === ctrl) state.ctrl = null; trayTitle(); micAfter(12000); }
   }
   /** What Dixi was doing missed ("couldn't find that on this page"): stop it, say so, log it. No model. */
@@ -1432,6 +1437,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   async function talk() {
     if (ptt.open) return;
     if (state.talking) toMain('everywhere:kill');
+    if (config.keys.anthropic) prewarm();   // fresh TLS to the planner while you talk (20 s throttle)
     overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
     show({ state: 'listening', text: '' });
     toMain('everywhere:listen');

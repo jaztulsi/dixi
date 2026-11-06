@@ -415,3 +415,18 @@ test('the overlay lets clicks through again on every show and every idle: the po
     assert.equal(ignore, 'through', 'idle with the pointer on it: clicks still go through');
   } finally { mock.timers.reset(); }
 });
+
+test('"[everywhere] fetch failed": a dropped socket is retried once on a fresh one; twice dropped = one plain line, no raw error', mac, async () => {
+  const real = globalThis.fetch;
+  let drops = 1, calls = 0;
+  globalThis.fetch = (...a) => { calls++; if (drops-- > 0) return Promise.reject(new TypeError('fetch failed')); return real(...a); };
+  try {
+    spoken = [];
+    await agentDoes([]);
+    assert.ok(calls >= 2, `retried (${calls} calls)`);
+    assert.ok(!spoken.some((s) => /fetch failed|went wrong/i.test(s)), `no error said: ${spoken}`);
+    drops = 99; spoken = [];
+    await agentDoes([]);
+    assert.ok(spoken.some((s) => /couldn't reach the internet/.test(s)) && !spoken.some((s) => /fetch failed/.test(s)), `plain line: ${spoken}`);
+  } finally { globalThis.fetch = real; quiet(); }
+});
