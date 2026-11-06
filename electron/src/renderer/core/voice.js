@@ -196,9 +196,10 @@ export class VoiceAgent {
     if (this.session === s && !this.isListening && !this.isStarting) this.endSession({ cancel: true });   // no mic or no socket
   }
   /** Close the mic now; the words still being transcribed get up to `waitMS` to arrive, then run. */
-  // ⌥Space again is you saying "I'm done": the words heard so far are sent at once (Flux has no
-  // finalize message; waitMS > 0 waits that long for its final words instead).
-  async endSession({ cancel = false, waitMS = 0 } = {}) {
+  // ⌥Space again is you saying "I'm done". Flux has no finalize message, so CloseStream makes it transcribe
+  // the audio it still holds (your last word) and then close. The words so far start being understood at
+  // once; Flux's next words, its close, or waitMS (whichever comes first) send them. waitMS 0 sends at once.
+  async endSession({ cancel = false, waitMS = 250 } = {}) {
     const s = this.session;
     if (!s) return;
     this.session = null;
@@ -206,14 +207,23 @@ export class VoiceAgent {
     this.mic?.stop();
     const open = this.heard && !this.turnsDone.has(this.heard.turn) ? this.heard : null;
     if (open && !cancel) {
-      for (const until = Date.now() + waitMS; Date.now() < until && !this.turnsDone.has(open.turn);) await new Promise((r) => setTimeout(r, 50));
+      const flush = waitMS > 0 && this.deepgram?.control;   // nothing to flush without a control channel
+      if (flush) { this.isListening = false; this.deepgram.control({ type: 'CloseStream' }); }   // its close is not a drop to reconnect
+      const st = this.turns.get(open.turn), early = st?.specText, key = early && normName(early);
+      if (early) { clearTimeout(st.specTimer); this.speculate(early); }
+      const sp = key && this.spec.get(key);
+      if (flush && !this.turnsDone.has(open.turn)) await new Promise((r) => { const t = setTimeout(r, waitMS); this.flushed = () => { clearTimeout(t); r(); }; });
+      this.flushed = null;
       if (!this.turnsDone.has(open.turn)) this.handleTurn({ event: 'EndOfTurn', transcript: this.heard.turn === open.turn ? this.heard.text : open.text, turn_index: open.turn, now: true });
+      // The words changed while flushing: that early start was for other words (one still in the map was not used).
+      if (sp && this.spec.get(key) === sp && this.heard.text !== open.text) { sp.ctrl.abort(); this.spec.delete(key); }
     }
+    if (this.session) return;   // ⌥Space pressed again during the flush: that new session keeps the mic
     await this.stop();
     this.onSessionEnd?.();   // main releases Esc and clears the panel
   }
   async handleClosed() {
-    if (!this.isListening) return;
+    if (!this.isListening) return this.flushed?.();   // Flux closed after flushing: nothing more is coming
     this.isListening = false;
     this.mic?.stop();
     await new Promise((r) => setTimeout(r, 500));
@@ -247,7 +257,7 @@ export class VoiceAgent {
     try { json = JSON.parse(raw); } catch { return; }
     // Say it on screen: a silent speech-service error looks like Dixi ignoring you.
     if (json.type === 'Error' || json.type === 'FatalError') { console.warn('[voice]', json.description ?? json.message); this.set({ statusLine: `Voice problem: ${String(json.description ?? json.message ?? 'speech service error').slice(0, 120)}` }); return; }
-    if (json.type === 'TurnInfo') this.handleTurn(json);
+    if (json.type === 'TurnInfo') { this.handleTurn(json); if (/Update|EndOfTurn/.test(json.event)) this.flushed?.(); }   // a flush's words
   }
 
   /** True when the words heard are Dixi's own, from something it said in the last 20 seconds. */
@@ -449,7 +459,7 @@ export class VoiceAgent {
     const last = clauses.at(-1);
     clearTimeout(st.timer);
     clearTimeout(st.specTimer);
-    st.timer = null;
+    st.timer = null; st.specText = null;
     // The turn ended mid-sentence (a long "uh"): keep the words for the next turn to finish.
     if (ended && incomplete(last)) {
       const c = { text: last, at: Date.now() };
@@ -470,7 +480,7 @@ export class VoiceAgent {
       if (!held && (demo || (!QUESTION.test(last) && !this.namesUnknownSite(last) && !waits(last)))) st.timer = setTimeout(() => { st.timer = null; this.dispatch(st, last); }, demo ? Math.min(this.specMS, this.settleMS) : this.settleMS);
       // Start understanding at a short pause (ready by the end of the sentence); acting waits. Not for
       // buying words that wait for the final transcript: half-heard, they'd be understood for nothing.
-      if (this.specMS < this.settleMS && !held && !waits(last)) st.specTimer = setTimeout(() => this.speculate(last), this.specMS);
+      if (this.specMS < this.settleMS && !held && !waits(last)) { st.specText = last; st.specTimer = setTimeout(() => this.speculate(last), this.specMS); }   // (⌥Space starts it at once)
     }
   }
 
