@@ -8,8 +8,8 @@
 // under each click is read from the Accessibility API, in code, never asked of the model; unreadable or
 // unnamed controls ask too. Hard, many-part jobs go to your own Claude Code agents (hive.js).
 
-import electron from 'electron';
-import { readScreens, notchOf } from './notch.js';   // the default import, so plain Node (the unit tests) can load the pure parts
+import electron from 'electron';   // the default import, so plain Node (the unit tests) can load the pure parts
+import { readScreens, notchOf, coalesce } from './notch.js';
 const { BrowserWindow, Menu, Notification, Tray, clipboard, desktopCapturer, globalShortcut, ipcMain, nativeImage, powerMonitor, screen, shell, systemPreferences } = electron;
 import fs from 'node:fs';
 import path from 'node:path';
@@ -325,7 +325,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // The notch of the display the overlay is on (notch.js): read with each new overlay window and when displays change.
   let screens = [];
   const notchNow = () => ui('ew:notch', notchOf(screen.getDisplayMatching?.(state.bounds), screens));
-  const renotch = () => readScreens().then((s) => { screens = s; notchNow(); });
+  const renotch = coalesce(readScreens, (s) => { screens = s; notchNow(); });   // a burst of display events: one osascript at a time, newest wins
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on?.(ev, renotch);
   function overlayOn(bounds) {
     if (!state.overlay || state.overlay.isDestroyed()) createOverlay(bounds);

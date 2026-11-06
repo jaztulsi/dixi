@@ -19,3 +19,14 @@ export function notchOf(display, screens = []) {
   const bar = display.workArea.y - display.bounds.y;
   return bar > 30 ? { w: 180, h: bar } : null;   // ponytail: without NSScreen the width is a guess (180 pt, this MBA reads 179)
 }
+
+/** run() reads at most once at a time: calls during a read start one more after it, and only the newest result is used. */
+export function coalesce(read, use) {
+  let busy = false, again = false;
+  const run = () => {
+    if (busy) { again = true; return; }
+    busy = true; again = false;
+    read().then((v) => { busy = false; if (again) run(); else use(v); });
+  };
+  return run;
+}
