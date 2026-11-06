@@ -26,8 +26,8 @@ test('a step out of order is still checked off; skipping moves on; denied is not
 });
 
 test('the try-it card uses the real shortcuts, and Dixi says them in words', () => {
-  assert.deepEqual(tryLines(), ['Hold ⌃ and ask: “what’s on my screen?” Let go to send.', 'Hold ⌃ and say: “open Safari.”', '⌥Space stops Dixi at once.']);
-  assert.match(tryLines({ stop: '⌃⇧D' }).join(' '), /⌃⇧D stops Dixi/);
+  assert.deepEqual(tryLines(), ['Press ⌥Space and ask: “what’s on my screen?” Press it again to send.', 'Press ⌥Space and say: “open Safari.”', 'Esc cancels.']);
+  assert.match(tryLines({ stop: '⌃⇧D' }).join(' '), /⌃⇧D cancels/);
   assert.doesNotMatch(tryLines().join(' '), /listening for|Dixi”, if/);   // no wake word, ever
   assert.equal(spoken('⌘⌥Space'), 'Command Option Space');
   assert.equal(spoken('⌃⇧D'), 'Control Shift D');

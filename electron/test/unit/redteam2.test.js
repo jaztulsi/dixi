@@ -272,34 +272,28 @@ test('W2: a bare "yes" counts only just after the question; later it takes "Dixi
   assert.equal(await soon, true, 'right after the question, a plain yes is fine');
 });
 
-// Hold Control = talk, let go = send; ⌥Space = the instant stop, and never opens the mic.
+// ⌥Space = talk, ⌥Space again = send (master v2). Hold-⌃ is opt-in, so control is null by default.
 const sent = async (fn, ms = 20) => { toMain.length = 0; await fn(); await sleep(ms); return [...toMain]; };
 const press = () => sent(() => keys['Alt+Space']());
-const hold = () => sent(() => ewApi.control('c1'), 240);
-const letGo = () => sent(() => ewApi.control('c0'));
-test('hold Control talks and letting go sends; a tap or a ⌃-shortcut is nothing; ⌥Space stops Dixi at once and never listens', mac, async () => {
+test('⌥Space opens the mic, ⌥Space again sends, Esc cancels; hold-⌃ is off by default; a press while working never kills the work', mac, async () => {
   const run = await harness;
   fakeMac();
   quiet();
-  assert.ok(!(await press()).includes('everywhere:listen'), '⌥Space with nothing going on: no mic');
-  assert.ok((await hold()).includes('everywhere:listen'), 'held: it listens');
-  assert.ok((await letGo()).includes('everywhere:finish'), 'let go: it sends');
-  assert.deepEqual(await sent(() => { ewApi.control('c1'); ewApi.control('c0'); }, 240), [], 'a quick tap of Control: nothing');
-  assert.deepEqual(await sent(() => { ewApi.control('c1'); ewApi.control('k'); }, 240), [], '⌃C before the hold counts: nothing');
-  await hold();
-  assert.ok((await sent(() => ewApi.control('k'))).includes('everywhere:disarm'), 'a shortcut mid-hold: the session is dropped, nothing sent');
-  // Working: a slow agent turn is under way.
+  assert.equal(ewApi.control, null, 'hold-⌃ watcher off by default (no 30 Hz poll at idle)');
+  assert.ok((await press()).includes('everywhere:listen'), 'first press: it listens');
+  assert.ok((await press()).includes('everywhere:finish'), 'second press: it sends');
+  await press();
+  assert.ok(!(await sent(() => keys.Escape())).includes('everywhere:finish'), 'Esc: cancelled, nothing sent');
+  assert.equal(released.at(-1), 'Escape', 'Esc released after cancel');
   const slow = globalThis.fetch;
   globalThis.fetch = (...a) => sleep(400).then(() => slow(...a));
   const busy = run('organize these notes for me');
   await sleep(50);
-  assert.ok((await press()).includes('everywhere:kill'), '⌥Space mid-task: stopped');
+  const mid = await press();
+  assert.ok(mid.includes('everywhere:listen') && !mid.includes('everywhere:kill'), `press mid-task: listens, work continues (${mid})`);
+  await press();
   await busy;
   globalThis.fetch = slow;
-  // The answer was just said but its voice hasn't started yet (the audio is still loading).
-  await run('what is 12 times 12');
-  const third = await press();
-  assert.ok(third.includes('everywhere:kill') && !third.includes('everywhere:listen'), `reply about to play: stopped, not a new question (${third})`);
   quiet();
 });
 
@@ -341,13 +335,13 @@ test('A1: a crashed Dixi window never leaves Esc held', mac, async () => {
   await harness;
   fakeMac();
   quiet();
-  assert.ok((await hold()).includes('everywhere:listen'), 'held: a session is open');
+  assert.ok((await press()).includes('everywhere:listen'), 'pressed: a session is open');
   released.length = 0;
   appOn['render-process-gone']({}, { other: true });
   assert.deepEqual(released, [], "another window's crash changes nothing");
   appOn['render-process-gone']({}, mainWin.webContents);
   assert.deepEqual(released, ['Escape'], 'the main window crashed mid-session: Esc is released');
-  await letGo();
+  await press();
 });
 
 test('"clear my activity" just clears it (no question) and "undo that" brings it back', mac, async () => {
@@ -361,7 +355,7 @@ test('"clear my activity" just clears it (no question) and "undo that" brings it
   assert.match(fs.readFileSync(f, 'utf8'), /kept for undo/, 'back');
 });
 
-test('A1: the overlay is made hidden at launch, so holding Control sends "listening" before any await (no cold window on the first hold)', mac, async () => {
+test('A1: the overlay is made hidden at launch, so ⌥Space sends "listening" before any await (no cold window on the first press)', mac, async () => {
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   mock.timers.enable({ apis: ['setTimeout'] });
   let api;
@@ -372,12 +366,11 @@ test('A1: the overlay is made hidden at launch, so holding Control sends "listen
     mock.timers.tick(2000);
     assert.equal(Win.made, start + 1, 'the overlay window exists before any press');
     const overlay = Win.last;
-    api.control('c1');
-    mock.timers.tick(200);   // the hold counts: talk() runs, and what follows runs before its first await
-    assert.equal(Win.made, start + 1, 'the hold builds no window');
+    api.toggle();   // ⌥Space: talk() runs, and what follows runs before its first await
+    assert.equal(Win.made, start + 1, 'the press builds no window');
     assert.deepEqual(overlay.sent.filter(([ch]) => ch === 'ew:state').map(([, d]) => d.state), ['listening'], "'listening' is already sent");
   } finally { mock.timers.reset(); }
-  api.control('c0');
+  api.toggle();
 });
 
 test('the speech connection drops mid-session: the island says "Reconnecting…", then goes back to just the waveform', mac, async () => {
@@ -390,13 +383,13 @@ test('the speech connection drops mid-session: the island says "Reconnecting…"
     mock.timers.tick(2000);
   } finally { mock.timers.reset(); }
   const overlay = Win.last, texts = () => overlay.sent.filter(([ch]) => ch === 'ew:state').map(([, d]) => d.text);
-  api.control('c1');
-  await sleep(240);
+  api.toggle();
+  await sleep(20);
   api.reconnecting(true);
   assert.equal(texts().at(-1), 'Reconnecting…');
   api.reconnecting(false);
   assert.equal(texts().at(-1), '', 'no "Listening" word: the waveform says it');
-  api.control('c0');
+  api.toggle();
 });
 
 test('the overlay lets clicks through again on every show and every idle: the pointer on the island never leaves the Mac blocked', mac, async () => {

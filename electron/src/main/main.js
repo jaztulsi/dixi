@@ -214,7 +214,7 @@ const ours = (e) => Boolean(win) && e.sender === win.webContents && e.senderFram
 const handle = (channel, fn) => ipcMain.handle(channel, (e, ...args) => { if (!ours(e)) throw new Error('forbidden'); return fn(...args); });
 const on = (channel, fn) => ipcMain.on(channel, (e, ...args) => { if (ours(e)) fn(...args); });
 
-// Dixi Everywhere (macOS): hold Control to talk about the app in front; ⌥Space stops it. Off in tests and with DIXI_EVERYWHERE=0.
+// Dixi Everywhere (macOS): ⌥Space to talk about the app in front, again to send. Off in tests and with DIXI_EVERYWHERE=0.
 app.whenReady().then(() => {
   if (EVAL || process.env.DIXI_FAKE_AUDIO) return;
   everywhere = setupEverywhere({ config, spend, here, userData: app.getPath('userData'), getMainWindow: () => win, handle, on, onShowMain: showMain, webAnswer });

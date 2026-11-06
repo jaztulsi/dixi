@@ -352,7 +352,7 @@ window.dixi.onOpenURL((url) => {
 render();
 if (config.problems?.length) showProblem(config.problems.join(' · '));
 window.addEventListener('unhandledrejection', (e) => { console.error('[unhandled]', e.reason); trace('error', { message: String(e.reason?.message ?? e.reason).slice(0, 200) }); });
-// On a Mac (ew) the mic never opens at launch: only while you hold Control. The browser alone keeps its own switch.
+// On a Mac (ew) the mic never opens at launch: only after ⌥Space. The browser alone keeps its own switch.
 if (!ew && (config.stt === 'elevenlabs' ? config.keys.elevenlabs : config.keys.deepgram) && (config.tiers.fast.length || config.tiers.plan?.length)) voice.start().catch((err) => console.error('[voice]', err.message));
 
 // For end-to-end tests and debugging.

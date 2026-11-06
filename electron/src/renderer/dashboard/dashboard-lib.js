@@ -57,4 +57,4 @@ export function byDay(items, now = Date.now(), locale) {
   return groups;
 }
 
-export const statusText = (s) => (s?.watching ? `👁 Watching: ${s.watching}` : 'Hold ⌃ to talk');   // the only way in: no wake word, no always-on mic
+export const statusText = (s) => (s?.watching ? `👁 Watching: ${s.watching}` : '⌥Space to talk');   // the only way in: no wake word, no always-on mic

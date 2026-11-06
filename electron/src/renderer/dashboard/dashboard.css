@@ -116,7 +116,7 @@ h2.sub { margin: 2.5rem 0 0.75rem; font-size: 1.3125rem; font-weight: 700; lette
 .hero-sub { margin: 0.875rem 0 0; max-width: 30rem; font-size: 1.125rem; color: var(--island-text-2); text-wrap: pretty; }
 .hero-sub kbd { min-width: 0; padding: 0.0625rem 0.4375rem; font-size: 0.9375rem; border-radius: 7px; }
 .hero-sub kbd + kbd { margin-left: 0.1875rem; }
-/* the island, still: what you'll see at the bottom of your screen while you hold ⌃ */
+/* the island, still: what you'll see at the bottom of your screen after you press ⌥Space */
 .hero-demo { display: grid; justify-items: center; gap: 0.625rem; padding: 1.25rem 0.5rem; }
 .demo-pill {
   display: flex; align-items: center; gap: 0.625rem; height: 3rem; padding: 0 1.125rem 0 0.5rem; border-radius: 1.5rem; background: #000;

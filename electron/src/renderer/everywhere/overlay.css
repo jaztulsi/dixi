@@ -75,7 +75,7 @@ html.large #text { max-width: 420px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
 [data-state="acting"] .dot { animation: pulse 900ms ease-in-out infinite alternate; }
 .check { width: 16px; height: 16px; fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-/* the mic is on: a small orange dot, only while you hold Control */
+/* the mic is on: a small orange dot, only after ⌥Space */
 .rec { display: none; flex: none; width: 6px; height: 6px; margin-left: -2px; border-radius: 50%; background: var(--orange); }
 [data-state="listening"] .rec { display: block; }
 @keyframes pulse { to { opacity: 0.35; } }

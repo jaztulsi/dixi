@@ -1385,12 +1385,12 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     say(on ? "Okay. I'll ask before every click and every bit of typing." : "Okay. I'll only ask before things like sending, paying or deleting.");
     show({ state: 'done', title: on ? 'Careful mode on' : 'Careful mode off', text: on ? 'Dixi asks before every step.' : 'Dixi asks before send, pay, buy, delete.', linger: 3500 });
   }
-  // Always listening (the "Dixi" wake word) is gone (Nov 5, the user's call): the mic is open only while you hold Control.
+  // Always listening (the "Dixi" wake word) is gone (Nov 5, the user's call): the mic is open only after you press ⌥Space.
   const listening = () => false;
   function setListening() {   // "stop listening" still answers: the mic is already off
     toMain('everywhere:mic', false);
-    show({ state: 'done', title: 'Microphone off', text: 'Dixi hears you only while you hold Control.', linger: 3500 });
-    say('The mic is off. I only hear you while you hold Control.');
+    show({ state: 'done', title: 'Microphone off', text: 'Dixi hears you only after you press ⌥Space.', linger: 3500 });
+    say('The mic is off. Press Option Space to talk.');
   }
   // With the mic switched off, ⌥Space opens it for one request; it closes again after.
   let micTimer = null;
@@ -1422,7 +1422,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   }
   function trayTitle() { tray.setTitle(busy() ? 'Stop' : ''); dashChanged(); }   // the template icon is Dixi; text only to say a click stops it
 
-  // Hold Control = talk (and take the picture now); let go = send (ptt.js). ⌥Space = stop it all, instantly.
+  // ⌥Space = talk (and take the picture now); ⌥Space again = send. Hold ⌃ is opt-in (ptt.js).
   // Esc cancels a session, but only while it's open; the renderer reports silence and the cap.
   const ptt = pttSession({ register: (k, fn) => globalShortcut.register(k, fn), unregister: (k) => globalShortcut.unregister(k), onEsc: () => stopAll() });
   ipcMain.on('everywhere:session-end', () => { ptt.end(); if (!busy()) show({ state: 'idle' }); });
@@ -1453,8 +1453,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
     if (!item) { show({ state: 'done', title: 'Nothing selected', text: 'Select something first, then press ⌥⇧Space.', linger: 4000 }); say('Select something first, then press it again.'); return; }
     state.selection = { ...item, app: front?.name, at: Date.now() };
-    // The mic stays closed: hold Control and say what to do with it (within a minute).
-    show({ state: 'done', title: item.kind === 'text' ? `“${item.text.slice(0, 60)}”` : item.kind === 'files' ? `${item.files.length} file(s)` : 'The picture', text: 'Got it. Hold ⌃ and say what to do with it.', linger: 8000 });
+    // The mic stays closed: press ⌥Space and say what to do with it (within a minute).
+    show({ state: 'done', title: item.kind === 'text' ? `“${item.text.slice(0, 60)}”` : item.kind === 'files' ? `${item.files.length} file(s)` : 'The picture', text: 'Got it. Press ⌥Space and say what to do with it.', linger: 8000 });
   }
   const label = (k) => k.replace('Command', '⌘').replace('Alt', '⌥').replace('Control', '⌃').replace('Shift', '⇧').replaceAll('+', '');
   // A taken key is never silent: one dismissible note per launch, naming the app that probably holds it
@@ -1469,7 +1469,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const SEL_KEY = env.DIXI_SELECTION_KEY || 'Alt+Shift+Space';
   if (!globalShortcut.register(SEL_KEY, selectionKey)) taken(SEL_KEY, 'DIXI_SELECTION_KEY');
   const KEY = env.DIXI_EVERYWHERE_KEY || 'Alt+Space';
-  if (!globalShortcut.register(KEY, () => stopAll())) taken(KEY, 'DIXI_EVERYWHERE_KEY');   // ⌥Space: the instant stop
+  // ⌥Space (master v2, Nov 6): press = talk (mic opens on key-down), press again = send. Esc cancels.
+  const toggle = () => (ptt.open ? letGo() : talk());
+  if (!globalShortcut.register(KEY, toggle)) taken(KEY, 'DIXI_EVERYWHERE_KEY');
   // The kill key: stops everything from any app (the task, the Claude team, a question, the voice).
   const KILL_KEY = env.DIXI_KILL_KEY || 'Command+Shift+Escape';
   if (!globalShortcut.register(KILL_KEY, () => kill())) taken(KILL_KEY, 'DIXI_KILL_KEY');
@@ -1481,7 +1483,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     screen: systemPreferences.getMediaAccessStatus('screen'),
     ax: systemPreferences.isTrustedAccessibilityClient(false),
     automation: prefs.automationOk ?? null,
-    keys: { ask: 'hold ⌃', stop: label(KEY) },
+    keys: { ask: label(KEY), stop: 'Esc' },
   });
   const pane = (name) => shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?Privacy_${name}`);
   async function openPane(p) {
@@ -1551,7 +1553,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       skills: listSkills(userData).map((x) => ({ id: x.id, name: x.name, app: x.app ?? '', steps: x.steps.length })),
       activity: act.read({ since: Date.now() - 7 * 864e5 }).slice(-80).reverse().map((e) => ({ t: e.t, kind: e.kind, line: lineOf(e) })),
       prefs: { careful: Boolean(prefs.careful), large: Boolean(prefs.large), contrast: Boolean(prefs.contrast), sounds: prefs.sounds !== false },
-      perms: permStatus(permsNow()), keys: { ask: 'hold ⌃', stop: label(KEY), select: label(SEL_KEY), kill: label(KILL_KEY), yes: '⌥↩' },
+      perms: permStatus(permsNow()), keys: { ask: label(KEY), stop: 'Esc', select: label(SEL_KEY), kill: label(KILL_KEY), yes: '⌥↩' },
     }),
     saveCommands: (list) => { const r = saveCommands(commandsFile, list); if (r.ok) { commands = r.commands; phrasesToMain(); } return r; },
     testCommand: async (c) => {
@@ -1612,10 +1614,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   let contextMenu = null;
   tray.on('click', () => { if (active()) stopAll(); else tray.popUpContextMenu(contextMenu); });
   tray.on('right-click', () => tray.popUpContextMenu(contextMenu));
-  tray.setToolTip(`Dixi: hold ⌃ Control to talk; ${label(KEY)} stops it`);
+  tray.setToolTip(`Dixi: ${label(KEY)} to talk, again to send; Esc cancels`);
   function menu() { contextMenu = Menu.buildFromTemplate([
-    { label: 'Hold ⌃ Control to talk, let go to send', enabled: false },
-    { label: `Stop Dixi now   ${label(KEY)}`, click: () => stopAll() },
+    { label: `${label(KEY)} to talk, again to send`, enabled: false },
+    { label: `Stop Dixi now   ${label(KILL_KEY)}`, click: () => stopAll() },
     { label: 'Open the Dixi dashboard', click: () => openDash() },
     { label: 'Ask before every step (careful mode)', type: 'checkbox', checked: Boolean(prefs.careful), click: () => setCareful(!prefs.careful) },
     { label: 'Open the Dixi browser', click: onShowMain },
@@ -1652,5 +1654,6 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   };
   // The speech connection dropped mid-session (deepgram.js retries and replays the audio): say so, not a frozen "Listening…".
   const reconnecting = (on) => { if (ptt.open && !busy()) show({ state: 'listening', text: on ? 'Reconnecting…' : '' }); };
-  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, control, showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
+  // ponytail: hold-⌃ runs a 30 Hz osascript poll, so it's opt-in (DIXI_HOLD_CTRL=1 or prefs.holdCtrl); ⌥Space is the default.
+  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, control: env.DIXI_HOLD_CTRL === '1' || prefs.holdCtrl ? control : null, toggle, showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
 }

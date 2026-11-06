@@ -71,7 +71,7 @@ function sampleDash() {
     ],
     prefs: { careful: false, large: false, contrast: false, sounds: true },
     perms: { mic: 'granted', screen: 'granted', ax: false, automation: null },
-    keys: { ask: 'hold ⌃', stop: '⌥Space', select: '⌥⇧Space', kill: '⌘⇧Esc', yes: '⌥↩' },
+    keys: { ask: '⌥Space', stop: 'Esc', select: '⌥⇧Space', kill: '⌘⇧Esc', yes: '⌥↩' },
     builtins: [
       { group: 'Your screen', examples: ['What’s on my screen?', 'Read this to me', 'Is this email a scam?'] },
       { group: 'Your day', examples: ['What’s on my calendar?', 'Any new email?'] },
@@ -213,7 +213,7 @@ function renderHome() {
   $('fix-btns').replaceChildren(...off.map((p) => h('button', { class: 'btn small primary', 'data-open': `pane:${p.id}`, 'aria-label': `Fix ${p.name}`, text: `Turn on ${p.name}` })));
 
   $('keys').replaceChildren(...[
-    [keys.ask && 'Hold ⌃', 'Talk, let go to send'], [keys.stop, 'Stop Dixi at once'], [keys.select, 'Use what’s selected'],
+    [keys.ask, 'Talk; press again to send'], [keys.stop, 'Cancel'], [keys.select, 'Use what’s selected'],
     [keys.kill, 'Stop everything'], [state.prefs.careful && keys.yes, 'Yes, when Dixi asks'],
   ].filter(([k]) => k).map(([k, what]) => h('div', {}, h('dt', {}, h('kbd', { text: k })), h('dd', { text: what }))));
   $('keys').hidden = !$('keys').children.length;
@@ -455,7 +455,7 @@ function renderSkills() {
       h('span', { class: 'skill-icon', icon: 'skills' }),
       h('h3', { text: name }),
       h('p', { class: 'skill-meta', text: [k.app && str(k.app), `${steps} ${steps === 1 ? 'step' : 'steps'}`].filter(Boolean).join(', ') }),
-      h('p', { class: 'skill-say', text: `Hold ⌃ and say “run my ${name} skill”.` }),
+      h('p', { class: 'skill-say', text: `Press ⌥Space and say “run my ${name} skill”.` }),
       h('button', { class: 'btn small quiet', icon: 'trash', 'data-k': `del-skill:${name}`, 'aria-label': `Delete ${name}`, onclick: () => deleteSkill(name) }, 'Delete'));
   }));
   $('skill-empty').hidden = state.skills.length > 0;
