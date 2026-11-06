@@ -1,9 +1,10 @@
-// The dashboard window's only bridge: read the state, save your commands, try one, change a setting.
+// The dashboard window's only bridge: read the state, save your commands, try one, type a request, change a setting.
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('dash', {
   get: () => ipcRenderer.invoke('dash:get'),
   saveCommands: (list) => ipcRenderer.invoke('dash:save', list),
   testCommand: (cmd) => ipcRenderer.invoke('dash:test', cmd),
+  run: (text) => ipcRenderer.invoke('dash:run', text),
   apps: () => ipcRenderer.invoke('dash:apps'),
   deleteSkill: (name) => ipcRenderer.invoke('dash:skill:delete', name),
   set: (key, value) => ipcRenderer.invoke('dash:set', key, value),

@@ -22,7 +22,9 @@ export { split };
 
 // ---- the instant paths (no AI, no picture) ----
 // "switch to Safari", "go back to Mail", "bring up Notes": only ever an installed app's exact name (instantOf checks), so "go to the Times website" stays a link.
-const OPEN_APP = /^(?:please\s+)?(?:open|launch|start|bring|switch\s+(?:over\s+|back\s+)?to|go\s+(?:back\s+)?to)\s+(?:up\s+)?(?:the\s+|my\s+)?(.+?)(?:\s+app)?[.!]?$/i;
+const OPEN_APP = /^(?:(?:hey\s+)?dixi[,.]?\s+)?(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?(?:open|launch|start|bring|switch\s+(?:over\s+|back\s+)?to|go\s+(?:back\s+)?to)\s+(?:up\s+)?(?:the\s+|my\s+)?(.+?)(?:\s+app)?(?:,?\s+(?:please|for me|now|real quick))?[.!?]?$/i;
+// "chrome" is Google Chrome, "word" is Microsoft Word, "settings" is System Settings: one installed app has that word.
+const byWord = (name, apps) => { const m = apps.filter((a) => lower(a).split(/\s+/).includes(name)); return m.length === 1 ? m[0] : null; };
 const lower = (s) => String(s ?? '').toLowerCase().trim();
 
 /** What Dixi can do with this clause alone, instantly, or null. `filesBefore`: a file search came earlier. */
@@ -41,7 +43,7 @@ export function instantOf(clause, { apps = [], commands = [], filesBefore = fals
   if (q) return { kind: 'quick', intent: q };
   // An installed app by its exact name, before files ("open Music" is the app, not a song file).
   const o = c.match(OPEN_APP);
-  const app = o && apps.find((a) => lower(a) === lower(o[1]));
+  const app = o && (apps.find((a) => lower(a) === lower(o[1])) ?? byWord(lower(o[1]), apps));
   if (app) return { kind: 'open', app };
   const f = fileIntent(c);
   // A search for files; "open it" / "rename it" / "move it to Documents" only after one (in this sentence or just before).

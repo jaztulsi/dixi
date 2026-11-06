@@ -107,12 +107,13 @@ window.dixi.onPopup((url) => tabs.createTab(url));
 // What goes there: anything right after ⌥Space; with another app in front, what's about the screen (and
 // follow-ups for a short while); a job for your Claude team from anywhere.
 const ew = window.dixi.everywhere;
+if (ew) settings.requireWakeWord = false;   // an old "always listening" never opens the mic again
 let ewArmed = 0, ewUntil = 0, ewConfirm = null;
-ew?.enabled().then(({ listening = true, phrases = [], apps = [] } = {}) => {
+ew?.enabled().then(({ phrases = [], apps = [] } = {}) => {
   voice.terms = [...new Set([...apps.slice(0, 30), ...(voice.terms ?? [])])];   // speech-to-text keyterms (voice.keyterms): your apps' names first, then the site catalog's
-  settings.requireWakeWord = listening;   // the Mac-wide "always listening" switch is the experimental wake-word mode
-  if (!listening) voice.stop();   // microphone switched off (⌘⌥Space): nothing is heard until it's back on
-  ew.onMic((on) => { settings.requireWakeWord = on; if (on) voice.start().catch(() => {}); else if (!voice.session) voice.stop(); });
+  settings.requireWakeWord = false;   // no wake word, ever (Nov 5): the mic is open only while Control is held
+  voice.stop();
+  ew.onMic(() => { settings.requireWakeWord = false; if (!voice.session) voice.stop(); });   // main only ever says "off" now
   // The Mac agent needs a word from you ("Which file?"): asked out loud, your answer goes back.
   ew.onAsk(async ({ id, question }) => ew.answer(id, await voice.ask(question, [], { raw: true })));
   // Your own commands (the dashboard): heard from any window. And with this window out of sight, everything
@@ -314,14 +315,12 @@ document.querySelectorAll('dialog [data-close]').forEach((b) => b.addEventListen
 
 // ---- settings ----
 function renderSettings() {
-  $('wake-toggle').checked = settings.requireWakeWord;
   const key = (el, ok) => { el.className = ok ? 'key-ok' : 'key-missing'; el.textContent = ok ? '✓ Set' : '✕ Missing'; };
   key($('key-groq'), config.keys.groq);
   key($('key-deepgram'), config.keys.deepgram);
   $('agent-model').textContent = config.tiers.agent[0] ?? 'none';
   $('voice-model').textContent = config.tiers.fast[0] ?? 'none';
 }
-$('wake-toggle').addEventListener('change', (e) => { settings.requireWakeWord = e.target.checked; renderExamples(); render(); });
 
 // Esc (the key, anywhere in the app, or the button on the caption): the first press stops whatever Dixi
 // is doing or thinking; pressed again (or when nothing is running) it resets Dixi: clears the caption
@@ -353,7 +352,8 @@ window.dixi.onOpenURL((url) => {
 render();
 if (config.problems?.length) showProblem(config.problems.join(' · '));
 window.addEventListener('unhandledrejection', (e) => { console.error('[unhandled]', e.reason); trace('error', { message: String(e.reason?.message ?? e.reason).slice(0, 200) }); });
-if ((config.stt === 'elevenlabs' ? config.keys.elevenlabs : config.keys.deepgram) && (config.tiers.fast.length || config.tiers.plan?.length)) voice.start().catch((err) => console.error('[voice]', err.message));
+// On a Mac (ew) the mic never opens at launch: only while you hold Control. The browser alone keeps its own switch.
+if (!ew && (config.stt === 'elevenlabs' ? config.keys.elevenlabs : config.keys.deepgram) && (config.tiers.fast.length || config.tiers.plan?.length)) voice.start().catch((err) => console.error('[voice]', err.message));
 
 // For end-to-end tests and debugging.
 window.__dixi = {

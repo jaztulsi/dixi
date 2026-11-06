@@ -7,7 +7,7 @@ const { BrowserWindow, ipcMain } = electron;
 
 const d = { win: null, api: null, hooked: false };
 const OPEN = /^(?:browser|setup|profile|tasks|pane:(?:mic|screen|ax|automation))$/;
-const KEYS = new Set(['listening', 'careful', 'large', 'contrast', 'sounds']);
+const KEYS = new Set(['careful', 'large', 'contrast', 'sounds']);
 
 export function openDashboard({ here, api }) {
   d.api = api;
@@ -19,6 +19,7 @@ export function openDashboard({ here, api }) {
     handle('dash:get', () => d.api.state());
     handle('dash:save', (list) => d.api.saveCommands(list));
     handle('dash:test', (cmd) => d.api.testCommand(cmd));
+    handle('dash:run', (text) => d.api.run(String(text ?? '').slice(0, 500)));
     handle('dash:apps', () => d.api.apps());
     handle('dash:skill:delete', (name) => d.api.deleteSkill(String(name ?? '').slice(0, 80)));
     handle('dash:set', (k, v) => (KEYS.has(k) ? d.api.set(k, Boolean(v)) : d.api.state()));

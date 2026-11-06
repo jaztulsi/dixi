@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld('ew', {
   stop: () => ipcRenderer.send('ew:stop'),   // ponytail: unused by the island; kept
   undo: () => ipcRenderer.send('ew:undo'),
   mouse: (inside) => ipcRenderer.send('ew:mouse', inside),
+  dash: () => ipcRenderer.send('ew:dash'),   // a click on the idle pill opens the dashboard
 });

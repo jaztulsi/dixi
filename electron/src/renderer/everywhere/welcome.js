@@ -23,11 +23,11 @@ export const granted = (v) => v === true || v === 'granted';
 /** The step to show now: the first one not on and not skipped; 'try' when everything is done or skipped. */
 export const nextStep = (perms = {}, skipped = []) => STEPS.find((s) => !granted(perms?.[s.id]) && !skipped.includes(s.id))?.id ?? 'try';
 
-// The "try it" card, with the shortcuts main really registered (they can be changed in .env).
+// The "try it" card: hold Control to talk (the mic is off otherwise), and the stop key main really registered.
 export const tryLines = (keys = {}) => [
-  `Press ${keys.ask ?? '⌥Space'} and ask: “what’s on my screen?”`,
-  `Press ${keys.ask ?? '⌥Space'} and say: “open Safari.”`,
-  `${keys.mic ?? '⌘⌥Space'} turns on listening for “Dixi”, if you like.`,
+  'Hold ⌃ and ask: “what’s on my screen?” Let go to send.',
+  'Hold ⌃ and say: “open Safari.”',
+  `${keys.stop ?? '⌥Space'} stops Dixi at once.`,
 ];
 // Key symbols as words, for Dixi's voice ("⌥Space" → "Option Space").
 export const spoken = (s) => s.replace(/⌘/g, 'Command ').replace(/⌥/g, 'Option ').replace(/⌃/g, 'Control ').replace(/⇧/g, 'Shift ');

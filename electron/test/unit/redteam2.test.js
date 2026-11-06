@@ -75,14 +75,14 @@ const result = (id) => requests.flatMap((r) => r.messages ?? []).flatMap((m) => 
 
 // One Everywhere, set up the way main.js does; approvals are answered by `answer(question)` (true = yes).
 let answer = () => false, asked = [], spoken = [], events = [], rt2Dir = '';
-let quiet = () => {}, mainWin = null;   // the renderer saying Dixi's voice has finished (there's no renderer here)
+let quiet = () => {}, mainWin = null, ewApi = null;   // the renderer saying Dixi's voice has finished (there's no renderer here)
 const harness = (async () => {
   if (process.platform !== 'darwin') return null;
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   const handlers = {}, ons = {};
   quiet = () => ons['everywhere:speaking']?.(false);
   const win = mainWin = { isDestroyed: () => false, webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:browse') { events.push(`browse ${d.text}`); setTimeout(() => { events.push(`done ${d.text}`); ons['everywhere:browsed'](d.id, true, ''); }, 30); } if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
-  setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+  ewApi = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
     userData: (rt2Dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-'))), trashDir: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-trash-')), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
   return (text) => handlers['everywhere:run'](text);
 })();
@@ -272,22 +272,28 @@ test('W2: a bare "yes" counts only just after the question; later it takes "Dixi
   assert.equal(await soon, true, 'right after the question, a plain yes is fine');
 });
 
-// ⌥Space is the one stop button: pressed while Dixi is doing anything at all, it stops; otherwise it listens.
-const press = async () => { toMain.length = 0; await keys['Alt+Space'](); await sleep(20); return [...toMain]; };
-test('⌥Space again: while it listens (even after a few seconds) it finishes and sends (A1); while it works, or its reply is about to play, it stops Dixi', mac, async () => {
+// Hold Control = talk, let go = send; ⌥Space = the instant stop, and never opens the mic.
+const sent = async (fn, ms = 20) => { toMain.length = 0; await fn(); await sleep(ms); return [...toMain]; };
+const press = () => sent(() => keys['Alt+Space']());
+const hold = () => sent(() => ewApi.control('c1'), 240);
+const letGo = () => sent(() => ewApi.control('c0'));
+test('hold Control talks and letting go sends; a tap or a ⌃-shortcut is nothing; ⌥Space stops Dixi at once and never listens', mac, async () => {
   const run = await harness;
   fakeMac();
   quiet();
-  assert.ok((await press()).includes('everywhere:listen'), 'first press listens');
-  await sleep(3200);
-  const second = await press();
-  assert.ok(second.includes('everywhere:finish') && !second.includes('everywhere:listen'), `still listening after 3 s: the second press finishes the session, it doesn't listen again (${second})`);
+  assert.ok(!(await press()).includes('everywhere:listen'), '⌥Space with nothing going on: no mic');
+  assert.ok((await hold()).includes('everywhere:listen'), 'held: it listens');
+  assert.ok((await letGo()).includes('everywhere:finish'), 'let go: it sends');
+  assert.deepEqual(await sent(() => { ewApi.control('c1'); ewApi.control('c0'); }, 240), [], 'a quick tap of Control: nothing');
+  assert.deepEqual(await sent(() => { ewApi.control('c1'); ewApi.control('k'); }, 240), [], '⌃C before the hold counts: nothing');
+  await hold();
+  assert.ok((await sent(() => ewApi.control('k'))).includes('everywhere:disarm'), 'a shortcut mid-hold: the session is dropped, nothing sent');
   // Working: a slow agent turn is under way.
   const slow = globalThis.fetch;
   globalThis.fetch = (...a) => sleep(400).then(() => slow(...a));
   const busy = run('organize these notes for me');
   await sleep(50);
-  assert.ok((await press()).includes('everywhere:kill'), 'pressed mid-task: stopped');
+  assert.ok((await press()).includes('everywhere:kill'), '⌥Space mid-task: stopped');
   await busy;
   globalThis.fetch = slow;
   // The answer was just said but its voice hasn't started yet (the audio is still loading).
@@ -295,8 +301,6 @@ test('⌥Space again: while it listens (even after a few seconds) it finishes an
   const third = await press();
   assert.ok(third.includes('everywhere:kill') && !third.includes('everywhere:listen'), `reply about to play: stopped, not a new question (${third})`);
   quiet();
-  assert.ok((await press()).includes('everywhere:listen'), 'nothing going on now: it listens');
-  await press();
 });
 
 test('A2: the agent types only into a box it found, and its result says whether the text is really there', mac, async () => {
@@ -337,13 +341,13 @@ test('A1: a crashed Dixi window never leaves Esc held', mac, async () => {
   await harness;
   fakeMac();
   quiet();
-  for (let i = 0; i < 3 && !(await press()).includes('everywhere:listen'); i++) await sleep(50);
+  assert.ok((await hold()).includes('everywhere:listen'), 'held: a session is open');
   released.length = 0;
   appOn['render-process-gone']({}, { other: true });
   assert.deepEqual(released, [], "another window's crash changes nothing");
   appOn['render-process-gone']({}, mainWin.webContents);
   assert.deepEqual(released, ['Escape'], 'the main window crashed mid-session: Esc is released');
-  await press();
+  await letGo();
 });
 
 test('"clear my activity" just clears it (no question) and "undo that" brings it back', mac, async () => {
@@ -357,26 +361,26 @@ test('"clear my activity" just clears it (no question) and "undo that" brings it
   assert.match(fs.readFileSync(f, 'utf8'), /kept for undo/, 'back');
 });
 
-test('A1: the overlay is made hidden at launch, so ⌥Space sends "listening" before any await (no cold window on the first press)', mac, async () => {
+test('A1: the overlay is made hidden at launch, so holding Control sends "listening" before any await (no cold window on the first hold)', mac, async () => {
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   mock.timers.enable({ apis: ['setTimeout'] });
-  let p;
+  let api;
   try {
-    setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+    api = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
       userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => mainWin, handle() {}, on() {}, onShowMain() {} });
     const start = Win.made;
     mock.timers.tick(2000);
     assert.equal(Win.made, start + 1, 'the overlay window exists before any press');
     const overlay = Win.last;
-    p = keys['Alt+Space']();   // not awaited: what follows runs before the handler's first await
-    assert.equal(Win.made, start + 1, 'the press builds no window');
+    api.control('c1');
+    mock.timers.tick(200);   // the hold counts: talk() runs, and what follows runs before its first await
+    assert.equal(Win.made, start + 1, 'the hold builds no window');
     assert.deepEqual(overlay.sent.filter(([ch]) => ch === 'ew:state').map(([, d]) => d.state), ['listening'], "'listening' is already sent");
   } finally { mock.timers.reset(); }
-  await p;
-  keys['Escape']?.();
+  api.control('c0');
 });
 
-test('the speech connection drops mid-session: the island says "Reconnecting…", then "Listening…" again', mac, async () => {
+test('the speech connection drops mid-session: the island says "Reconnecting…", then goes back to just the waveform', mac, async () => {
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   mock.timers.enable({ apis: ['setTimeout'] });
   let api;
@@ -386,15 +390,16 @@ test('the speech connection drops mid-session: the island says "Reconnecting…"
     mock.timers.tick(2000);
   } finally { mock.timers.reset(); }
   const overlay = Win.last, texts = () => overlay.sent.filter(([ch]) => ch === 'ew:state').map(([, d]) => d.text);
-  await keys['Alt+Space']();
+  api.control('c1');
+  await sleep(240);
   api.reconnecting(true);
   assert.equal(texts().at(-1), 'Reconnecting…');
   api.reconnecting(false);
-  assert.equal(texts().at(-1), 'Listening…');
-  keys['Escape']?.();
+  assert.equal(texts().at(-1), '', 'no "Listening" word: the waveform says it');
+  api.control('c0');
 });
 
-test('the overlay lets clicks through again on every hide and show: the pointer on the island when it hid never leaves the Mac blocked', mac, async () => {
+test('the overlay lets clicks through again on every show and every idle: the pointer on the island never leaves the Mac blocked', mac, async () => {
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   const handlers = {};
   mock.timers.enable({ apis: ['setTimeout'] });
@@ -412,8 +417,8 @@ test('the overlay lets clicks through again on every hide and show: the pointer 
     assert.equal(visible, true);
     assert.equal(ignore, 'through', 'shown: clicks outside the island reach your apps');
     w.setIgnoreMouseEvents(false);   // the pointer is on the island again as it lingers
-    mock.timers.tick(60000); mock.timers.tick(1000);   // its linger (no app opened here, so an error card), then the 500 ms fade
-    assert.equal(hid, 1, 'hidden after its linger');
-    assert.equal(ignore, 'through', 'hidden with the pointer on it: clicks still go through');
+    mock.timers.tick(60000); mock.timers.tick(1000);   // its linger (no app opened here, so an error card)
+    assert.equal(hid, 0, 'back to the idle mascot pill: the island stays on screen');
+    assert.equal(ignore, 'through', 'idle with the pointer on it: clicks still go through');
   } finally { mock.timers.reset(); }
 });

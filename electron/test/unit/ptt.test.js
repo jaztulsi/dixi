@@ -118,3 +118,16 @@ test('A1: the mic denied while the socket is still connecting: 0 sockets and no 
   await new Promise((r) => setTimeout(r, 400));   // the slow open finishes
   assert.deepEqual({ sockets, fallen, session: v.session, listening: v.isListening }, { sockets: 0, fallen: false, session: null, listening: false });
 });
+
+test('hold Control to talk: a hold talks and letting go sends; a tap, or a ⌃-shortcut, never opens the mic', async () => {
+  const { holdToTalk } = await import('../../src/main/ptt.js');
+  const log = [];
+  const ctl = holdToTalk({ onStart: () => log.push('talk'), onEnd: () => log.push('send'), onCancel: () => log.push('drop'), holdMs: 30 });
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  ctl('c1'); await wait(10); ctl('c0'); await wait(40);          // a tap
+  ctl('c1'); await wait(10); ctl('k'); ctl('c0'); await wait(40); // ⌃C, quickly
+  assert.deepEqual(log, [], 'neither one talks');
+  ctl('c1'); await wait(45); ctl('c0');
+  ctl('c1'); await wait(45); ctl('k'); ctl('c0');
+  assert.deepEqual(log, ['talk', 'send', 'talk', 'drop'], 'held: talk then send; a shortcut mid-hold: dropped, and the release after it is nothing');
+});

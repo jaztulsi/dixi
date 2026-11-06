@@ -288,3 +288,10 @@ test('fast planner: a sure plan is used as is and Haiku is never called; an unsu
     assert.equal(haiku, 1); assert.deepEqual(r.steps.map((s) => s.do), ['script', 'script']);
   }
 });
+
+test('"Open Claude, please." and "can you open chrome?" open the app instantly (the way people really ask)', () => {
+  const mine = ['Claude', 'Google Chrome', 'System Settings', 'Microsoft Word', 'Safari'];
+  const said = { 'Open Claude, please.': 'Claude', 'hey Dixi, open Claude': 'Claude', 'can you open chrome?': 'Google Chrome', 'open settings for me': 'System Settings', 'please open word': 'Microsoft Word' };
+  for (const [c, app] of Object.entries(said)) assert.deepEqual(instantOf(c, { apps: mine }), { kind: 'open', app }, c);
+  assert.equal(instantOf('open google', { apps: [...mine, 'Google Docs'] })?.kind === 'open', false, 'two apps share the word: not a guess');
+});
