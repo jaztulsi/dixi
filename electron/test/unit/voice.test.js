@@ -291,3 +291,34 @@ test('never asks "which one?" (Nov 5): the first result is taken and said in one
   assert.ok(r.spoken.every((t) => !t.includes('?')));
   assert.match((await import('node:fs')).readFileSync(new URL('../../src/renderer/app.js', import.meta.url), 'utf8'), /ask: \(q, options\) => voice\.choose\(q, options\)/, "the executor's choices go through choose()");
 });
+
+test('Mac-wide (⌥Space) on the browser clock: planned at a short pause, sent at a pause before the turn ends, never twice', async () => {
+  const r = rig();
+  const sent = [], specs = [];
+  r.v.everywhere = { wants: () => true, transcript() {}, speculate: (t) => specs.push(t), run: (t) => sent.push(t), stop() {} };
+  r.v.terms = ['Safari'];
+  Object.assign(r.v, { specMS: 20, settleMS: 60 });
+  r.turn(1, [['Update', 'open Safari']]);
+  await sleep(100);
+  assert.deepEqual(specs, ['open Safari'], 'planned while still talking');
+  assert.deepEqual(sent, ['open Safari'], 'sent at the pause, before any end of turn');
+  r.turn(1, [['Update', 'open Safari and go to apple.com']]);
+  await sleep(100);
+  r.turn(1, [['EndOfTurn', 'Open Safari and go to apple.com.']]);
+  assert.deepEqual(sent, ['open Safari', 'go to apple.com.'], 'only the new words, once (a site not used yet waits for the end, as in the browser)');
+  // A question, half a sentence, or a buy waits for the end of the turn.
+  for (const [i, words] of [[2, 'what is on my screen'], [3, 'open the'], [4, 'buy a new charger']]) {
+    const n = sent.length;
+    r.turn(i, [['Update', words]]);
+    await sleep(100);
+    assert.equal(sent.length, n, `"${words}" waited`);
+    r.turn(i, [['EndOfTurn', words]]);
+    assert.equal(sent.length, n + 1, `"${words}" went at the end`);
+  }
+  assert.equal(sent.length, 5);
+  // Esc (cancel) drops a pending send.
+  r.turn(5, [['Update', 'open Notes']]);
+  r.v.cancelAll({ quiet: true });
+  await sleep(100);
+  assert.equal(sent.length, 5);
+});

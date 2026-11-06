@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('dixi', {
     run: (text, mode) => ipcRenderer.invoke('everywhere:run', text, mode),
     speaking: (on) => ipcRenderer.send('everywhere:speaking', on),
     transcript: (text) => ipcRenderer.send('everywhere:transcript', text),
+    speculate: (text) => ipcRenderer.send('everywhere:speculate', text),
     stop: () => ipcRenderer.send('everywhere:stop'),
     confirmReply: (id, ok) => ipcRenderer.send('everywhere:confirm-reply', id, ok),
     onListen: (fn) => ipcRenderer.on('everywhere:listen', () => fn()),

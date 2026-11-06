@@ -827,6 +827,25 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     }).catch((err) => ({ steps: [], why: err.message }))
       .finally(() => { mark(runId, 'planned'); q.planning--; q.wake?.(); });
   }
+  // ---- a head start (the browser's speculate, voice.js): the words so far are planned at a short pause while
+  // you're still talking, so the plan is ready when they're sent. Nothing is done before that.
+  // ponytail: one at a time, newer words replace it; plain code plans (open, type, files…) cost nothing.
+  const specKey = (t) => String(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  async function headStart(t) {
+    const key = specKey(t), mode = modeOf(t);
+    if (!key || state.spec?.key === key || (state.plan && state.ctrl) || mode === 'talk' || mode === 'hive' || HERE.test(t) || DO_IT.test(t.trim())) return;
+    state.spec?.ctrl.abort();
+    const s = state.spec = { key, ctrl: new AbortController(), at: Date.now() };
+    const q = await newPlan().catch(() => null);
+    if (q && state.spec === s) { s.q = q; s.ready = planInto(q, t, s.ctrl.signal, null); }
+  }
+  /** The head start for exactly these words (its plan keeps streaming into its queue), or null: then it's dropped. */
+  function adopt(head, t, signal, runId) {
+    if (!head?.ready || head.key !== specKey(t) || Date.now() - head.at > 20000) { head?.ctrl.abort(); return null; }
+    signal.addEventListener('abort', () => head.ctrl.abort(), { once: true });
+    head.ready.then(() => mark(runId, 'planned'));
+    return head;
+  }
   /** One step → { ok, say?, out?, error? }. `prior`: what earlier steps found, for steps that need it. */
   async function doStep(s, prior, signal) {
     if (s.do === 'instant') {
@@ -951,7 +970,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const runId = (Date.now() - (state.heardAt ?? 0) < 30000 && state.heardId) || `r${Date.now().toString(36)}`;   // one per utterance (timing.js)
     state.heardId = null;
     mark(runId, 'stt_final');
-    if (!forced && state.plan && state.ctrl) { mark(runId, 'routed'); planInto(state.plan, text, state.ctrl.signal, runId); return; }   // added to the running plan
+    const head = forced ? null : state.spec;
+    state.spec = null;
+    if (!forced && state.plan && state.ctrl) { head?.ctrl.abort(); mark(runId, 'routed'); planInto(state.plan, text, state.ctrl.signal, runId); return; }   // added to the running plan
     state.runId = runId;
     state.ctrl?.abort();
     for (const done of approvals.values()) done(false);   // a late yes can't land on the old run
@@ -1031,8 +1052,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // Several things in one breath: planned once, then done in order (plan.js).
       if (!forced && split(t).length > 1 && !HERE.test(t) && !DO_IT.test(t) && !tutorIntent(t) && !SCAM_CHECK.test(t) && !CAL_ADD.test(t) && !REMEMBER.test(t) && modeOf(t) !== 'hive') {
         mark(runId, 'routed');
-        const q = await newPlan();
-        planInto(q, t, signal, runId);
+        const h = adopt(head, t, signal, runId);
+        const q = h?.q ?? (await newPlan());
+        if (!h) planInto(q, t, signal, runId);
         return await runPlan(q, t, signal);
       }
       // The Mac itself, no AI and no picture: volume, music, windows, timers… (desktop.js) and "why is my
@@ -1082,8 +1104,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // One task for another app: a script or a link when the planner has one; the screen agent only when it doesn't.
       // ("Open the New York Times website", "open you tube": no app by that name, so the planner finds the link.)
       if ((mode === 'agent' || mode === 'open') && !doIt && !ri && !HERE.test(t) && !SCAM_CHECK.test(t) && !CAL_ADD.test(t) && !REMEMBER.test(t)) {
-        const q = await newPlan();
-        const r = await planInto(q, t, signal, runId, false);
+        const h = adopt(head, t, signal, runId);
+        const q = h?.q ?? (await newPlan());
+        const r = await (h?.ready ?? planInto(q, t, signal, runId, false));
         if (signal.aborted) return;
         // One screen step goes straight to the agent below, unless Dixi's own window is in front (then it's the browser's).
         const lone = r.steps.length === 1 && r.steps[0].do === 'computer' && (r.steps[0].app || (await frontNow()).pid !== process.pid);
@@ -1117,7 +1140,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       console.warn('[everywhere]', err.message);
       show({ state: 'error', title: 'Something went wrong', text: err.message });
       say(err.message);
-    } finally { mark(runId, 'done'); if (state.ctrl === ctrl) state.ctrl = null; trayTitle(); micAfter(12000); }
+    } finally { head?.ctrl.abort(); mark(runId, 'done'); if (state.ctrl === ctrl) state.ctrl = null; trayTitle(); micAfter(12000); }
   }
   /** What Dixi was doing missed ("couldn't find that on this page"): stop it, say so, log it. No model. */
   function missed(said) {
@@ -1351,7 +1374,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   ipcMain.on('everywhere:session-end', () => { ptt.end(); if (!busy()) show({ state: 'idle' }); });
   electron.app.on('render-process-gone', (_e, wc) => { const win = getMainWindow(); if (!win || win.isDestroyed() || wc === win.webContents) ptt.end(); });   // a crashed window never leaves Esc held
   async function hotkey() {
-    if (ptt.open && !busy()) { ptt.end(); toMain('everywhere:finish'); return; }   // ⌥Space again: finish and send
+    // ⌥Space again in a session: finish and send the rest, even if Dixi already started on what it heard at a
+    // pause (voice.js ewProgress). Esc, or saying "stop", stops it all.
+    if (ptt.open) { ptt.end(); toMain('everywhere:finish'); return; }
     if (active()) return stopAll();
     overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
     show({ state: 'listening', text: listening() ? 'Listening…' : 'Listening, just for this…' });
@@ -1499,6 +1524,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   handle('everywhere:run', (text, mode) => run(String(text ?? '').slice(0, 4000), mode));
   on('everywhere:speaking', (talking) => { if (talking) mark(state.runId, 'first_audio'); state.talking = Boolean(talking); if (!talking) state.saidAt = 0; ui('ew:speaking', state.talking); trayTitle(); });
   on('everywhere:transcript', (t) => { if (!state.heardId || Date.now() - state.heardAt > 30000) { state.heardAt = Date.now(); mark((state.heardId = `r${state.heardAt.toString(36)}`), 'heard'); } if (!state.ctrl) show({ state: 'listening', text: String(t ?? '').slice(0, 300) || 'Listening…' }); });
+  on('everywhere:speculate', (t) => { headStart(String(t ?? '').slice(0, 4000)).catch(() => {}); });
   on('everywhere:confirm-reply', (id, ok) => approvals.get(Number(id))?.(Boolean(ok)));
   on('everywhere:stop', () => stop());
   const fromOverlay = (e) => e.sender === state.overlay?.webContents;

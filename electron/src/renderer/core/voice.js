@@ -207,6 +207,7 @@ export class VoiceAgent {
     clearInterval(this.sessionTimer);
     this.mic?.stop();
     const open = this.heard && !this.turnsDone.has(this.heard.turn) ? this.heard : null;
+    if (cancel) this.ewWait();
     if (open && !cancel) {
       const flush = waitMS > 0 && this.deepgram?.control;   // nothing to flush without a control channel
       if (flush) { this.isListening = false; this.deepgram.control({ type: 'CloseStream' }); }   // its close is not a drop to reconnect
@@ -400,7 +401,8 @@ export class VoiceAgent {
       const st = this.turns.get(turn);
       if (st) { clearTimeout(st.timer); clearTimeout(st.specTimer); this.turns.delete(turn); }
       this.everywhere.transcript(command);
-      if (final) { this.turnsDone.add(turn); this.awakeUntil = 0; this.everywhere.run(command); }
+      this.ewProgress(turn, command, final, json.event === 'EagerEndOfTurn');
+      if (final) { this.turnsDone.add(turn); this.awakeUntil = 0; }
       return;
     }
     if (command) {
@@ -496,6 +498,40 @@ export class VoiceAgent {
       if (this.specMS < this.settleMS && !held && !waits(last)) { st.specText = last; st.specTimer = setTimeout(() => this.speculate(last), this.specMS); }   // (⌥Space starts it at once)
     }
   }
+
+  /**
+   * The Mac-wide turn on the browser's clock (progress above): planned from a specMS pause, sent at a settleMS
+   * pause on a whole command (never a question, half a sentence or a buy), or when the speech service says the
+   * turn is (probably) over. Words that grow the sentence after it went are sent on their own (main adds them
+   * to what's running); the same words never go twice.
+   */
+  ewProgress(turn, command, final, eager) {
+    const ew = this.everywhere;
+    if (this.ewSent?.turn !== turn) { this.ewWait(); this.ewSent = { turn, text: '' }; }
+    const s = this.ewSent;
+    this.ewWait();
+    const word = (w) => w.toLowerCase().replace(/[^\p{L}\p{N}']+/gu, '');
+    const send = (keep) => {
+      const said = command.trim().split(/\s+/), had = s.text ? s.text.trim().split(/\s+/) : [];
+      // ponytail: words changed under what already went (a corrected transcript): it's already acting on them.
+      if (had.length && !had.every((w, i) => word(w) === word(said[i] ?? ''))) return;
+      const rest = said.slice(had.length).join(' ').replace(/^\W*(?:(?:and|then|also|plus|after that)\b\W*)*/i, '').trim();
+      if (!normName(rest)) return;
+      s.text = command;
+      ew.run(rest, undefined, { keep });
+    };
+    if (final) return send(false);
+    const last = splitClauses(command).at(-1) ?? command;
+    const whole = !incomplete(last) && !/[-–—]["”']?\s*$/.test(command) && (command.match(/"/g) ?? []).length % 2 === 0;
+    if (!whole) return;
+    if (eager) return send(true);
+    const site = this.namesUnknownSite(last) && !(this.terms ?? []).some((n) => normName(last).endsWith(normName(n)));   // your apps are known names too
+    if (QUESTION.test(last) || (SHOPPING.test(command) && !fastPath(command)) || site) return;
+    if (this.specMS < this.settleMS) s.specTimer = setTimeout(() => ew.speculate?.(command), this.specMS);
+    s.timer = setTimeout(() => send(true), this.settleMS);
+  }
+
+  ewWait() { clearTimeout(this.ewSent?.timer); clearTimeout(this.ewSent?.specTimer); }   // nothing pending goes
 
   /**
    * "take me to Maya…", "…on Zentora": a site you haven't used yet may still be growing ("Maya Indian
@@ -716,6 +752,7 @@ export class VoiceAgent {
     this.carry = null;
     this.dictation = null;
     clearTimeout(this.carryTimer);
+    this.ewWait();
     if (this.agent?.isRunning) this.agent.stop();
     this.everywhere?.stop();
     for (const p of this.plan) if (p.state === 'queued' || p.state === 'running') p.state = 'cancelled';

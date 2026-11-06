@@ -123,7 +123,8 @@ ew?.enabled().then(({ listening = true, phrases = [], apps = [] } = {}) => {
   voice.everywhere = {
     wants: (t) => Date.now() < ewArmed || HIVE.test(t) || (split(t).length > 1 && !HERE.test(t)) || COMMAND.test(t.trim()) || mine.some((re) => re.test(t)) || document.visibilityState === 'hidden' || (!document.hasFocus() && (Date.now() < ewUntil || ABOUT_SCREEN.test(t) || DESKTOP_WORDS.test(t.trim()))),
     transcript: (t) => { if (Date.now() < ewArmed || !document.hasFocus()) ew.transcript(t); },
-    run: (t, mode) => { ewArmed = 0; ewUntil = Date.now() + 30000; return ew.run(t, mode).catch(() => {}); },
+    speculate: (t) => ew.speculate?.(t),
+    run: (t, mode, { keep } = {}) => { if (!keep) ewArmed = 0; ewUntil = Date.now() + 30000; return ew.run(t, mode).catch(() => {}); },
     stop: () => ew.stop(),
   };
   speaker.onSpeaking = (on) => ew.speaking(on);   // the mascot in the glass panel talks while Dixi does
