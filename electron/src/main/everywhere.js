@@ -330,7 +330,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // The notch of the display the overlay is on (notch.js): read with each new overlay window and when displays change.
   let screens = [];
   const notchNow = () => {
-    const d = screen.getDisplayMatching?.(state.bounds);
+    const d = state.bounds ? screen.getDisplayMatching?.(state.bounds) : screen.getPrimaryDisplay?.();   // no overlay yet at startup: the main display
     ui('ew:notch', notchOf(d, screens));
     if (d?.workArea) ui('ew:dock', d.bounds.y + d.bounds.height - d.workArea.y - d.workArea.height);   // the pill sits just above the Dock
   };
