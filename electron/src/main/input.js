@@ -105,15 +105,10 @@ export function key(combo, { repeat = 1, holdSecs = 0 } = {}) {
       if (down && A.hold) delay(A.hold);
     }`, { ...k, repeat: reps, hold }, 15000 + reps * hold * 1000));
 }
-/** Types text by pasting it (any language, emoji, any length), then puts your clipboard back. */
+/** Types text by pasting it (any language, emoji, any length), then puts your clipboard back (every format). */
 export async function type(text) {
-  const { clipboard } = await import('electron');   // loaded here so the unit tests can import this file under plain Node
-  const saved = clipboard.readText();
-  clipboard.writeText(String(text));
-  try { await key('cmd+v'); await new Promise((r) => setTimeout(r, 250)); } finally {
-    // ponytail: restores text only; an image on the clipboard is lost. Save clipboard.readImage() too if that matters.
-    if (clipboard.readText() === String(text)) clipboard.writeText(saved);
-  }
+  const [{ clipboard }, { pasteText }] = await Promise.all([import('electron'), import('./capture.js')]);   // loaded here so the unit tests can import this file under plain Node
+  await pasteText({ clipboard, key, text });
 }
 export async function cursor() { const [x, y] = (await jxa('const p = $.CGEventGetLocation($.CGEventCreate(null)); [Math.round(p.x), Math.round(p.y)].join(",")')).split(',').map(Number); return { x, y }; }
 

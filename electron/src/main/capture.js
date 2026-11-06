@@ -65,53 +65,62 @@ export async function textOf(file, { extract = extractText, read = ocr } = {}) {
 }
 
 // ---- the clipboard ----
-function filesOn(clipboard) {
+// Electron 44's clipboard is the web's: async, read() → ClipboardItems (MIME types, plus macOS's own as
+// `electron application/osclipboard;format="…"`), write(ClipboardItems). The old sync calls are gone.
+const RAW = (f) => `electron application/osclipboard;format="${f}"`;
+const asText = async (v) => (v == null ? '' : typeof v === 'string' ? v : v.text());
+let Item;   // Electron's ClipboardItem; a look-alike under plain Node (the unit tests)
+const itemClass = async () => (Item ??= (await import('electron')).ClipboardItem ?? class { constructor(r) { this.types = Object.keys(r); this.getType = async (t) => r[t]; } });
+/** Every format on the clipboard, read out now (so it survives the clipboard changing): [{ type: Blob | string }]. */
+async function snapshot(c) {
+  const items = await c.read().catch(() => []);
+  return Promise.all(items.map(async (it) => Object.fromEntries((await Promise.all(it.types.map(async (t) => [t, await it.getType(t).catch(() => null)]))).filter(([, v]) => v != null))));
+}
+const restoreClip = async (c, saved) => {
+  if (!saved.length) return c.clear();
+  const I = await itemClass();
+  return c.write(saved.map((r) => new I(r)));
+};
+async function filesOn(r) {
   // Several files from Finder: a property list of paths; one file: a file URL.
-  const plist = clipboard.readBuffer?.('NSFilenamesPboardType')?.toString('utf8') ?? '';
+  // ponytail: macOS's own Finder types, read through Electron's raw format; check with a real Finder copy if it misses.
+  const plist = await asText(r[RAW('NSFilenamesPboardType')]);
   const many = [...plist.matchAll(/<string>([^<]+)<\/string>/g)].map((m) => m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
   if (many.length) return many;
-  const one = clipboard.read?.('public.file-url') ?? '';
+  const one = (await asText(r[RAW('public.file-url')] ?? r['text/uri-list'])).trim();
   return one.startsWith('file://') ? [decodeURIComponent(new URL(one).pathname)] : [];
 }
-const readClip = (clipboard) => {
-  const files = filesOn(clipboard);
+async function readClip(c) {
+  const [r = {}] = await snapshot(c);   // (macOS has one item)
+  const files = await filesOn(r);
   if (files.length) return { kind: 'files', files };
-  const image = clipboard.readImage();
-  if (image && !image.isEmpty()) return { kind: 'image', png: image.toPNG() };
-  const text = clipboard.readText();
+  const img = r['image/png'] ?? Object.entries(r).find(([t]) => t.startsWith('image/'))?.[1];
+  if (img) return { kind: 'image', png: Buffer.from(await (typeof img === 'string' ? new Blob([img]) : img).arrayBuffer()) };
+  const text = await asText(r['text/plain']);
   return text.trim() ? { kind: 'text', text } : null;
-};
-// ponytail: files on the clipboard aren't put back after a grab (text, HTML, RTF and images are).
-const saveClip = (c) => ({ text: c.readText(), html: c.readHTML?.() ?? '', rtf: c.readRTF?.() ?? '', image: c.readImage() });
-const restoreClip = (c, s) => {
-  const data = {};
-  if (s.text) data.text = s.text;
-  if (s.html) data.html = s.html;
-  if (s.rtf) data.rtf = s.rtf;
-  if (s.image && !s.image.isEmpty()) data.image = s.image;
-  if (Object.keys(data).length) c.write(data); else c.clear();
-};
+}
 
 /** Whatever is selected in the app in front: { kind: 'text' | 'image' | 'files', … } or null (nothing selected). */
 export async function grabSelection({ clipboard, key, waitMs = 400 }) {
-  const saved = saveClip(clipboard);
+  const saved = await snapshot(clipboard);
   const mark = `dixi-mark-${Math.random().toString(36).slice(2)}`;
-  clipboard.writeText(mark);
+  await clipboard.writeText(mark);
   try {
     await key('cmd+c');
+    // Anything copied replaces the mark (a picture or files leave no text, which isn't the mark either).
     for (const until = Date.now() + waitMs; Date.now() < until; await sleep(20)) {
-      const changed = clipboard.readText() !== mark || !clipboard.readImage().isEmpty() || filesOn(clipboard).length;
-      if (changed) { await sleep(30); return readClip(clipboard); }   // a moment for every format to land
+      if ((await clipboard.readText()) !== mark) { await sleep(30); return await readClip(clipboard); }   // a moment for every format to land
     }
     return null;
-  } finally { restoreClip(clipboard, saved); }
+  } finally { await restoreClip(clipboard, saved); }
 }
 
-/** Puts `text` where the selection was (⌘V), then the clipboard back as it was. */
-export async function pasteText({ clipboard, key, text }) {
-  const saved = saveClip(clipboard);
-  clipboard.writeText(String(text));
-  try { await key('cmd+v'); await sleep(150); } finally { restoreClip(clipboard, saved); }
+/** Puts `text` where the cursor or selection is (⌘V), then the clipboard back as it was (unless you copied
+ *  something else meanwhile). */
+export async function pasteText({ clipboard, key, text, settleMs = 250 }) {
+  const saved = await snapshot(clipboard);
+  await clipboard.writeText(String(text));
+  try { await key('cmd+v'); await sleep(settleMs); } finally { if ((await clipboard.readText()) === String(text)) await restoreClip(clipboard, saved); }
 }
 
 /** A box you draw on screen (Esc = none). → the PNG's path, or null. Needs Screen Recording. */
@@ -131,10 +140,13 @@ export async function screenText({ run = runText, dir = os.tmpdir() } = {}) {
 // ---- clipboard history: what you copied today, searchable ----
 /** Polls the clipboard. Password managers mark what they copy (concealed / transient): never kept. */
 export function clipboardHistory({ clipboard, everyMs = 1000, keepMs = 24 * 3600e3, max = 300, onClip = () => {}, now = Date.now } = {}) {
-  let items = [], last = clipboard.readText(), timer = null;
-  const poll = () => {
-    if (['org.nspasteboard.ConcealedType', 'org.nspasteboard.TransientType', 'org.nspasteboard.AutoGeneratedType'].some((f) => clipboard.has?.(f))) return;
-    const text = clipboard.readText();
+  let items = [], last = '', timer = null;
+  const ready = Promise.resolve(clipboard.readText()).then((t) => { last = t; }, () => {});   // what was there before isn't a copy
+  const poll = async () => {
+    await ready;
+    const marked = await Promise.all(['org.nspasteboard.ConcealedType', 'org.nspasteboard.TransientType', 'org.nspasteboard.AutoGeneratedType'].map((f) => clipboard.has(RAW(f)).catch(() => false)));
+    if (marked.some(Boolean)) return;
+    const text = await clipboard.readText();
     if (!text.trim() || text === last || text.startsWith('dixi-mark-')) { last = text; return; }
     last = text;
     if (hideSecrets(text) !== text) return;   // looks like a password or card number
@@ -143,7 +155,7 @@ export function clipboardHistory({ clipboard, everyMs = 1000, keepMs = 24 * 3600
     onClip(item);
   };
   const h = {
-    start() { timer ??= setInterval(poll, everyMs); return h; },
+    start() { timer ??= setInterval(() => poll().catch(() => {}), everyMs); return h; },
     stop() { clearInterval(timer); timer = null; },
     poll,
     list: () => items.filter((x) => now() - x.at < keepMs),
