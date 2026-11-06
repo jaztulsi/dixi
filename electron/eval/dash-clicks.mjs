@@ -24,9 +24,9 @@ const s = {
     { t: now - 3 * min, kind: 'done', line: 'Opened Claude' }, { t: now - 4 * min, kind: 'run', line: '“open Claude”' },
     { t: now - day - 90 * min, kind: 'step', line: 'Typed the ZIP code' }, { t: now - 4 * day, kind: 'done', line: 'Saved the skill “Send photos to Anna”' },
   ],
-  prefs: { careful: false, large: false, contrast: false, sounds: true },
+  prefs: { careful: false, allowSend: false, allowSpend: false, allowDelete: false, large: false, contrast: false, sounds: true },
   perms: { mic: 'granted', screen: 'granted', ax: false, automation: null },
-  keys: { ask: 'hold ⌃', stop: '⌥Space', select: '⌥⇧Space', kill: '⌘⇧Esc', yes: '⌥↩' },
+  keys: { ask: '⌥Space', stop: 'Esc', select: '⌥⇧Space', kill: '⌘⇧Esc', yes: '⌥↩' },
   builtins: [{ group: 'Your screen', examples: ['What’s on my screen?', 'Read this to me'] }, { group: 'Do it for me', examples: ['Open Gemini and plan my week', 'Reply to this email saying thanks'] }],
   watching: null,
 };

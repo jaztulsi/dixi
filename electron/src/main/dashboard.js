@@ -7,7 +7,7 @@ const { BrowserWindow, ipcMain } = electron;
 
 const d = { win: null, api: null, hooked: false };
 const OPEN = /^(?:browser|setup|profile|tasks|pane:(?:mic|screen|ax|automation))$/;
-const KEYS = new Set(['careful', 'large', 'contrast', 'sounds']);
+const KEYS = new Set(['careful', 'allowSend', 'allowSpend', 'allowDelete', 'large', 'contrast', 'sounds']);
 
 export function openDashboard({ here, api }) {
   d.api = api;

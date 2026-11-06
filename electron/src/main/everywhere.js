@@ -58,6 +58,17 @@ export { ABOUT_SCREEN };
 // what the browser gates by other means (form submits).
 const DESKTOP_RISKY = /\b(submit|post|publish|share|tweet|reply all|move to (the )?trash|empty (the )?trash|trash|airdrop|erase|format disk|install|uninstall|always allow|allow|grant access|open anyway|send|join|sign ?up|upgrade|download|start (?:my |your |a |the )?(?:free )?trial|free trial|try (?:it |now |\d+ \w+ )?(?:for )?free|\d+ (?:days?|weeks?|months?) free)\b/i;   // money and commitments: sign-ups, trials, upgrades, app downloads
 const GET = /^\s*get\s*$/i;   // the App Store's install button is just "Get" ("Get Info" is not)
+// Master v2 Phase 4: sending, spending and permanent deleting are the only things Dixi won't finish on its own.
+// Unless you turned that kind on in Settings, it gets everything ready and stops one step before the final press.
+// ponytail: verb regexes on the button/question text; a control with no such word is judged by clickRisk alone.
+const FINAL = [['send', /\b(send|post|publish|tweet|reply|submit|share)\b/i], ['spend', /\b(buy|order|pay|purchas\w*|check ?out|subscribe|upgrade|trial)\b/i], ['delete', /\b(empty (the )?trash|erase|delete|permanently|forever)\b/i]];
+const ALLOW = { send: 'allowSend', spend: 'allowSpend', delete: 'allowDelete' };
+export const heldBack = (q, prefs = {}) => (prefs.careful ? null : FINAL.find(([k, re]) => re.test(String(q ?? '')) && !prefs[ALLOW[k]])?.[0] ?? null);
+const HELD = { send: 'send it', spend: 'pay', delete: 'delete it' };
+export const heldLine = (q, kind) => { const l = String(q ?? '').match(/“([^”]+)”/)?.[1]; return `It's ready. I stopped before ${l ? `“${l}”` : `the last step`}: ${kind === 'spend' ? 'pay' : 'press it'} yourself, or let Dixi ${HELD[kind]} in Settings`; };
+// A script that would send (Messages/Mail `send`, JXA .send()) or empty the Trash runs as screen steps instead,
+// so the same one-step-before stop applies.
+export const scriptFinal = (code, prefs = {}) => (prefs.careful ? null : /\bsend\b|\.send\(/i.test(code) && !prefs.allowSend ? 'send' : /\bempty\s+(the\s+)?trash\b/i.test(code) && !prefs.allowDelete ? 'delete' : null);
 export const riskyLabel = (s) => Boolean(s) && (IRREVERSIBLE.test(s.trim()) || RECURRING.test(s) || DESKTOP_RISKY.test(s) || GET.test(s));
 // Dixi asks no questions. A step that would have asked goes ahead only when the user's own words ask for it: they said
 // "send" and the button is Send. Otherwise it is refused (and a plan stops there): "Open anyway", "Always allow",
@@ -568,6 +579,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const tag = c.name === 'press' ? {} : { toolset_name: 'computer' };   // press is Dixi's own tool, not the toolset's
     const ok = (content = 'OK') => ({ type: 'tool_result', tool_use_id: c.id, ...tag, content });
     const no = (q) => {
+      const held = heldBack(q, prefs);
+      if (held) { state.refusal = heldLine(q, held); return { type: 'tool_result', tool_use_id: c.id, ...tag, content: `Stopped: ${state.refusal}. Leave it ready. Don't press it another way. Tell the user in one short sentence.` }; }
       // "Press “Open Anyway”?" → "you didn't ask me to press “Open Anyway”"; "I can't tell what that button does. Press it?" → its first sentence.
       const mask = String(q).replace(/“[^”]*”/g, (m) => '_'.repeat(m.length));   // a label's own "." or "?" ends nothing
       const end = mask.indexOf('?'), cut = mask.slice(0, end).search(/[.!]\s+\S[^.!]*$/);
@@ -583,7 +596,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const acted = (r, el) => { state.lastSynthetic = Date.now(); rec?.add(stepOf(c, at, el)); act.log(stepEvent(c, ctx, el)); return r; };   // (lastSynthetic: for the approve buttons)
     // Asked and approved, but stopped meanwhile: nothing happens.
     // No questions (see userAsked): only careful mode, the user's own setting, still asks.
-    const yes = async (q) => !signal.aborted && (prefs.careful ? await approve(q) : userAsked(q, state.words ?? ''));
+    const yes = async (q) => !signal.aborted && (prefs.careful ? await approve(q) : userAsked(q, state.words ?? '') && !heldBack(q, prefs));
     // Careful mode ("ask me before every step"), or an app where one switch hands over the Mac (System
     // Settings, Terminal, Installer…): every click, key and bit of typing waits for a yes.
     let asked = false;
@@ -723,6 +736,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (hits.length !== 1 || signal.aborted) return false;
     const el = hits[0], shown = quoteLabel(el.labels[0] ?? name);
     const why = clickRisk(el) || (isMoney(ctx) && `Press “${shown}” on a money page?`);
+    const held = why && heldBack(why, prefs);
+    if (held) { act.log({ kind: 'refused', text: why, app: ctx.name, role: el.role, label: el.labels[0] }); const line = heldLine(why, held); say(`${line}.`); show({ state: 'done', title: 'Ready', text: line, linger: 4000 }); return true; }
     if (why && !userAsked(why, said)) {   // never a question (careful mode went to the agent above): the user's words decide
       act.log({ kind: 'refused', text: why, app: ctx.name, role: el.role, label: el.labels[0] });
       say(`You didn't ask me to press “${shown}”, so I didn't.`); show({ state: 'done', title: 'Not pressed', text: shown, linger: 2500 }); return true;
@@ -904,6 +919,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         const why = await keysBlocked(s.app);
         if (why) return { ok: false, error: `${why}, so I didn't press any keys` };
       }
+      if (scriptFinal(s.code, prefs)) return doStep({ do: 'computer', clause: s.clause, app: s.app }, prior, signal);   // composed on screen, stops before Send
       let r = await runScript({ lang: s.lang, code: s.code });
       if (!r.ok && !r.refused && !signal.aborted) {   // one repair, then the screen agent does it
         const j = await claude({ model: 'claude-haiku-5-5', max_tokens: 400, thinking: { type: 'disabled' },
@@ -1558,7 +1574,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       commands, actions: ACTIONS, builtins: BUILTINS, watching: state.watching ?? null,
       skills: listSkills(userData).map((x) => ({ id: x.id, name: x.name, app: x.app ?? '', steps: x.steps.length })),
       activity: act.read({ since: Date.now() - 7 * 864e5 }).slice(-80).reverse().map((e) => ({ t: e.t, kind: e.kind, line: lineOf(e) })),
-      prefs: { careful: Boolean(prefs.careful), large: Boolean(prefs.large), contrast: Boolean(prefs.contrast), sounds: prefs.sounds !== false },
+      prefs: { careful: Boolean(prefs.careful), allowSend: Boolean(prefs.allowSend), allowSpend: Boolean(prefs.allowSpend), allowDelete: Boolean(prefs.allowDelete), large: Boolean(prefs.large), contrast: Boolean(prefs.contrast), sounds: prefs.sounds !== false },
       perms: permStatus(permsNow()), keys: { ask: label(KEY), stop: 'Esc', select: label(SEL_KEY), kill: label(KILL_KEY), yes: '⌥↩' },
     }),
     saveCommands: (list) => { const r = saveCommands(commandsFile, list); if (r.ok) { commands = r.commands; phrasesToMain(); } return r; },
@@ -1661,5 +1677,5 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // The speech connection dropped mid-session (deepgram.js retries and replays the audio): say so, not a frozen "Listening…".
   const reconnecting = (on) => { if (ptt.open && !busy()) show({ state: 'listening', text: on ? 'Reconnecting…' : '' }); };
   // ponytail: hold-⌃ runs a 30 Hz osascript poll, so it's opt-in (DIXI_HOLD_CTRL=1 or prefs.holdCtrl); ⌥Space is the default.
-  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, control: env.DIXI_HOLD_CTRL === '1' || prefs.holdCtrl ? control : null, toggle, showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
+  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, control: env.DIXI_HOLD_CTRL === '1' || prefs.holdCtrl ? control : null, toggle, set: (k, v) => dashApi.set(k, v), showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
 }

@@ -139,11 +139,15 @@ test('"click X" by name: pressed when the words name it, skipped with one line w
   const SEND = { ...SAVE, labels: ['Send'] }, WIDE = { ...SAVE, labels: ['Delete Account'] };
   await agentDoes([], { named: [SEND] }, 'click Send');
   assert.equal(asked.length, 0, 'nothing was asked');
-  assert.ok(done.some(([w]) => w === 'press'), 'Send was pressed');
+  assert.ok(!done.some(([w]) => w === 'press') && spoken.some((s) => /stopped before “Send”/.test(s)), `sending off (default): ready, not pressed: ${spoken} ${JSON.stringify(done)}`);
+  ewApi.set('allowSend', true);
+  await agentDoes([], { named: [SEND] }, 'click Send');
+  ewApi.set('allowSend', false);
+  assert.ok(done.some(([w]) => w === 'press'), 'sending allowed: Send was pressed');
   await agentDoes([], { named: [WIDE] }, 'click delete');   // the one match reaches past what was said
   assert.equal(asked.length, 0, 'nothing was asked');
   assert.ok(!done.some(([w]) => w === 'press'), 'Delete Account was not pressed');
-  assert.ok(spoken.some((s) => /didn't ask me to press “Delete Account”/.test(s)), 'and the reason was said');
+  assert.ok(spoken.some((s) => /stopped before “Delete Account”/.test(s)), 'and the reason was said (deleting is off)');
 });
 
 test('a form uses your profile without asking: said on the card, logged without its values', mac, async () => {
@@ -183,8 +187,10 @@ test('a risky named control is never asked about: refused unless the user said i
   await agentDoes([{ name: 'press', input: { ref: 1 } }], { controls: [SEND] });   // "organize these notes": nobody said send
   assert.equal(asked.length, 0, 'nothing was asked');
   assert.ok(!done.some(([w]) => w === 'press'), 'and Send was not pressed');
-  assert.ok(spoken.some((s) => /didn't ask me to press “Send”/.test(s)), 'and the reason was said');
+  assert.ok(spoken.some((s) => /stopped before “Send”/.test(s)), 'and the reason was said');
+  ewApi.set('allowSend', true);
   await agentDoes([{ name: 'press', input: { ref: 1 } }], { controls: [SEND] }, 'send it to Alex');
+  ewApi.set('allowSend', false);
   assert.equal(asked.length, 0, 'nothing was asked');
   assert.ok(done.some(([w]) => w === 'press'), 'the user said send, so it was pressed');
 });
@@ -429,4 +435,25 @@ test('"[everywhere] fetch failed": a dropped socket is retried once on a fresh o
     await agentDoes([]);
     assert.ok(spoken.some((s) => /couldn't reach the internet/.test(s)) && !spoken.some((s) => /fetch failed/.test(s)), `plain line: ${spoken}`);
   } finally { globalThis.fetch = real; quiet(); }
+});
+
+test('Phase 4: send, pay and delete-for-good stop one step before, unless that kind is allowed in Settings; everything else just happens', async () => {
+  const { heldBack, heldLine, scriptFinal } = await import('../../src/main/everywhere.js');
+  assert.equal(heldBack('Press “Send”?', {}), 'send');
+  assert.equal(heldBack('Press “Place order”?', {}), 'spend');
+  assert.equal(heldBack('Press “Empty Trash”?', {}), 'delete');
+  assert.equal(heldBack('Press Enter? It may send or submit.', {}), 'send');
+  assert.equal(heldBack('Press “Send”?', { allowSend: true }), null, 'allowed in Settings');
+  assert.equal(heldBack('Press “Send”?', { careful: true }), null, 'careful mode asks instead');
+  assert.equal(heldBack('Press “Open anyway”?', {}), null, 'not a send/pay/delete: userAsked decides');
+  assert.match(heldLine('Press “Send”?', 'send'), /stopped before “Send”.*Settings/);
+  assert.equal(scriptFinal('tell application "Messages" to send "hi" to buddy "Mom"', {}), 'send');
+  assert.equal(scriptFinal('tell application "Messages" to send "hi" to buddy "Mom"', { allowSend: true }), null);
+  assert.equal(scriptFinal('tell application "Music" to play', {}), null);
+});
+
+test('Phase 4: "send it" said out loud still stops before Send when sending is off', mac, async () => {
+  await agentDoes([{ name: 'press', input: { ref: 1 } }], { controls: [{ ...SAVE, labels: ['Send'] }] }, 'send it to Alex');
+  assert.ok(!done.some(([w]) => w === 'press' || w === 'click'), `pressed: ${JSON.stringify(done)}`);
+  assert.equal(asked.length, 0, 'nothing asked');
 });
