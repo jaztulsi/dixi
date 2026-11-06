@@ -386,7 +386,7 @@ export function searchFormTemplate(html, base) {
 on('net:preconnect', (url) => { if (/^https?:\/\//i.test(url)) tabsSession().preconnect({ url, numSockets: 2 }); });
 
 handle('deepgram:open', (params) => deepgram.open({ keyterms: (params?.keyterms ?? []).slice(0, 50).map(String) }));
-on('deepgram:audio', (chunk) => deepgram.sendAudio(chunk));
+on('deepgram:audio', (chunk) => { deepgram.sendAudio(chunk); everywhere?.level?.(chunk); });
 on('deepgram:control', (message) => deepgram.sendControl(message));
 handle('deepgram:close', () => deepgram.close());
 

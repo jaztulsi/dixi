@@ -367,3 +367,27 @@ test('A1: the overlay is made hidden at launch, so ⌥Space sends "listening" be
   await p;
   keys['Escape']?.();
 });
+
+test('the overlay lets clicks through again on every hide and show: the pointer on the island when it hid never leaves the Mac blocked', mac, async () => {
+  const { setupEverywhere } = await import('../../src/main/everywhere.js');
+  const handlers = {};
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+      userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => mainWin, handle: (ch, fn) => { handlers[ch] = fn; }, on() {}, onShowMain() {} });
+    mock.timers.tick(2000);
+    const w = Win.last;
+    let visible = false, ignore = null, hid = 0;
+    Object.assign(w, { isVisible: () => visible, showInactive: () => { visible = true; }, hide: () => { visible = false; hid++; },
+      setIgnoreMouseEvents: (on, o) => { ignore = on && o?.forward ? 'through' : on ? 'swallowed' : 'caught'; } });
+    fakeMac();
+    w.setIgnoreMouseEvents(false);   // the pointer was on the island (ew:mouse inside) when it last hid, e.g. it pressed Undo
+    await handlers['everywhere:run']('open Notes');
+    assert.equal(visible, true);
+    assert.equal(ignore, 'through', 'shown: clicks outside the island reach your apps');
+    w.setIgnoreMouseEvents(false);   // the pointer is on the island again as it lingers
+    mock.timers.tick(60000); mock.timers.tick(1000);   // its linger (no app opened here, so an error card), then the 500 ms fade
+    assert.equal(hid, 1, 'hidden after its linger');
+    assert.equal(ignore, 'through', 'hidden with the pointer on it: clicks still go through');
+  } finally { mock.timers.reset(); }
+});

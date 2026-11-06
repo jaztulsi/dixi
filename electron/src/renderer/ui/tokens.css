@@ -1,0 +1,20 @@
+/* Dixi's one look (ADDENDUM A4): true black, restrained glass, SF Pro, white ink at a few opacities.
+   Every surface links this file; none hardcodes its own colors. No gradients, orbs or sparkles. */
+:root {
+  --black: #000;
+  --base: #0a0a0a;
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-blur: blur(32px) saturate(1.3);
+  --hairline: rgba(255, 255, 255, 0.10);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --ink: #fff;
+  --ink-2: rgba(255, 255, 255, 0.62);
+  --ink-3: rgba(255, 255, 255, 0.38);
+  --red: #ff453a;
+  --r-s: 14px; --r-m: 20px; --r-l: 28px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", system-ui, sans-serif;
+  --t-s: 12px; --t-m: 14px; --t-l: 17px; --t-xl: 28px;
+  --fast: 120ms; --dur: 200ms; --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-transparency: reduce) { :root { --glass: var(--base); --glass-blur: none; } }

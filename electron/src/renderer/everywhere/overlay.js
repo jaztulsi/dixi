@@ -1,24 +1,35 @@
-// Draws what the main process sends: the glass pill (listening, thinking, the answer, steps, the
-// Claude team, an approval card), rings on the real screen, and a ring where the agent clicks.
-// The window ignores the mouse except over the pill, so it never gets in the way of your apps.
+// Draws what the main process sends: the island (listening, thinking, acting, done, error), the card
+// slot under it, rings on the real screen, and a ring where the agent clicks. The window ignores the
+// mouse except over the island and the card, so it never gets in the way of your apps.
 
-import { mountMascot } from '../ui/mascot.js';
 import { earconFor, play, canSound, cardAnswer } from './cues.js';
 
 const $ = (id) => document.getElementById(id);
-const pill = $('pill');
+const root = document.documentElement;
+const pill = $('pill'), more = $('more');
 
 // Settings from the menu bar: large text, high contrast (also on with macOS "Increase contrast" unless
 // switched off), and sounds (on unless sounds === false).
 let prefs = {};
 const moreContrast = matchMedia('(prefers-contrast: more)');
 function applyPrefs() {
-  document.documentElement.classList.toggle('large', Boolean(prefs.large));
-  document.documentElement.classList.toggle('contrast', prefs.contrast ?? moreContrast.matches);
-  requestAnimationFrame(placeBackdrop);
+  root.classList.toggle('large', Boolean(prefs.large));
+  root.classList.toggle('contrast', prefs.contrast ?? moreContrast.matches);
+  fold();
 }
 moreContrast.addEventListener('change', applyPrefs);
 window.ew.on('ew:prefs', (p) => { prefs = p ?? {}; applyPrefs(); });
+
+// The notch (main/notch.js): the island grows out of it, and folds back into its exact size.
+let notch = null;
+function fold() {
+  root.classList.toggle('notch', Boolean(notch));
+  if (notch) root.style.setProperty('--notch-h', `${notch.h}px`);
+  const r = pill.getBoundingClientRect();   // its laid-out size (a transform doesn't change it)
+  root.style.setProperty('--sx', notch && r.width ? (notch.w / r.width).toFixed(3) : '0.9');
+  root.style.setProperty('--sy', notch && r.height ? (notch.h / r.height).toFixed(3) : '0.7');
+}
+window.ew.on('ew:notch', (n) => { notch = n?.w > 0 ? n : null; fold(); });
 applyPrefs();
 
 // Earcons (cues.js), never over Dixi's voice or its echo window. The window needs autoplayPolicy
@@ -34,62 +45,54 @@ function earcon(name) {
     ac.resume().then(() => { if (performance.now() - asked < 300 && mayPlay()) play(ac, name); }, () => {});
   } catch {}
 }
+window.ew.on('ew:speaking', (on) => { if (talking && !on) stoppedAt = performance.now(); talking = Boolean(on); });
 
 // Screen readers: answers and progress politely; approval cards and Guardian stops assertively.
 const announce = (where, text) => { if ($(where).textContent !== text) $(where).textContent = text; };
-
-// Dixi the mascot, as in the app: a pose for each state; it bobs while Dixi is talking.
-const buddy = mountMascot($('buddy'), { base: '../assets/' });
-buddy.init();
-const POSE = { listening: 'curious', thinking: 'face', acting: 'happy', hive: 'happy', done: 'nod', error: 'neutral' };
-window.ew.on('ew:speaking', (on) => {
-  if (talking && !on) stoppedAt = performance.now();
-  talking = Boolean(on);
-  $('buddy').classList.toggle('talking', talking);
-});
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-// The real screen behind the pill, blurred: glass that matches whatever app is underneath.
-let shot = '';
-function placeBackdrop() {
-  const b = pill.querySelector('.backdrop');
-  if (!shot) { b.style.backgroundImage = ''; return; }
-  const r = pill.getBoundingClientRect();   // on screen; the pill's own lengths are times its zoom (large text)
-  const z = parseFloat(getComputedStyle(pill).zoom) || 1;
-  b.style.backgroundImage = `url("data:image/jpeg;base64,${shot}")`;
-  b.style.backgroundSize = `${innerWidth / z}px ${innerHeight / z}px`;
-  b.style.backgroundPosition = `${30 - r.left / z}px ${30 - r.top / z}px`;   // the backdrop overhangs the pill by 30px
-}
-new ResizeObserver(placeBackdrop).observe(pill);
-window.ew.on('ew:backdrop', (b64) => { shot = b64 ?? ''; placeBackdrop(); });
+// The waveform: five bars follow the mic level (main sends ~15 per second, only while listening).
+const bars = [...pill.querySelectorAll('.wave i')];
+const SHAPE = [0.5, 0.8, 1, 0.75, 0.55];
+window.ew.on('ew:level', (v) => bars.forEach((b, i) => b.style.setProperty('--l', Math.max(0.18, Math.min(1, v * SHAPE[i] * (0.8 + Math.random() * 0.4))).toFixed(2))));
+
+// The card slot shows only when it has something: an answer longer than the island's line, steps, the
+// Claude team, or (careful mode only) a yes/no.
+const showMore = () => { more.hidden = pill.hidden || !($('full').textContent || $('steps').children.length || $('hive').children.length || !$('ask').hidden); };
 
 // A Guardian stop is a state with guard: true; it gets its own low tone and is announced at once.
 let last = 'idle';
+const brief = (t) => { const w = String(t).trim().split(/\s+/); return w.length > 4 ? `${w.slice(0, 4).join(' ')}…` : w.join(' '); };
 window.ew.on('ew:state', (s) => {
   const now = s.guard ? 'guard' : s.state;
   earcon(earconFor(last, now));
   const fresh = now !== last;
   last = now;
-  if (s.state === 'idle') { pill.hidden = true; $('marks').innerHTML = ''; shot = ''; placeBackdrop(); return; }   // the last screenshot doesn't stay in the style
+  if (s.state === 'idle') { pill.hidden = true; showMore(); $('marks').innerHTML = ''; return; }
+  const view = s.state === 'hive' ? 'acting' : s.state;
+  pill.dataset.state = view;
+  if (view === 'listening') bars.forEach((b) => b.style.removeProperty('--l'));
   pill.hidden = false;
-  pill.dataset.state = s.state;
-  buddy.setPose(POSE[s.state] ?? 'face');
-  $('title').textContent = s.title ?? ({ listening: 'Dixi is listening', thinking: 'Dixi', acting: 'Dixi is on it', hive: 'Your Claude team' }[s.state] ?? 'Dixi');
-  $('app').textContent = s.app ?? '';
-  $('text').textContent = s.text ?? '';
-  $('steps').innerHTML = (s.steps ?? []).map((x) => `<li data-state="${esc(x.state)}">${esc(x.label)}</li>`).join('');
+  const running = (s.steps ?? []).findLast((x) => x.state === 'running')?.label;
+  const line = (view === 'acting' ? running || s.text || s.title : s.text || (view === 'done' || view === 'error' ? s.title : '')) ?? '';
+  $('text').textContent = String(line).replace(/\s+/g, ' ').trim();
+  $('undo').hidden = !(view === 'done' && s.undo);
+  // The whole answer goes in the card when one line can't hold it; then the island says only what it's about
+  // (✓ and a few words of the title), so the same sentence never shows twice.
+  const card = (view === 'done' || view === 'error') && $('text').scrollWidth > $('text').clientWidth;
+  $('full').textContent = card ? s.text ?? '' : '';
+  if (card) $('text').textContent = brief(s.title || (view === 'done' ? 'Done' : 'Error'));
+  $('steps').innerHTML = (s.steps ?? []).length > 1 ? s.steps.map((x) => `<li data-state="${esc(x.state)}">${esc(x.label)}</li>`).join('') : '';
   $('hive').innerHTML = (s.hive ?? []).map((x) => `<li data-status="${esc(x.status)}"><b>${esc(x.task.slice(0, 70))}</b><span>${esc(x.step ?? '')}</span></li>`).join('');
-  const busy = ['listening', 'thinking', 'acting', 'hive'].includes(s.state);
-  $('hint').hidden = !busy;
-  $('close').hidden = busy;
-  $('close').setAttribute('aria-label', s.state === 'done' || s.state === 'error' ? 'Close' : 'Stop');
+  showMore();
   if (s.state !== 'done') $('marks').innerHTML = '';
-  requestAnimationFrame(placeBackdrop);
   // Live words while listening aren't read out as they arrive: only "listening" itself is.
   if (s.state === 'listening' && !fresh) return;
-  const words = [$('title').textContent, s.text, (s.steps ?? []).findLast((x) => x.state === 'running')?.label].filter(Boolean).join('. ');
+  const title = s.title ?? ({ listening: 'Dixi is listening', thinking: 'Dixi', acting: 'Dixi is on it', hive: 'Your Claude team' }[s.state] ?? 'Dixi');
+  const words = [title, s.text, running].filter(Boolean).join('. ');
   if (now === 'guard') announce('assertive', words); else announce('polite', words);
 });
+$('undo').addEventListener('click', () => { $('undo').hidden = true; window.ew.undo(); });
 
 // Rings and boxes where the answer points, each with a short label.
 window.ew.on('ew:marks', (marks) => {
@@ -120,15 +123,16 @@ window.ew.on('ew:cursor', (p) => {
   c.classList.add('on');
 });
 
-// The approval card: big Yes / No (saying "yes" or "no" works too). It chimes, is read out at once,
-// and focus moves to Yes.
+// Careful mode only (by default Dixi never asks): Yes / No in the card slot. It chimes, is read out at
+// once, and focus moves to Yes.
 let cardId = null, cardAt = 0, lastKey = 0;
 window.ew.on('ew:card', (card) => {
   cardId = card?.id ?? null;
-  $('card').hidden = !card;
+  $('ask').hidden = !card;
   $('question').textContent = card?.question ?? '';
   announce('assertive', card ? `${card.question} Yes or no?` : '');
   if (card) { pill.hidden = false; cardAt = performance.now(); earcon('card'); requestAnimationFrame(() => $('yes').focus()); }
+  showMore();
 });
 const answer = (ok) => { if (!cardId) return; window.ew.approve(cardId, ok); cardId = null; };
 $('yes').addEventListener('click', () => answer(true));
@@ -147,8 +151,9 @@ document.addEventListener('keydown', (e) => {
   if (key === 'Enter' || ok !== null) e.preventDefault();      // Enter never clicks Yes by itself: it goes through the check
   if (ok !== null && !e.repeat) answer(ok);
 });
-$('close').addEventListener('click', () => window.ew.stop());
 
-// Clicks reach the pill only while the pointer is over it; everywhere else they go to your apps.
-pill.addEventListener('mouseenter', () => window.ew.mouse(true));
-pill.addEventListener('mouseleave', () => window.ew.mouse(false));
+// Clicks reach the island and the card only while the pointer is over them; everywhere else they go to your apps.
+for (const el of [pill, more]) {
+  el.addEventListener('mouseenter', () => window.ew.mouse(true));
+  el.addEventListener('mouseleave', () => window.ew.mouse(false));
+}
