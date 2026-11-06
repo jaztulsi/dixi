@@ -30,20 +30,20 @@ export class ElevenLabsBridge {
   }
 
   async open(opts = {}) {
+    // Turn numbers never repeat across the switch either way (Scribe counts its own; Flux's are renumbered).
+    const toFlux = () => { this.fallen = true; this.fallback.next = Math.max(this.fallback.next ?? 0, this.turn); return this.fallback.open(opts); };
     if (this.dead?.is('elevenlabs') || Date.now() < this.retryAt) {   // 0 round trips to ElevenLabs
       if (!this.fallback) return { ok: false, error: 'ElevenLabs is out of credit or refused the key' };
-      this.fallen = true;
-      return this.fallback.open(opts);
+      return toFlux();
     }
-    if (this.fallen) { this.fallen = false; this.fallback.close(); }   // retry time: back to ElevenLabs
+    if (this.fallen) { this.fallen = false; this.turn = Math.max(this.turn, this.fallback.next ?? 0); this.fallback.close(); }   // retry time: back to ElevenLabs
     const pending = this.connect(opts);
     const closes = this.closes;   // connect() closes the old socket first; a close after this is the caller giving up
     const r = await pending;
     if (r.ok || !this.fallback) return r;
     if (this.closes !== closes) return { ok: false, error: 'closed while connecting' };   // never open the fallback after a cancel
     this.giveUp(r.error, deadAnswer(Number(/HTTP (\d+)/.exec(r.error)?.[1])));
-    this.fallen = true;
-    return this.fallback.open(opts);
+    return toFlux();
   }
 
   connect({ keyterms = [] } = {}) {

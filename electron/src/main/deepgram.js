@@ -22,6 +22,7 @@ export class DeepgramBridge {
     this.apiKey = apiKey;
     this.emit = emit;
     this.ws = null;
+    this.next = 0;   // Flux numbers each connection's turns from 0; Dixi's turn numbers keep rising (each ⌥Space is a new connection)
   }
 
   open({ keyterms = [] } = {}) {
@@ -32,12 +33,23 @@ export class DeepgramBridge {
     const url = `${ENDPOINTS.deepgram.url}?${q}`;
     const ws = new WebSocket(url, { headers: { Authorization: `Token ${this.apiKey}` } });
     this.ws = ws;
+    const base = this.next;
     return new Promise((resolve) => {
       ws.once('open', () => resolve({ ok: true }));
       ws.once('error', (err) => resolve({ ok: false, error: err.message }));
-      ws.on('message', (data) => this.emit('deepgram:message', data.toString()));
+      ws.on('message', (data) => this.emit('deepgram:message', this.renumber(data.toString(), base)));
       ws.on('close', (code) => { if (this.ws === ws) { this.ws = null; this.emit('deepgram:closed', code); } });
     });
+  }
+
+  /** A turn_index from this connection, moved past every turn an earlier connection used. */
+  renumber(raw, base) {
+    let m;
+    try { m = JSON.parse(raw); } catch { return raw; }
+    if (!Number.isInteger(m?.turn_index)) return raw;
+    m.turn_index += base;
+    this.next = Math.max(this.next, m.turn_index + 1);
+    return JSON.stringify(m);
   }
 
   sendAudio(chunk) {
