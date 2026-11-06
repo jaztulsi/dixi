@@ -1,6 +1,7 @@
-// Draws what the main process sends: the pill (listening, thinking, acting, done, error), the card
-// slot beside it, rings on the real screen, and a ring where the agent clicks. The window ignores the
-// mouse except over the island and the card, so it never gets in the way of your apps.
+// Draws what the main process sends: the island (always on screen: idle Dixi, then listening, thinking,
+// acting, done, error), your words under it, the card slot beside it, rings on the real screen, and a ring
+// where the agent clicks. The window ignores the mouse except over the island and the card, so it never gets
+// in the way of your apps.
 
 import { earconFor, play, canSound, cardAnswer } from './cues.js';
 
@@ -23,7 +24,7 @@ moreContrast.addEventListener('change', applyPrefs);
 window.ew.on('ew:prefs', (p) => { prefs = p ?? {}; applyPrefs(); });
 
 // The pill is as wide as its one line, so it grows and folds smoothly (a CSS width transition) as the words change.
-function size() { pill.style.setProperty('--pw', `${Math.max(64, row.offsetWidth)}px`); }
+function size() { pill.style.setProperty('--pw', `${Math.max(pill.dataset.state === 'idle' ? 40 : 64, row.offsetWidth)}px`); }
 // The Dock (main sends its height on this display): the pill sits just above it.
 window.ew.on('ew:dock', (px) => root.style.setProperty('--dock', `${Math.max(0, Number(px) || 0)}px`));
 
@@ -31,10 +32,8 @@ window.ew.on('ew:dock', (px) => root.style.setProperty('--dock', `${Math.max(0, 
 let notch = null;
 function fold() {
   root.classList.toggle('notch', Boolean(notch && prefs.top));
-  if (notch) root.style.setProperty('--notch-h', `${notch.h}px`);
-  const r = pill.getBoundingClientRect();   // its laid-out size (a transform doesn't change it)
-  root.style.setProperty('--sx', notch && r.width ? (notch.w / r.width).toFixed(3) : '0.9');
-  root.style.setProperty('--sy', notch && r.height ? (notch.h / r.height).toFixed(3) : '0.7');
+  root.style.setProperty('--notch-h', `${notch && prefs.top ? notch.h : 0}px`);
+  root.style.setProperty('--nw', `${notch && prefs.top ? notch.w : 0}px`);   // idle, it hangs from the notch at the notch's width
 }
 window.ew.on('ew:notch', (n) => { notch = n?.w > 0 ? n : null; fold(); });
 applyPrefs();
@@ -67,12 +66,12 @@ window.ew.on('ew:level', (v) => {
   heard = [Math.min(1, 1.3 * Math.sqrt(Math.max(0, Number(v) - 0.02) || 0)), ...heard].slice(0, mid + 1);
   bars.forEach((b, i) => { const d = Math.abs(i - mid); b.style.setProperty('--l', Math.max(0.12, (heard[d] ?? 0) * (1 - d / (mid + 3))).toFixed(2)); });
 });
-// Live words keep their newest end in view: "…and email it to Sam", never "open my resume and…".
-const tail = (t) => (t.length > 46 ? `…${t.slice(-45).replace(/^\S*\s+/, '')}` : t);
+// Your words, under the pill, keep their newest end in view: "…and email it to Sam", never "open my resume and…".
+const tail = (t) => (t.length > 72 ? `…${t.slice(-71).replace(/^\S*\s+/, '')}` : t);
 
 // The card slot shows only when it has something: an answer longer than the island's line, steps, the
 // Claude team, or (careful mode only) a yes/no.
-const showMore = () => { more.hidden = pill.hidden || !($('full').textContent || $('steps').children.length || $('hive').children.length || !$('ask').hidden); };
+const showMore = () => { more.hidden = pill.dataset.state === 'idle' || !($('full').textContent || $('steps').children.length || $('hive').children.length || !$('ask').hidden); };
 
 // A Guardian stop is a state with guard: true; it gets its own low tone and is announced at once.
 let last = 'idle';
@@ -82,15 +81,23 @@ window.ew.on('ew:state', (s) => {
   earcon(earconFor(last, now));
   const fresh = now !== last;
   last = now;
-  if (s.state === 'idle') { pill.hidden = true; showMore(); $('marks').innerHTML = ''; return; }
+  if (s.state === 'idle') {   // back to resting Dixi: the small pill stays, everything else goes
+    pill.dataset.state = 'idle';
+    for (const id of ['text', 'said', 'full', 'steps', 'hive', 'marks']) $(id).textContent = '';
+    $('undo').hidden = true;
+    showMore(); size();
+    return;
+  }
   const view = s.state === 'hive' ? 'acting' : s.state;
   pill.dataset.state = view;
   if (view === 'listening' && fresh) { heard = []; bars.forEach((b) => b.style.removeProperty('--l')); }
-  pill.hidden = false;
   const running = (s.steps ?? []).findLast((x) => x.state === 'running')?.label;
   const line = (view === 'acting' ? running || s.text || s.title : s.text || (view === 'done' || view === 'error' ? s.title : '')) ?? '';
   const words = String(line).replace(/\s+/g, ' ').trim();
-  $('text').textContent = view === 'listening' || view === 'thinking' ? tail(words) : words;
+  const hearing = view === 'listening' || view === 'thinking';
+  if (hearing && words) $('said').textContent = tail(words);   // your words: their own line, under the pill
+  else if (!hearing) $('said').textContent = '';
+  $('text').textContent = hearing ? '' : words;
   $('undo').hidden = !(view === 'done' && s.undo);
   // The whole answer goes in the card when one line can't hold it; then the island says only what it's about
   // (✓ and a few words of the title), so the same sentence never shows twice.
@@ -147,7 +154,7 @@ window.ew.on('ew:card', (card) => {
   $('ask').hidden = !card;
   $('question').textContent = card?.question ?? '';
   announce('assertive', card ? `${card.question} Yes or no?` : '');
-  if (card) { pill.hidden = false; size(); cardAt = performance.now(); earcon('card'); requestAnimationFrame(() => $('yes').focus()); }
+  if (card) { size(); cardAt = performance.now(); earcon('card'); requestAnimationFrame(() => $('yes').focus()); }
   showMore();
 });
 const answer = (ok) => { if (!cardId) return; window.ew.approve(cardId, ok); cardId = null; };
@@ -173,3 +180,6 @@ for (const el of [pill, more]) {
   el.addEventListener('mouseenter', () => window.ew.mouse(true));
   el.addEventListener('mouseleave', () => window.ew.mouse(false));
 }
+// Resting Dixi, clicked: the dashboard.
+pill.addEventListener('click', (e) => { if (pill.dataset.state === 'idle' && !e.target.closest('button')) window.ew.dash?.(); });
+size();

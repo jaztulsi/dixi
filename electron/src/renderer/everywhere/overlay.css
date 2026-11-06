@@ -1,15 +1,19 @@
-/* Dixi Everywhere: the Flow pill. A small opaque-black capsule at bottom-center, just above the Dock, with a
-   live waveform of your voice; it widens only as far as its one line needs, then folds back. "Island at the top"
-   (menu bar) puts it in the notch instead (ADDENDUM A6): flush to the top edge, rounded bottom corners, or a
-   top-center pill without a notch. Motion: transform, opacity and the pill's width, 200 ms or less; nothing
-   runs while idle. */
+/* Dixi Everywhere: the island. Always on screen: idle, a small black pill with Dixi's marble face in it; hold
+   Control and it opens into a live waveform of your voice, with your words on their own line underneath (never
+   inside it, never a "Listening" word). Then it widens only as far as its one line needs, and folds back.
+   "Island at the top" (menu bar) hangs it from the notch instead (ADDENDUM A6). Motion: transform, opacity, the
+   pill's size, 200 ms or less; nothing runs while idle (no animation, no timers). */
 :root {
   --w: min(380px, calc(100vw - 32px));
-  --row: 36px;
+  --row: 40px;        /* the open pill */
+  --idle-h: 28px;     /* the resting pill */
+  --lift: 36px;       /* room under the pill for your words */
   --notch-h: 0px;
   --top: 6px;
-  --dock: 0px;   /* the Dock's height on this display (main sends it), so the pill sits just above it */
+  --dock: 0px;        /* the Dock's height on this display (main sends it), so the pill sits just above it */
   --h: var(--row);
+  --ph: var(--row);
+  --orange: #ff9f0a;  /* the mic-on dot, the same color as macOS's own */
   font: 500 var(--t-m)/1.35 var(--font);
   color: var(--ink);
 }
@@ -20,16 +24,17 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 
 /* ---- the pill (default): bottom-center, as wide as its content (overlay.js sets --pw) ---- */
 .island {
-  position: fixed; bottom: calc(var(--dock) + 14px); left: 50%; width: var(--pw, 96px); max-width: calc(100vw - 32px); height: var(--row);
-  translate: -50% 0; background: var(--black); border-radius: calc(var(--row) / 2);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 6px 24px rgba(0, 0, 0, 0.35);
+  position: fixed; bottom: calc(var(--dock) + var(--lift)); left: 50%; width: var(--pw, 44px); max-width: calc(100vw - 32px); height: var(--ph);
+  translate: -50% 0; background: var(--black); border-radius: calc(var(--ph) / 2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 8px 28px rgba(0, 0, 0, 0.38);
   transform-origin: 50% 100%;
-  transition: transform var(--dur) var(--ease), opacity var(--fast) linear, width var(--dur) var(--ease);
+  transition: width var(--dur) var(--ease), height var(--dur) var(--ease), border-radius var(--dur) var(--ease), transform var(--fast) var(--ease);
 }
-.island[hidden] { display: block; opacity: 0; transform: scale(0.6, 0.5); pointer-events: none; transition-duration: var(--fast); }
-/* ---- at the top (menu bar setting): out of the notch, or a top-center pill; a fixed width ---- */
+.island[data-state="idle"] { --ph: var(--idle-h); cursor: pointer; }
+.island[data-state="idle"]:hover { transform: scale(1.08); }
+/* ---- at the top (menu bar setting): out of the notch, or a top-center pill ---- */
 html.top .island { top: var(--top); bottom: auto; width: var(--w); height: var(--h); transform-origin: 50% 0; box-shadow: var(--shadow); }
-html.top .island[hidden] { transform: scale(var(--sx, 0.9), var(--sy, 0.7)); }
+html.top .island[data-state="idle"] { width: max(var(--pw, 44px), var(--nw, 0px)); height: calc(var(--notch-h) + var(--idle-h)); }
 html.notch .island { border-radius: 0 0 var(--r-m) var(--r-m); box-shadow: none; }
 /* the notch's concave "ears" where the island meets the top edge, as on the hardware */
 html.notch .island::before, html.notch .island::after {
@@ -38,37 +43,56 @@ html.notch .island::before, html.notch .island::after {
 html.notch .island::before { left: -8px; border-top-right-radius: 8px; box-shadow: 4px -4px 0 4px var(--black); }
 html.notch .island::after { right: -8px; border-top-left-radius: 8px; box-shadow: -4px -4px 0 4px var(--black); }
 .row {
-  position: absolute; left: 0; bottom: 0; width: max-content; box-sizing: border-box; height: var(--row); padding: 0 16px;
-  display: flex; align-items: center; justify-content: center; gap: 10px; transition: opacity var(--fast) linear 60ms;
+  position: absolute; left: 0; bottom: 0; width: max-content; box-sizing: border-box; height: var(--ph); padding: 0 16px 0 7px;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
 }
-html.top .row { right: 0; width: auto; justify-content: flex-start; padding: 0 8px 0 14px; }
-.island[hidden] .row { opacity: 0; transition-delay: 0ms; }
-[data-state="listening"] .row { transition-duration: 80ms; transition-delay: 0ms; }   /* the waveform is fully in by 80 ms */
+html.top .row { right: 0; width: auto; justify-content: flex-start; padding: 0 8px 0 8px; height: var(--row); }
+html.top .island[data-state="idle"] .row { height: var(--idle-h); justify-content: center; }
+.island[data-state="idle"] .row { padding: 0 11px; }
 .row:has(#undo:not([hidden])) { padding-right: 5px; }
+
+/* Dixi in the pill: one still pose per state (neutral, all ears while you talk, happy when done); no motion */
+.buddy { position: relative; flex: none; height: 30px; aspect-ratio: 0.86; transition: height var(--dur) var(--ease); }
+[data-state="idle"] .buddy { height: 22px; }
+.buddy img { position: absolute; left: 50%; bottom: 0; height: 100%; translate: -50% 0; opacity: 0; transition: opacity 120ms linear; }
+.buddy .m-neutral, [data-state="listening"] .m-curious, [data-state="done"] .m-happy { opacity: 1; }
+[data-state="listening"] .m-neutral, [data-state="done"] .m-neutral { opacity: 0; }
+
 #text { flex: 0 1 auto; max-width: 340px; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
 html.top #text { flex: 1; max-width: none; }
 html.large #text { max-width: 420px; }
-#text:empty { display: none; }   /* the pill is just the waveform until there are words */
-html.top #text:empty { display: block; }
-#text:empty::before { color: var(--ink-3); }
-html.top [data-state="listening"] #text:empty::before { content: "Listening"; }
-html.top [data-state="thinking"] #text:empty::before { content: "Thinking"; }
-[data-state="listening"] #text, [data-state="thinking"] #text { color: var(--ink-2); }   /* your words, as heard */
+#text:empty, [data-state="idle"] #text, [data-state="listening"] #text, [data-state="thinking"] #text { display: none; }   /* only Dixi's answers go in the pill */
 [data-state="error"] #text { color: var(--red); }
 
-/* leading mark: waveform (listening; it ripples while thinking), dot (acting), check (done); none on an error */
+/* leading mark: waveform (listening; it ripples while thinking), dot (acting), check (done); none idle or on an error */
 .lead { flex: none; height: 18px; display: grid; place-items: center; }
 .lead > * { grid-area: 1 / 1; display: none; }
 [data-state="listening"] .wave, [data-state="thinking"] .wave, [data-state="acting"] .dot, [data-state="done"] .check { display: flex; }
-[data-state="error"] .lead { display: none; }
+[data-state="error"] .lead, [data-state="idle"] .lead { display: none; }
 .wave { gap: 2.5px; align-items: center; height: 18px; }
 .wave i { width: 2px; height: 18px; border-radius: 1px; background: var(--ink); transform: scaleY(var(--l, 0.12)); transition: transform 70ms linear; }
 [data-state="thinking"] .wave i { animation: ripple 900ms ease-in-out calc(var(--d, 0) * 70ms) infinite; opacity: 0.85; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
 [data-state="acting"] .dot { animation: pulse 900ms ease-in-out infinite alternate; }
 .check { width: 16px; height: 16px; fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+/* the mic is on: a small orange dot, only while you hold Control */
+.rec { display: none; flex: none; width: 6px; height: 6px; margin-left: -2px; border-radius: 50%; background: var(--orange); }
+[data-state="listening"] .rec { display: block; }
 @keyframes pulse { to { opacity: 0.35; } }
 @keyframes ripple { 0%, 100% { transform: scaleY(0.12); } 50% { transform: scaleY(0.55); } }   /* a wave out from the middle: "working on it" */
+
+/* ---- your words, under the pill: the newest end in view; the hint takes the same place when you point at idle Dixi ---- */
+#said, #hint {
+  position: fixed; left: 50%; bottom: calc(var(--dock) + 6px); translate: -50% 0; box-sizing: border-box; max-width: min(560px, calc(100vw - 32px));
+  margin: 0; padding: 3px 11px; border-radius: 10px; background: rgba(0, 0, 0, 0.74); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  font-size: var(--t-s); line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+  opacity: 0; transition: opacity var(--fast) linear;
+}
+#said:not(:empty) { opacity: 1; }
+#hint { color: var(--ink-2); }
+#hint kbd { font: 600 12px/1 var(--font); color: var(--ink); padding: 1px 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.14); }
+body:has(.island[data-state="idle"]:hover) #hint { opacity: 1; }
+html.top #said, html.top #hint { top: calc(var(--top) + var(--h) + 8px); bottom: auto; }
 
 .quiet { flex: none; height: 26px; padding: 0 12px; border-radius: 13px; font-size: var(--t-s); font-weight: 600; background: rgba(255, 255, 255, 0.14); }
 .quiet:hover { background: rgba(255, 255, 255, 0.2); }
@@ -77,7 +101,7 @@ html.top [data-state="thinking"] #text:empty::before { content: "Thinking"; }
 
 /* ---- the card slot: just above the pill (under the island at the top); collapses with it ---- */
 .card {
-  position: fixed; bottom: calc(var(--dock) + 14px + var(--row) + 8px); left: 50%; width: var(--w); margin-left: calc(var(--w) / -2); box-sizing: border-box;
+  position: fixed; bottom: calc(var(--dock) + var(--lift) + var(--row) + 8px); left: 50%; width: var(--w); margin-left: calc(var(--w) / -2); box-sizing: border-box;
   padding: 12px 14px; background: var(--base); border: 1px solid var(--hairline); border-radius: var(--r-m); box-shadow: var(--highlight), var(--shadow);
   transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
 }
@@ -124,8 +148,8 @@ html.top .card[hidden] { transform: translateY(-6px); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
-  .island, .island[hidden], .card, .card[hidden] { transform: none; }
-  .island { transition: opacity var(--fast) linear; }
+  .island, .island:hover, .card, .card[hidden] { transform: none !important; }
+  .island, .buddy, .buddy img { transition: none; }
   .wave i, .dot, .mark, .mark.point::after, .label { animation: none !important; }
   [data-state="thinking"] .wave i { transform: scaleY(0.35); opacity: 0.5; }   /* still reads as "working", without motion */
   .cursor.on { animation: fade 900ms linear forwards; }
@@ -133,7 +157,7 @@ html.top .card[hidden] { transform: translateY(-6px); }
 @keyframes fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
 
 /* Large text (menu bar setting) and high contrast (setting, or macOS "Increase contrast"). */
-html.large { --row: 44px; --t-m: 18px; --t-s: 15px; --w: min(460px, calc(100vw - 32px)); }
+html.large { --row: 48px; --idle-h: 32px; --lift: 40px; --t-m: 18px; --t-s: 15px; --w: min(460px, calc(100vw - 32px)); }
 html.contrast:not(.top) .island { box-shadow: inset 0 0 0 2px var(--ink); }
 html.contrast { --ink-2: #e6e6e6; --ink-3: #c8c8c8; --hairline: #fff; }
 html.contrast .card { border-width: 2px; }

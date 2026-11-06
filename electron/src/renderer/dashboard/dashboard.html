@@ -16,7 +16,7 @@
       <span id="mascot" class="side-mascot"></span>
       <span class="brand-name">Dixi</span>
     </div>
-    <p id="status" class="status-pill" role="status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">Press ⌥Space to talk</span></p>
+    <p id="status" class="status-pill" role="status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">Hold ⌃ to talk</span></p>
     <nav aria-label="Dashboard">
       <ul id="nav">
         <li><button data-go="home" aria-current="page"><span data-icon="home"></span>Home</button></li>
@@ -32,52 +32,71 @@
     <div class="scroll">
 
       <section id="home" aria-labelledby="home-h">
-        <h1 id="home-h" tabindex="-1">Home</h1>
-
-        <div class="island" id="listen-card">
-          <div class="island-top">
-            <span class="island-dot" aria-hidden="true"></span>
-            <div class="island-words">
-              <h2 id="listen-title">Press ⌥Space and talk</h2>
-              <p id="listen-sub">The mic opens only while you ask. Switch on to also listen for “Dixi” (experimental).</p>
-            </div>
-            <label class="switch-hit">
-              <span class="sr">Listen for “Dixi”</span>
-              <input type="checkbox" role="switch" class="switch" data-pref="listening">
-            </label>
+        <!-- The one thing to know, big: how to talk to Dixi. Beside it, what you'll see (the island, in miniature). -->
+        <div class="hero">
+          <div class="hero-copy">
+            <p id="ready" class="ready"><span class="ready-dot" aria-hidden="true"></span><span id="ready-text">Dixi is ready</span></p>
+            <h1 id="home-h" tabindex="-1">Hold <kbd class="cap">⌃</kbd> and talk.</h1>
+            <p class="hero-sub">Let go and Dixi does it, in any app. The mic is off the rest of the time, and <kbd>⌥</kbd><kbd>Space</kbd> stops Dixi at once.</p>
           </div>
-          <dl id="keys" class="keys"></dl>
+          <div class="hero-demo" aria-hidden="true">
+            <div class="demo-pill">
+              <img src="../assets/mascot-curious.webp" alt="" draggable="false">
+              <span class="demo-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+              <span class="demo-rec"></span>
+            </div>
+            <p class="demo-said">open Gemini and plan my week</p>
+          </div>
         </div>
 
-        <div class="card">
-          <div class="setting">
-            <div>
-              <label for="careful-home" class="setting-name">Careful mode</label>
-              <p class="setting-desc" id="careful-home-d">Dixi checks with you before every click and every word it types.</p>
-            </div>
+        <!-- Or type it: the same as saying it. -->
+        <form id="ask-form" class="ask" autocomplete="off">
+          <label for="ask" class="sr">Type what Dixi should do</label>
+          <span class="ask-icon" data-icon="ask"></span>
+          <input id="ask" class="ask-input" placeholder="Or type it here: “open Claude”" maxlength="500" spellcheck="false" enterkeyhint="go">
+          <button class="btn primary" type="submit">Do it</button>
+        </form>
+
+        <div class="tiles">
+          <div class="tile">
+            <span class="tile-icon" data-icon="mic"></span>
+            <div><b>Microphone</b><span>Off until you hold ⌃</span></div>
+          </div>
+          <button class="tile tile-btn" id="perm-tile" data-go-to="settings">
+            <span class="tile-icon" data-icon="shield"></span>
+            <div><b>Permissions</b><span id="perm-sum">All on</span></div>
+          </button>
+          <div class="tile">
+            <span class="tile-icon" data-icon="tick"></span>
+            <div><label for="careful-home"><b>Careful mode</b></label><span id="careful-home-d">Asks first</span></div>
             <input type="checkbox" role="switch" class="switch" id="careful-home" data-pref="careful" aria-describedby="careful-home-d">
           </div>
         </div>
 
+        <div id="fix-wrap" class="fix" hidden>
+          <p id="fix-text"></p>
+          <div id="fix-btns" class="fix-btns"></div>
+        </div>
+
+        <h2 class="sub">Keys</h2>
+        <dl id="keys" class="keys card"></dl>
+
         <div id="try-wrap">
           <h2 class="sub">Things to try</h2>
+          <p class="lede-sm">Click one to put it in the box, then press Do it. Or hold ⌃ and say it.</p>
           <div id="try"></div>
         </div>
 
-        <h2 class="sub">Permissions</h2>
-        <p class="lede-sm">Dixi needs these to hear you, see your screen and click for you.</p>
-        <ul id="perms" class="card perm-list"></ul>
-
-        <div class="actions">
-          <button class="btn primary" data-open="browser">Open the Dixi browser</button>
-          <button class="btn" data-open="setup">Run setup again</button>
+        <div id="recent-wrap" hidden>
+          <div class="head-row"><h2 class="sub">Lately</h2><button class="btn small quiet" data-go-to="activity">See all</button></div>
+          <ol id="recent" class="events card recent"></ol>
         </div>
       </section>
 
       <section id="commands" aria-labelledby="commands-h" hidden>
         <h1 id="commands-h" tabindex="-1">Commands</h1>
         <p class="lede">Make up your own words for the things you do often.</p>
-        <p class="tip"><span data-icon="quote"></span>Press ⌥Space and say “Claude” or “open Claude”.</p>
+        <p class="tip"><span data-icon="quote"></span>Hold ⌃ and say “Claude” or “open Claude”.</p>
 
         <ol id="cmd-list" class="cmd-list" aria-label="Your commands"></ol>
 
@@ -125,10 +144,10 @@
         <div class="card">
           <div class="setting">
             <div>
-              <label for="listening-set" class="setting-name">Listen for “Dixi”</label>
-              <p class="setting-desc" id="listening-set-d"><span id="mic-key-desc">Experimental. Off, the mic opens only for ⌥Space.</span></p>
+              <p class="setting-name">Microphone</p>
+              <p class="setting-desc">Only while you hold ⌃ Control. Dixi never listens in the background.</p>
             </div>
-            <input type="checkbox" role="switch" class="switch" id="listening-set" data-pref="listening" aria-describedby="listening-set-d">
+            <span class="setting-fact">Hold ⌃</span>
           </div>
           <div class="setting">
             <div>
@@ -138,6 +157,10 @@
             <input type="checkbox" role="switch" class="switch" id="careful-set" data-pref="careful" aria-describedby="careful-set-d">
           </div>
         </div>
+
+        <h2 class="sub">Permissions</h2>
+        <p class="lede-sm">Dixi needs these to hear you, see your screen and click for you.</p>
+        <ul id="perms" class="card perm-list"></ul>
 
         <h2 class="sub">Look and sound</h2>
         <div class="card">
@@ -169,6 +192,7 @@
           <button class="btn" data-open="profile">My profile (for forms)</button>
           <button class="btn" data-open="tasks">Open the Dixi Tasks folder</button>
           <button class="btn" data-open="setup">Run setup again</button>
+          <button class="btn" data-open="browser">Open the Dixi browser</button>
         </div>
       </section>
 

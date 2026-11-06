@@ -57,4 +57,4 @@ export function byDay(items, now = Date.now(), locale) {
   return groups;
 }
 
-export const statusText = (s) => (s?.watching ? `👁 Watching: ${s.watching}` : s?.prefs?.listening ? 'Listening for “Dixi”' : `Press ${s?.keys?.ask ?? '⌥Space'} to talk`);   // ⌥Space is the way in; the wake word is extra
+export const statusText = (s) => (s?.watching ? `👁 Watching: ${s.watching}` : 'Hold ⌃ to talk');   // the only way in: no wake word, no always-on mic

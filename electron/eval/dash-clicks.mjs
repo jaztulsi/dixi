@@ -24,10 +24,10 @@ const s = {
     { t: now - 3 * min, kind: 'done', line: 'Opened Claude' }, { t: now - 4 * min, kind: 'run', line: '“open Claude”' },
     { t: now - day - 90 * min, kind: 'step', line: 'Typed the ZIP code' }, { t: now - 4 * day, kind: 'done', line: 'Saved the skill “Send photos to Anna”' },
   ],
-  prefs: { listening: false, careful: false, large: false, contrast: false, sounds: true },
+  prefs: { careful: false, large: false, contrast: false, sounds: true },
   perms: { mic: 'granted', screen: 'granted', ax: false, automation: null },
-  keys: { ask: '⌥Space', mic: '⌘⌥Space', kill: '⌘⇧Esc', yes: '⌥↩' },
-  builtins: [{ group: 'Your screen', examples: ['What’s on my screen?', 'Read this to me'] }],
+  keys: { ask: 'hold ⌃', stop: '⌥Space', select: '⌥⇧Space', kill: '⌘⇧Esc', yes: '⌥↩' },
+  builtins: [{ group: 'Your screen', examples: ['What’s on my screen?', 'Read this to me'] }, { group: 'Do it for me', examples: ['Open Gemini and plan my week', 'Reply to this email saying thanks'] }],
   watching: null,
 };
 const calls = [];
@@ -36,6 +36,7 @@ const copy = () => structuredClone(s);
 const api = {
   state: rec('get', async () => copy()),
   saveCommands: rec('save', async (list) => { s.commands = list.map((c, i) => ({ id: c.id ?? `n${i}`, ...c })); return { ok: true, commands: copy().commands }; }),
+  run: rec('run', async (t) => ({ ok: true, say: `On it: “${t}”.` })),
   testCommand: rec('test', async (c) => ({ ok: true, say: `Okay, opening ${c.target}.` })),
   apps: rec('apps', async () => ['Calendar', 'Claude', 'Mail', 'Safari']),
   deleteSkill: rec('skill:delete', async (name) => { s.skills = s.skills.filter((k) => k.name !== name); return true; }),
@@ -77,6 +78,9 @@ app.whenReady().then(async () => {
   }
   const opens = await js(`[...document.querySelectorAll('[data-open]')].map((e) => e.dataset.open)`);
   for (const [i, what] of opens.entries()) await check(`open ${what}`, `document.querySelectorAll('[data-open]')[${i}].click()`, 200, 'open');
+  await check('try chip → box', `document.querySelector('#try .chip').click(); return document.getElementById('ask').value ? 'box: ' + document.getElementById('ask').value : '';`);
+  await check('type + Do it', `document.getElementById('ask').value = 'open Claude'; document.getElementById('ask-form').requestSubmit();`, 300, 'run');
+  await check('permissions tile', `document.getElementById('perm-tile').click(); return document.getElementById('settings').hidden ? '' : 'shows settings';`);
   await check('refresh', `document.getElementById('refresh').click()`, 300, 'get');
   await check('add command + type', `document.getElementById('add-cmd').click();
     const li = document.querySelector('#cmd-list li:last-child'), p = li.querySelector('.phrase'), t = li.querySelector('.target');

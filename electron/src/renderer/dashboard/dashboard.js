@@ -69,9 +69,9 @@ function sampleDash() {
       { t: now - day - 95 * min, kind: 'run', line: 'Fill in the shipping form' },
       { t: now - 4 * day, kind: 'done', line: 'Saved the skill “Send photos to Anna”' },
     ],
-    prefs: { listening: true, careful: false, large: false, contrast: false, sounds: true },
+    prefs: { careful: false, large: false, contrast: false, sounds: true },
     perms: { mic: 'granted', screen: 'granted', ax: false, automation: null },
-    keys: { ask: '⌥Space', mic: '⌘⌥Space', kill: '⌘⇧Escape', yes: '⌥Return' },
+    keys: { ask: 'hold ⌃', stop: '⌥Space', select: '⌥⇧Space', kill: '⌘⇧Esc', yes: '⌥↩' },
     builtins: [
       { group: 'Your screen', examples: ['What’s on my screen?', 'Read this to me', 'Is this email a scam?'] },
       { group: 'Your day', examples: ['What’s on my calendar?', 'Any new email?'] },
@@ -84,6 +84,7 @@ function sampleDash() {
     get: async () => copy(),
     saveCommands: async (list) => { s.commands = list.map((c, i) => ({ id: c.id ?? `n${Date.now()}${i}`, ...c })); return { ok: true, commands: copy().commands }; },
     testCommand: async (c) => ({ ok: true, say: c.action === 'say' ? c.target : `Okay, opening ${c.target}.` }),
+    run: async (text) => ({ ok: true, say: `On it: “${text}”.` }),
     apps: async () => ['Calendar', 'Claude', 'FaceTime', 'Mail', 'Messages', 'Notes', 'Photos', 'Safari'],
     deleteSkill: async (name) => { s.skills = s.skills.filter((k) => k.name !== name); return true; },
     set: async (k, v) => { s.prefs[k] = v; return copy(); },
@@ -124,7 +125,6 @@ function render(s) {
   renderStatus();
   renderHome();
   for (const el of document.querySelectorAll('[data-pref]')) el.checked = prefOn(el.dataset.pref);
-  $('mic-key-desc').textContent = state.keys.mic ? `Experimental. Off, the mic opens only for ${state.keys.ask || '⌥Space'}. ${state.keys.mic} turns it on and off too.` : '';
   renderSkills();
   renderActivity();
   // Never redraw the commands under someone's hands: only when nothing is waiting to be saved.
@@ -148,9 +148,8 @@ function renderStatus() {
   const text = statusText(state);
   $('status-text').textContent = text;
   $('status').title = text;
-  $('status').classList.toggle('live', Boolean(state.prefs.listening) && !state.watching);
   $('status').classList.toggle('watching', Boolean(state.watching));
-  mascot.setPose(state.prefs.listening ? 'face' : 'sleep');
+  mascot.setPose('face');
 }
 
 const SECTIONS = ['home', 'commands', 'skills', 'activity', 'settings'];
@@ -192,6 +191,8 @@ document.addEventListener('change', async (e) => {
 document.addEventListener('click', (e) => {
   const what = e.target.closest?.('[data-open]')?.dataset.open;
   if (what) dash.open(what);
+  const to = e.target.closest?.('[data-go-to]')?.dataset.goTo;
+  if (to) { show(to); $(`${to}-h`)?.focus(); }
 });
 
 // ---- home ----
@@ -201,20 +202,30 @@ const PERMS = [
   { id: 'ax', name: 'Accessibility', why: 'To click and type for you.' },
   { id: 'automation', name: 'Calendar & Mail', why: 'To tell you about your day. Optional.' },
 ];
+const NEEDED = PERMS.slice(0, 3);   // Calendar & Mail is optional
 function renderHome() {
-  const on = Boolean(state.prefs.listening), keys = state.keys;
-  $('listen-card').classList.toggle('on', on);
-  $('listen-title').textContent = on ? 'Dixi is listening' : `Press ${keys.ask || '⌥Space'} and talk`;
-  $('listen-sub').textContent = on ? `Say “Dixi”, then what you need. ${keys.ask || '⌥Space'} works too.` : 'The mic opens only while you ask. Switch on to also listen for “Dixi” (experimental).';
+  const keys = state.keys, off = NEEDED.filter((p) => !granted(state.perms[p.id]));
+  $('ready-text').textContent = off.length ? `Dixi needs ${off.length === 1 ? 'one permission' : `${off.length} permissions`}` : 'Dixi is ready';
+  $('ready').classList.toggle('warn', off.length > 0);
+  $('perm-sum').textContent = off.length ? `${NEEDED.length - off.length} of ${NEEDED.length} on: fix` : 'All on';
+  $('fix-wrap').hidden = !off.length;
+  $('fix-text').textContent = off.length ? `Turn on ${off.map((p) => p.name).join(' and ')}. ${off.map((p) => p.why).join(' ')}` : '';
+  $('fix-btns').replaceChildren(...off.map((p) => h('button', { class: 'btn small primary', 'data-open': `pane:${p.id}`, 'aria-label': `Fix ${p.name}`, text: `Turn on ${p.name}` })));
+
   $('keys').replaceChildren(...[
-    [keys.ask, 'Talk to Dixi'], [keys.mic, 'Listen for “Dixi” on or off'], [keys.kill, 'Stop everything'], [keys.yes, 'Say yes when Dixi asks'],
+    [keys.ask && 'Hold ⌃', 'Talk, let go to send'], [keys.stop, 'Stop Dixi at once'], [keys.select, 'Use what’s selected'],
+    [keys.kill, 'Stop everything'], [state.prefs.careful && keys.yes, 'Yes, when Dixi asks'],
   ].filter(([k]) => k).map(([k, what]) => h('div', {}, h('dt', {}, h('kbd', { text: k })), h('dd', { text: what }))));
   $('keys').hidden = !$('keys').children.length;
 
   $('try').replaceChildren(...state.builtins.map((g) => h('div', { class: 'try-group' },
     h('h3', { text: str(g?.group) }),
-    h('ul', { class: 'chips' }, ...arr(g?.examples).map((x) => h('li', { class: 'chip glass', text: `“${str(x)}”` }))))));
+    h('ul', { class: 'chips' }, ...arr(g?.examples).map((x) => h('li', {}, h('button', { class: 'chip', type: 'button', text: `“${str(x)}”`, onclick: () => { $('ask').value = str(x); $('ask').focus(); } })))))));
   $('try-wrap').hidden = !state.builtins.length;
+
+  const recent = state.activity.slice(0, 4);
+  $('recent').replaceChildren(...recent.map(eventRow));
+  $('recent-wrap').hidden = !recent.length;
 
   $('perms').replaceChildren(...PERMS.map((p) => {
     const v = state.perms[p.id], ok = granted(v);
@@ -225,6 +236,21 @@ function renderHome() {
       !ok && h('button', { class: 'btn small primary', 'data-open': `pane:${p.id}`, 'data-k': `fix:${p.id}`, 'aria-label': `Fix ${p.name}`, text: 'Fix' }));
   }));
 }
+
+// Typed is the same as said: Dixi runs it Mac-wide (main/everywhere.js run()), and the island shows the rest.
+let asking = false;
+$('ask-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('ask').value.trim();
+  if (!text || asking) return;
+  asking = true;
+  try {
+    const r = await dash.run?.(text);
+    if (r?.ok) $('ask').value = '';
+    toast(str(r?.say) || (r?.ok ? 'On it.' : 'Dixi couldn’t start that. Try again.'));
+  } catch { toast('Dixi couldn’t start that. Try again.'); }
+  asking = false;
+});
 
 // ---- commands ----
 const actionOf = (id) => state.actions.find((a) => a.id === id) ?? state.actions[0];
@@ -429,7 +455,7 @@ function renderSkills() {
       h('span', { class: 'skill-icon', icon: 'skills' }),
       h('h3', { text: name }),
       h('p', { class: 'skill-meta', text: [k.app && str(k.app), `${steps} ${steps === 1 ? 'step' : 'steps'}`].filter(Boolean).join(', ') }),
-      h('p', { class: 'skill-say', text: `Press ⌥Space and say “run my ${name} skill”.` }),
+      h('p', { class: 'skill-say', text: `Hold ⌃ and say “run my ${name} skill”.` }),
       h('button', { class: 'btn small quiet', icon: 'trash', 'data-k': `del-skill:${name}`, 'aria-label': `Delete ${name}`, onclick: () => deleteSkill(name) }, 'Delete'));
   }));
   $('skill-empty').hidden = state.skills.length > 0;
@@ -456,17 +482,18 @@ async function commitDelete(name) {
 }
 
 // ---- activity ----
+function eventRow(it) {
+  const [icon, word] = KIND[it.kind] ?? KIND.step;
+  return h('li', { class: `ev ${KIND[it.kind] ? it.kind : 'step'}` },
+    h('span', { class: 'ev-icon', icon }),
+    h('time', { datetime: new Date(it.t).toISOString(), text: timeLabel(it.t) }),
+    h('p', {}, h('span', { class: 'sr', text: `${word}: ` }), str(it.line)));
+}
 function renderActivity() {
   const groups = byDay(state.activity);
   $('timeline').replaceChildren(...groups.map((g) => h('div', { class: 'day' },
     h('h2', { class: 'day-h', text: g.label }),
-    h('ol', { class: 'events' }, ...g.items.map((it) => {
-      const [icon, word] = KIND[it.kind] ?? KIND.step;
-      return h('li', { class: `ev ${KIND[it.kind] ? it.kind : 'step'}` },
-        h('span', { class: 'ev-icon', icon }),
-        h('time', { datetime: new Date(it.t).toISOString(), text: timeLabel(it.t) }),
-        h('p', {}, h('span', { class: 'sr', text: `${word}: ` }), str(it.line)));
-    })))));
+    h('ol', { class: 'events' }, ...g.items.map(eventRow)))));
   $('activity-empty').hidden = groups.length > 0;
 }
 $('refresh').addEventListener('click', async () => {

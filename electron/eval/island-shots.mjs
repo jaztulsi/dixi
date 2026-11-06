@@ -13,6 +13,8 @@ const out = path.resolve(root, '../docs/ui');
 const W = 1470, H = 956, NOTCH = { w: 179, h: 32 }, DOCK = 70;   // this MacBook Air's display, notch (notch.js) and Dock
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const STATES = {
+  idle: { state: 'idle' },
+  'idle-hover': { state: 'idle', hover: true },
   'listening-quiet': { state: 'listening' },
   listening: { state: 'listening', text: 'open my resume and email it to' },
   thinking: { state: 'thinking', text: 'open my resume and email it to Sam' },
@@ -55,12 +57,17 @@ app.whenReady().then(async () => {
       send('ew:state', { state: 'idle' });
       await sleep(260);
       send('ew:state', s);
+      if (s.hover) {   // point at resting Dixi: the hint shows under it
+        const r = await wc.executeJavaScript(`(() => { const b = document.querySelector('#pill').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+        wc.sendInputEvent({ type: 'mouseMove', x: Math.round(r.x), y: Math.round(r.y) });
+      }
       if (s.state === 'listening' && s.text) for (const v of [0.05, 0.2, 0.5, 0.35, 0.6, 0.25, 0.4]) { send('ew:level', v); await sleep(70); }
       await sleep(320);   // every transition is 200 ms or less
       const file = `island-${place}-${theme}-${name}.png`;
       const area = notch ? { x: W / 2 - 260, y: 0, width: 520, height: 210 } : { x: W / 2 - 300, y: H - 250, width: 600, height: 250 };
       fs.writeFileSync(path.join(out, file), (await wc.capturePage(area)).toPNG());
       shots.push(file);
+      if (s.hover) wc.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 });
     }
   }
   // thinking: IPC → the frame that shows the rippling waveform (must be under 200 ms)
@@ -73,13 +80,13 @@ app.whenReady().then(async () => {
     await wc.executeJavaScript(`new Promise((r) => { const f = () => getComputedStyle(document.querySelector('.wave')).display === 'flex' ? requestAnimationFrame(() => r()) : requestAnimationFrame(f); f(); })`);
     t.push(performance.now() - t0);
   }
-  // listening: IPC → "Listening…" fully shown (the row's opacity reaches 1)
+  // listening: IPC → the open pill fully shown (waveform on, height grown to the row)
   const l = [];
   for (let i = 0; i < 9; i++) {
     send('ew:state', { state: 'idle' }); await sleep(260);
     const t0 = performance.now();
     send('ew:state', { state: 'listening' });
-    await wc.executeJavaScript(`new Promise((r) => { const f = () => getComputedStyle(document.querySelector('.row')).opacity === '1' && !document.querySelector('#pill').hidden ? r() : requestAnimationFrame(f); f(); })`);
+    await wc.executeJavaScript(`new Promise((r) => { const f = () => getComputedStyle(document.querySelector('.wave')).display === 'flex' && document.querySelector('#pill').getBoundingClientRect().height >= 39.5 ? r() : requestAnimationFrame(f); f(); })`);
     l.push(performance.now() - t0);
   }
   l.sort((a, b) => a - b);

@@ -16,9 +16,15 @@
   <p id="polite" class="sr" aria-live="polite"></p>
   <p id="assertive" class="sr" aria-live="assertive"></p>
 
-  <!-- The pill: opaque black, bottom-center above the Dock (or, set in the menu bar, out of the notch). One line. -->
-  <section id="pill" class="island" data-state="idle" aria-label="Dixi" hidden>
+  <!-- The island: always on screen. Idle it is a small black pill with Dixi in it; hold Control and it opens into
+       the waveform (no "Listening" word: the moving bars say it). Bottom-center above the Dock, or out of the notch. -->
+  <section id="pill" class="island" data-state="idle" aria-label="Dixi: hold Control to talk">
     <div class="row">
+      <span class="buddy" aria-hidden="true">
+        <img class="m-neutral" src="../assets/mascot-neutral.webp" alt="" draggable="false">
+        <img class="m-curious" src="../assets/mascot-curious.webp" alt="" draggable="false">
+        <img class="m-happy" src="../assets/mascot-happy.webp" alt="" draggable="false">
+      </span>
       <span class="lead" aria-hidden="true">
         <span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
         <span class="dot"></span>
@@ -26,8 +32,12 @@
       </span>
       <p id="text"></p>
       <button id="undo" class="quiet" hidden>Undo</button>
+      <span class="rec" aria-hidden="true"></span>
     </div>
   </section>
+  <!-- Your words as Dixi hears them: their own line under the pill, never inside it. -->
+  <p id="said" aria-hidden="true"></p>
+  <p id="hint" aria-hidden="true">Hold <kbd>⌃</kbd> to talk · <kbd>⌥</kbd><kbd>Space</kbd> stops</p>
 
   <!-- The card slot above the pill (under the island at the top): a longer answer, steps, the Claude team; approval only in careful mode. -->
   <section id="more" class="card" hidden>
