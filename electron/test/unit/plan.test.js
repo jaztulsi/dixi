@@ -211,7 +211,7 @@ test('recorded planner replies pass the checks and keep their meaning', async ()
     'Turn the volume down, open my notes, and start a new note': ['instant', 'instant', 'instant'],
     'buy a bagel from Safeway': ['web'],
     'open Safari and go to the New York Times website': ['instant', 'open'],
-    'make a new folder on my desktop called homework': ['script'],
+    'make a new folder on my desktop called homework': ['instant'],   // desktop.js mkdir now: no planner call
   };
   for (const [said, f] of Object.entries(fixtures)) {
     const text = f.text ?? (f.reply && JSON.stringify({ steps: f.reply }));   // older fixtures kept only the parsed steps
@@ -240,10 +240,12 @@ test('a file search with clauses that point back at it stays one file job, never
 });
 
 test('QA youtube-search-play: one planned step over two clauses leaves the second planned too, never dropped', async () => {
-  const said = 'search YouTube for lo-fi beats and play the first video';
-  const model = async () => ({ content: [{ type: 'text', text: JSON.stringify({ steps: [{ do: 'open', clause: said, url: 'https://www.youtube.com/results?search_query=lo-fi+beats' }] }) }] });
+  const said = 'search Vimeo for lo-fi beats and play the first video';   // (YouTube's search is code's own now, below)
+  const model = async () => ({ content: [{ type: 'text', text: JSON.stringify({ steps: [{ do: 'open', clause: said, url: 'https://vimeo.com/search?q=lo-fi+beats' }] }) }] });
   const r = await plan(said, {}, { model });
   assert.deepEqual(r.steps.map((s) => [s.do, s.clause]), [['open', said], ['computer', 'play the first video']]);
+  const yt = await plan('search YouTube for lo-fi beats and play the first video', {}, { model });
+  assert.deepEqual(yt.steps.map((s) => [s.do, s.kind ?? null]), [['instant', 'desktop'], ['computer', null]], 'the search is instant; the rest still gets done');
 });
 
 test('never asks: the planner has no "ask" step, its prompt forbids questions back, and an "ask" from the model is not a question', () => {

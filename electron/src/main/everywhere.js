@@ -274,6 +274,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     await new Promise((r) => setTimeout(r, 400));
     return keysRefused(await frontNow());
   }
+  // Keys meant for the app in front (desktop.js: "close this tab", "scroll down", ⌘N): the same check, so never a terminal or code editor.
+  const appKey = async (combo) => { const why = await keysBlocked(); if (why) throw Object.assign(new Error(why), { refused: true }); return input.key(combo); };
   // What you asked Dixi to remember: in memory only (never written to disk), for an afternoon.
   // (With the facts you said, memory.js. Both go in the user's message as data, never the system prompt.)
   const notesLine = (task = '') => { state.notes = state.notes.filter((n) => Date.now() - n.at < 4 * 3600000); return (state.notes.length ? `\nThe user asked you to remember (use it when relevant, e.g. to paste into another app): ${state.notes.map((n) => `[from ${n.app}${n.title ? `, “${n.title}”` : ''}] ${n.note}`).join(' | ')}` : '') + factsLine(mem, task); };
@@ -867,7 +869,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         if (s.app && !(await toFront(s.app, { open: input.openApp, front: input.frontApp }))?.name) return { ok: false, error: `${s.app} didn't come to the front, so I didn't type` };
         const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why };
       }
-      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, open: input.openApp, front: input.frontApp, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return r.ok === false ? { ok: false, error: r.say } : { ok: true, say: r.say }; }
+      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, appKey, open: input.openApp, front: input.frontApp, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return r.ok === false ? { ok: false, error: r.say } : { ok: true, say: r.say, said: r.quiet }; }   // quiet: a key press needs no "Done."
       if (s.kind === 'file') {
         const r = await fileAction(s.intent, null, { approve, say, undo });
         if (r?.results) state.filesAt = Date.now();
@@ -1067,8 +1069,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       const dk = !forced && desktopIntent(t);
       const doc = !forced && !dk && doctorIntent(t);
       if (dk || doc) {
-        const r = dk ? await runDesktop(dk, { exec: desktopExec, say, approve: async () => true, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }) : await diagnose(doc, {});
-        say(r.say); show({ state: 'done', title: r.title, text: r.text, linger: doc ? 12000 : 3000 });
+        const r = dk ? await runDesktop(dk, { exec: desktopExec, say, approve: async () => true, key: input.key, appKey, screens: () => screen.getAllDisplays().map((d) => d.workArea) }) : await diagnose(doc, {});
+        say(r.say); show({ state: 'done', title: r.title, text: r.text, linger: r.quiet ? 1200 : doc ? 12000 : 3000 });
         return;
       }
       const ty = !forced && typeIntent(t);   // "type hello world": those words, as said, no AI

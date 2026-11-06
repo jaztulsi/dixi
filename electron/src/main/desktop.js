@@ -1,11 +1,13 @@
 // Desktop verbs: the Mac obeys with no AI. "volume up", "pause the music", "go to youtube.com", "snap it
 // left", "set a timer for 10 minutes", "dark mode", "lock the screen", "battery", "take a screenshot",
-// "turn wifi off", "quit Safari". Words are matched by regex in code; every command is a fixed script or
+// "turn wifi off", "quit Safari", "search Google for…", "open my Downloads", "new folder on my desktop called…", and
+// the front app's own keys ("close this tab", "go back", "scroll down", "copy that"). Words are matched by regex in code; every command is a fixed script or
 // program. What you said never becomes script text: it goes in as an argument (argv) or as JSON. No shell.
 // Never here, on purpose: empty trash, shut down, restart, deleting anything.
 // Needs Automation permission for System Events (windows, dark mode) and for Music / Spotify (media).
 
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { unsafe } from './safesite.js';
@@ -43,6 +45,10 @@ const RULES = [
   rule('media', String.raw`skip(?: the| this)? (?:song|track)|(?:play )?(?:the )?next (?:song|track)`, () => ({ op: 'next' })),
   rule('media', String.raw`(?:play )?(?:the )?(?:previous|last) (?:song|track)|go back (?:a|one) (?:song|track)`, () => ({ op: 'previous' })),
   rule('media', String.raw`${WHAT}(?: song| track)? (?:now )?playing(?: right now)?|what (?:song|track) is (?:this|playing)(?: right now)?|${WHAT} this (?:song|track)`, () => ({ op: 'now' })),
+  rule('search', String.raw`(?:search|look up|look for|find)(?: for)? (.{1,80}?) (?:on|in|with|using) (google|youtube|amazon|wikipedia)|(?:search|check) (google|youtube|amazon|wikipedia) for (.{1,80})|google (.{1,80})`, (m) => ({ site: (m[2] ?? m[3] ?? 'google').toLowerCase(), q: (m[1] ?? m[4] ?? m[5]).trim() })),
+  rule('search', String.raw`(?:get |give me |show me )?directions to (.{1,80})|(?:show|find) (.{1,80}?) on (?:the )?maps?`, (m) => ({ site: m[1] ? 'directions' : 'maps', q: (m[1] ?? m[2]).trim() })),
+  rule('folder', String.raw`open (?:up )?(?:my |the )?(downloads|documents|desktop|applications|pictures)(?: folder)?|open (?:up )?(?:my |the )?(music|movies|home) folder`, (m) => ({ dir: (m[1] ?? m[2]).toLowerCase() })),
+  rule('mkdir', String.raw`(?:make|create|add|start)? ?(?:a )?new folder(?: (?:on|in) (?:my |the )?(desktop|documents|downloads))?(?: folder)? (?:called|named) ["“']?([^"”'/\\:]{1,60}?)["”']?(?: (?:on|in) (?:my |the )?(desktop|documents|downloads))?`, (m) => ({ dir: (m[1] ?? m[3] ?? 'desktop').toLowerCase(), name: m[2].trim() })),
   rule('site', String.raw`(?:go to|open|visit|browse to) (?:https?://)?((?:[a-z0-9-]+(?:\.| dot ))+[a-z]{2,})(/[\w\-./%?=&#~+]*)?`, (m) => siteArgs(m[1], m[2])),
   rule('window', String.raw`(?:(?:move|snap|put|send|tile) ${SUBJ} (?:to |on )?(?:the )?left(?: half| side)?|(?:snap|tile) left|left half)`, () => ({ op: 'left' })),
   rule('window', String.raw`(?:(?:move|snap|put|send|tile) ${SUBJ} (?:to |on )?(?:the )?right(?: half| side)?|(?:snap|tile) right|right half)`, () => ({ op: 'right' })),
@@ -67,6 +73,37 @@ const RULES = [
   rule('new', String.raw`(?:start|make|create|open|begin|get) (?:a |an |another )?new (?:blank |empty )?([a-z]+)`, (m) => ({ what: m[1].toLowerCase() })),
   rule('quit', String.raw`(?:force )?quit (?:the )?(${APPNAME})(?: app| application)?`, (m) => ({ app: m[1].trim() })),
 ];
+// The front app's own key for a few everyday things. Kept out of DESKTOP (below): in the browser version these
+// words are for its own page. ponytail: Mac default shortcuts; an app that remaps them gets the default.
+const KEY_SAID = [
+  ['cmd+w', 'close (?:this |the |that )?(?:tab|window|document)'],
+  ['cmd+shift+t', 're-?open (?:the )?(?:last |closed |last closed )?tab'],
+  ['cmd+t', '(?:a )?new tab'],
+  ['ctrl+tab', '(?:go to |switch to )?(?:the )?next tab|switch tabs'],
+  ['ctrl+shift+tab', '(?:go (?:back )?to |switch to )?(?:the )?(?:previous|last) tab'],
+  ['cmd+[', 'go back(?: a page| one page| to the last page)?'],
+  ['cmd+]', 'go forward(?: a page| one page)?'],
+  ['cmd+r', '(?:reload|refresh)(?: (?:the|this) page| it| this)?'],
+  ['pagedown', 'scroll (?:down|further)|page down'],
+  ['pageup', 'scroll (?:up|back up)|page up'],
+  ['cmd+up', '(?:scroll |go )?(?:back )?(?:up )?to the top(?: of (?:the|this) page)?'],
+  ['cmd+down', '(?:scroll |go )?(?:down )?to the bottom(?: of (?:the|this) page)?'],
+  ['cmd+=', 'zoom in|make (?:it|this|the text) bigger'],
+  ['cmd+-', 'zoom out|make (?:it|this|the text) smaller'],
+  ['cmd+0', 'reset (?:the )?zoom|actual size'],
+  ['cmd+c', 'copy(?: (?:that|this|it|the selection))?'],
+  ['cmd+x', 'cut (?:that|this|the selection)'],
+  ['cmd+v', 'paste(?: (?:that|this|it))?(?: here)?'],
+  ['cmd+a', 'select (?:all|everything)'],
+  ['cmd+s', 'save(?: (?:the|this|my) (?:file|document|work|changes))?'],   // not "save this": that's REMEMBER (what's on screen)
+  ['cmd+m', 'minimi[sz]e(?: (?:this|it|the window|this window))?'],
+  ['cmd+h', 'hide (?:this|it|this app|the app|this window)'],
+  ['ctrl+cmd+f', '(?:go |enter |exit |leave )?full ?screen(?: mode)?'],
+];
+const KEY_RULES = KEY_SAID.map(([combo, body]) => rule('keys', body, () => ({ combo })));
+const SEARCH = { google: 'www.google.com/search?q=', youtube: 'www.youtube.com/results?search_query=', amazon: 'www.amazon.com/s?k=', wikipedia: 'en.wikipedia.org/w/index.php?search=', maps: 'maps.apple.com/?q=', directions: 'maps.apple.com/?daddr=' };
+const SEARCH_NAME = { google: 'Google', youtube: 'YouTube', amazon: 'Amazon', wikipedia: 'Wikipedia' };
+const FOLDER = { downloads: 'Downloads', documents: 'Documents', desktop: 'Desktop', applications: '/Applications', pictures: 'Pictures', music: 'Music', movies: 'Movies', home: '' };
 const mediaApp = (s) => (/spotify/i.test(s) ? 'Spotify' : /apple music/i.test(s) ? 'Music' : undefined);
 const NOT_APPS = /^(this|that|it|everything|all|dixi|app|the app|here)$/i;
 
@@ -90,7 +127,7 @@ export function parseDuration(s) {
 export function desktopIntent(text) {
   const t = String(text ?? '').trim().replace(/\s+/g, ' ');
   if (!t || t.length > 200) return null;
-  for (const { verb, re, args } of RULES) {
+  for (const { verb, re, args } of [...RULES, ...KEY_RULES]) {
     const m = t.match(re);
     if (!m) continue;
     const a = args(m);
@@ -98,6 +135,12 @@ export function desktopIntent(text) {
       const url = validSite(a.host, a.path);
       return url ? { verb, url } : null;
     }
+    if (verb === 'search') {   // a search is a link: the same checks as any site (DO.site)
+      const [host, ...rest] = SEARCH[a.site].split('/');
+      const url = validSite(host, `/${rest.join('/')}${encodeURIComponent(a.q)}`);
+      return url ? { verb: 'site', url, say: a.site === 'directions' ? `Directions to ${a.q}.` : a.site === 'maps' ? `Showing ${a.q} on the map.` : `Searching ${SEARCH_NAME[a.site]} for ${a.q}.` } : null;
+    }
+    if (verb === 'mkdir' && (/^\.|\.\.|^\s*$/.test(a.name) || NOT_APPS.test(a.name))) return null;
     if (verb === 'timer' && !a.ms) return null;
     if (verb === 'quit' && NOT_APPS.test(a.app)) return null;
     if (verb === 'new' && /^(?:folder|password|passcode|account|user|profile|card|line|paragraph|one)$/.test(a.what)) return null;   // not a New-key thing
@@ -174,6 +217,7 @@ export async function runDesktop(intent, deps) {
     const fn = DO[intent?.verb];
     return fn ? await fn(intent, d) : out("I don't know that one.");
   } catch (err) {
+    if (err?.refused) return { ...out(`I didn't press anything: ${err.message}.`, 'Dixi'), ok: false };
     if (/-1743|not authori[sz]ed|assistive/i.test(String(err?.message ?? err))) return out('Dixi needs permission to control that app. Allow it in System Settings, Privacy and Security, Automation, then ask again.', 'Permission needed');
     return out("That didn't work.", 'Dixi');
   }
@@ -288,7 +332,26 @@ const DO = {
     const why = unsafe(url);   // a caller reading out "chase-secure-login.com" is exactly this case
     if (why) return out(`${why} I didn't open it.`, 'Dixi Guardian');
     await d.exec('open', [url]);
-    return out(`Opening ${u.hostname.replace(/^www\./, '')}.`, 'Opening');
+    return out(i.say ?? `Opening ${u.hostname.replace(/^www\./, '')}.`, 'Opening');
+  },
+  async folder(i, d) {
+    const dir = FOLDER[i.dir].startsWith('/') ? FOLDER[i.dir] : path.join(d.home, FOLDER[i.dir]);
+    await d.exec('open', [dir]);
+    return out(`Opening ${i.dir === 'home' ? 'your home folder' : FOLDER[i.dir].replace('/', '')}.`, 'Finder');
+  },
+  // ponytail: an empty folder, so "undo that" doesn't track it (⌘Z in Finder doesn't either); add it to undo.js if asked.
+  async mkdir(i, d) {
+    const dir = path.join(d.home, FOLDER[i.dir], i.name);
+    if (path.dirname(dir) !== path.join(d.home, FOLDER[i.dir])) return out("That name can't be a folder.", 'New folder');
+    if ((d.exists ?? fs.existsSync)(dir)) return out(`There's already a ${i.name} folder in ${FOLDER[i.dir]}.`, 'New folder');
+    await d.exec('mkdir', [dir]);
+    return out(`Made the ${i.name} folder in ${FOLDER[i.dir]}.`, 'New folder');
+  },
+  // "close this tab", "scroll down": the key, in the app in front (never a terminal or code editor: appKey checks). Silent.
+  async keys(i, d) {
+    await (d.appKey ?? d.key ?? key)(i.combo);
+    const pretty = i.combo.replace(/cmd\+/g, '⌘').replace(/ctrl\+/g, '⌃').replace(/shift\+/g, '⇧').replace('pagedown', 'Page Down').replace('pageup', 'Page Up').replace(/tab$/, 'Tab').replace(/up$/, '↑').replace(/down$/, '↓').replace(/(^|[⌘⌃⇧])([a-z])$/, (_, m, k) => m + k.toUpperCase());
+    return { say: '', title: 'Done', text: pretty, quiet: true };
   },
   async window(i, d) {
     const win = JSON.parse(await jxa(d, `const p = Application('System Events').applicationProcesses.whose({frontmost: true})[0]; const w = p.windows[0];
@@ -349,13 +412,13 @@ const DO = {
     const f = await toFront(i.app, d);
     if (f === 'none') return out(`There's no app called ${i.app} on this Mac.`, 'Window');
     if (!f) return out(`${i.app} didn't come to the front, so I didn't press anything.`, 'Window');
-    await (d.key ?? key)('cmd+n');
+    await (d.appKey ?? d.key ?? key)('cmd+n');
     return out(`New ${f.name} window.`, 'Window');
   },
   // After "open Notes", i.app: Notes must be in front first, so ⌘N never lands in another app.
   async new(i, d) {
     if (i.app && !(await toFront(i.app, d))?.name) return { ...out(`${i.app} didn't come to the front, so I didn't press anything.`, 'New'), ok: false };
-    await (d.key ?? key)(i.what === 'tab' ? 'cmd+t' : 'cmd+n');
+    await (d.appKey ?? d.key ?? key)(i.what === 'tab' ? 'cmd+t' : 'cmd+n');
     return out(`New ${i.what}.`, 'New');
   },
   async quit(i, d) {

@@ -260,3 +260,33 @@ test('search on Apple Music: opens its search page, and says so only once result
   const blank = rig(() => '', { texts: async () => ['Search', 'Home'], wait: async () => {} });
   assert.equal((await runDesktop(desktopIntent('search lo-fi beats on Apple Music'), blank.deps)).say, 'I opened Music, but no results for lo-fi beats showed up.', 'never "Done." on nothing');
 });
+
+test('everyday keys, web searches and folders are code, never the model', async () => {
+  const combo = (t) => I(t)?.combo;
+  assert.equal(combo('close this tab'), 'cmd+w');
+  assert.equal(combo('scroll down'), 'pagedown');
+  assert.equal(combo('next tab'), 'ctrl+tab');
+  assert.equal(combo('go back'), 'cmd+[');
+  assert.equal(combo('zoom in'), 'cmd+=');
+  assert.equal(combo('save the file'), 'cmd+s');
+  assert.equal(I('save this'), null, '"save this" is remember, not ⌘S');
+  assert.equal(I('go to the next page'), null);
+  assert.equal(I('search YouTube for lo-fi beats').url, 'https://www.youtube.com/results?search_query=lo-fi%20beats');
+  assert.match(I('google best bagels near me').url, /^https:\/\/www\.google\.com\/search\?q=best%20bagels/);
+  assert.equal(I('directions to the airport').say, 'Directions to the airport.');
+  assert.deepEqual(I('open my downloads folder'), { verb: 'folder', dir: 'downloads' });
+  assert.deepEqual(I('make a new folder on my desktop called homework'), { verb: 'mkdir', dir: 'desktop', name: 'homework' });
+  assert.equal(I('make a new folder called ../etc'), null);
+
+  const r = rig(), pressed = [];
+  const res = await runDesktop(I('close this tab'), { ...r.deps, appKey: async (c) => pressed.push(c) });
+  assert.deepEqual([pressed, res.quiet, res.text], [['cmd+w'], true, '⌘W']);
+  const no = await runDesktop(I('scroll down'), { ...r.deps, appKey: async () => { throw Object.assign(new Error('Terminal is in front'), { refused: true }); } });
+  assert.equal(no.ok, false);
+  assert.match(no.say, /I didn't press anything: Terminal is in front/);
+
+  await runDesktop(I('open my downloads folder'), r.deps);
+  await runDesktop(I('make a new folder on my desktop called homework'), { ...r.deps, exists: () => false });
+  assert.deepEqual(r.calls, [['open', '/Users/sam/Downloads'], ['mkdir', '/Users/sam/Desktop/homework']]);
+  assert.match((await runDesktop(I('make a new folder on my desktop called homework'), { ...r.deps, exists: () => true })).say, /already/);
+});
