@@ -44,12 +44,12 @@ globalThis.__electron = new Proxy({
 
 const OTHER = 4242;   // the pid of the app in front (not Dixi)
 let done = [];        // what really happened to the Mac: clicks, presses, typing
-function fakeMac({ front = OTHER, controls = [], at = null, press = 'ok', box = { role: 'AXTextArea', labels: [], pid: front }, found = { ok: false, why: "Couldn't find the TextEdit input." }, pasted = { ok: true, checked: true }, owner = '' } = {}) {
+function fakeMac({ front = OTHER, controls = [], at = null, press = 'ok', box = { role: 'AXTextArea', labels: [], pid: front }, found = { ok: false, why: "Couldn't find the TextEdit input." }, pasted = { ok: true, checked: true }, owner = '', named = [] } = {}) {
   done = [];
   const log = (what) => async (...a) => { done.push([what, ...a]); };
   globalThis.__input = new Proxy({
     frontApp: async () => ({ name: 'TextEdit', bundle: 'com.apple.TextEdit', pid: front }),
-    browserTab: async () => null, enableAX: async () => {}, findControls: async () => [],
+    browserTab: async () => null, enableAX: async () => {}, findControls: async () => named,
     listControls: async () => controls, elementAt: async () => at, focused: async () => box,
     isEditable: (el) => /^AX(TextField|TextArea)$/.test(el?.role ?? ''), fieldHas: async () => ({ read: true, len: 0, has: false }),
     focusField: async () => found, procName: async () => owner, pasteChecked: async (t) => { done.push(['type', t]); return pasted; },
@@ -124,6 +124,47 @@ test('P4: a control nobody can read is refused, even in an ordinary app, without
   assert.equal(asked.length, 0, 'nothing was asked');
   assert.ok(!done.some(([w]) => w === 'click'), 'and nothing was clicked, even though the user said "send"');
   assert.ok(spoken.some((s) => /can't tell what that button does/.test(s)), 'and the reason was said');
+});
+
+test('"click X" by name: pressed when the words name it, skipped with one line when they do not, never asked', mac, async () => {
+  answer = () => true;   // a yes waiting here must not be what lets a press through
+  const SEND = { ...SAVE, labels: ['Send'] }, WIDE = { ...SAVE, labels: ['Delete Account'] };
+  await agentDoes([], { named: [SEND] }, 'click Send');
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.ok(done.some(([w]) => w === 'press'), 'Send was pressed');
+  await agentDoes([], { named: [WIDE] }, 'click delete');   // the one match reaches past what was said
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.ok(!done.some(([w]) => w === 'press'), 'Delete Account was not pressed');
+  assert.ok(spoken.some((s) => /didn't ask me to press “Delete Account”/.test(s)), 'and the reason was said');
+});
+
+test('a form uses your profile without asking: said on the card, logged without its values', mac, async () => {
+  fs.writeFileSync(path.join(rt2Dir, 'profile.json'), JSON.stringify({ name: 'Pat Example', email: 'pat@example.com' }));
+  answer = () => false;   // a "no" waiting here must not be what decides
+  await agentDoes([], {}, 'fill out this form');
+  fs.rmSync(path.join(rt2Dir, 'profile.json'));
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.match(JSON.stringify(requests[0]?.messages?.[0]), /Pat Example/, 'the agent got the profile');
+  const log = fs.readFileSync(path.join(rt2Dir, 'activity.jsonl'), 'utf8');
+  assert.match(log, /used your profile/);
+  assert.doesNotMatch(log, /pat@example|Pat Example/, 'no profile values in the log');
+});
+
+test('the screen agent never asks in normal mode: told to pick the likeliest option, at most twice, then it stops', mac, async () => {
+  await agentDoes([], {}, 'tidy up my desktop');   // sets the fakes; the scripted turns follow
+  const ask = () => [{ type: 'text', text: 'Which folder do you mean?' }];
+  script = [ask(), [{ type: 'text', text: 'I picked Downloads.' }, { type: 'tool_use', id: 'k0', name: 'key', input: { text: 'cmd+n' } }], [{ type: 'text', text: 'Done.' }]];
+  requests = []; spoken = []; toMain.length = 0;
+  await (await harness)('tidy up my desktop');
+  assert.ok(!toMain.includes('everywhere:ask'), 'nothing was asked');
+  assert.ok(!spoken.some((x) => /\?$/.test(x)), `no question was said: ${spoken}`);
+  const agent = requests.filter((r) => r.tools);
+  assert.match(JSON.stringify(agent[1]?.messages?.at(-1)), /Pick the likeliest option/, 'it was told to pick');
+  assert.match(agent[0].system, /Never ask the user anything/);
+  script = [ask(), ask(), ask(), ask()]; requests = []; toMain.length = 0;
+  await (await harness)('tidy up my desktop');
+  assert.ok(!toMain.includes('everywhere:ask'), 'still nothing asked');
+  assert.equal(requests.filter((r) => r.tools).length, 3, 'one first try and two nudges, then it stops');
 });
 
 test('a risky named control is never asked about: refused unless the user said it, pressed when they did', mac, async () => {
@@ -262,7 +303,7 @@ test('A2: the agent types only into a box it found, and its result says whether 
 
 test('clicks: the front app and menu extras yes; another window or a system prompt no, each refusal logged', mac, async () => {
   const click = [{ name: 'left_click', input: { coordinate: [640, 400] } }], said = 'click Send';
-  const refusals = () => fs.readFileSync(path.join(rt2Dir, 'activity.jsonl'), 'utf8').split('\n').filter((l) => l.includes('"refused"')).length;
+  const logged = () => { try { return fs.readFileSync(path.join(rt2Dir, 'activity.jsonl'), 'utf8').split('\n').filter((l) => l.includes('"refused"')).length; } catch { return 0; } }, base = logged(), refusals = () => logged() - base;
   await agentDoes(click, { at: { role: 'AXMenuBarItem', subrole: 'AXMenuExtra', labels: ['Wi-Fi'], pid: 99 } }, said);
   assert.ok(done.some(([w]) => w === 'click'), 'a menu bar extra (another process) is clicked');
   await agentDoes(click, { at: { role: 'AXButton', labels: ['Send'], pid: 99 } }, said);
