@@ -67,3 +67,17 @@ test('image text that looks private is refused and not copied', async () => {
   const r = await readOut({ intent: 'image', shot, claude: fakeClaude('4242 4242 4242 4242'), image, writeClipboard: (t) => { clip = t; }, pid: 1 });
   assert.equal(clip, null); assert.equal(r.say[0], "I won't copy that; it looks private.");
 });
+
+test('"what\'s on my screen": AX first, then on-device OCR, the picture last, and it says which answered', async () => {
+  for (const t of ["what's on my screen", 'what’s on the screen', 'what am I looking at', 'describe my screen']) assert.equal(readIntent(t), 'screen', t);
+  const app = { name: 'Safari', pid: 1 }, claude = fakeClaude('A news page.');
+  const ax = await readOut({ intent: 'screen', claude, image, app, jxaRun: jx({ page: 'Top stories. Rain all week.' }), screenText: async () => assert.fail('no OCR when AX had text') });
+  assert.deepEqual([ax.how, ax.say[0]], ['ax', "You're in Safari. It says: Top stories. Rain all week."]);
+  const ocr = await readOut({ intent: 'screen', claude, image, app, jxaRun: jx({}), screenText: async () => 'Invoice  42' });
+  assert.deepEqual([ocr.how, ocr.say[0]], ['ocr', "You're in Safari. It says: Invoice 42"]);
+  assert.equal(claude.calls, 0, 'no model for either');
+  assert.equal((await readOut({ intent: 'screen', claude, image, app, jxaRun: jx({}) })).text, '', 'nothing: the caller takes the picture');
+  const v = await readOut({ intent: 'screen', shot, claude, image, app, jxaRun: jx({ page: 'skipped' }) });
+  assert.deepEqual([v.how, v.say[0], claude.calls], ['vision', 'A news page.', 1]);
+  assert.equal((await readOut({ intent: 'screen', claude, image, app, jxaRun: jx({}), screenText: async () => 'Your code is 834221' })).text, "I won't read that out; it looks private.");
+});

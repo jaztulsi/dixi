@@ -26,7 +26,7 @@ const CODE = [
   ['open Claude', ['open']], ['what time is it', ['quick']], ['set a timer for 10 minutes', ['desktop']],
   ['snap this window left', ['desktop']], ['lock the screen', ['desktop']], ['find my tax PDF from last week', ['file']],
   ['my bank', ['command']], ['go to youtube.com', ['desktop']], ['pause the music', ['desktop']], ['next song', ['desktop']],
-  ['take a screenshot', ['desktop']], ['switch to Safari', ['open']], ['go back to Mail', ['open']], ['type hello world', ['type']], ['find my resume', ['file']],
+  ['take a screenshot', ['desktop']], ['switch to Safari', ['open']], ['go back to Mail', ['open']], ['type hello world', ['type']], ['find my resume', ['file']], ["what's on my screen", ['read']],
   // compound
   ['volume down and open notes', ['desktop', 'open']], ['open Safari, then set a timer for 5 minutes', ['open', 'desktop']],
   ['mute; then lock the screen', ['desktop', 'desktop']], ['what time is it and set a timer for 20 minutes', ['quick', 'desktop']],

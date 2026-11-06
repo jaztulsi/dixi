@@ -12,6 +12,7 @@ import { split } from '../renderer/core/everywhere-words.js';
 import { desktopIntent, typeIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
 import { fileIntent } from './files.js';
+import { readIntent } from './reader.js';
 import { matchCommand } from './commands.js';
 import { unsafe } from './safesite.js';
 
@@ -33,6 +34,8 @@ export function instantOf(clause, { apps = [], commands = [], filesBefore = fals
   if (d) return { kind: 'desktop', intent: d };
   const ty = typeIntent(c);
   if (ty) return { kind: 'type', text: ty };
+  const rd = readIntent(c);   // "what's on my screen", "read this to me": AX, then on-device OCR
+  if (rd && rd !== 'image') return { kind: 'read', intent: rd };
   const q = quickIntent(c);
   if (q) return { kind: 'quick', intent: q };
   // An installed app by its exact name, before files ("open Music" is the app, not a song file).

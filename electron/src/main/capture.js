@@ -121,6 +121,13 @@ export async function captureRegion({ run = runText, dir = os.tmpdir() } = {}) {
   return (await fs.stat(file).catch(() => null))?.size ? file : null;
 }
 
+/** The main screen's text, read on this Mac (Vision OCR, no model); '' when there's none or no permission. */
+export async function screenText({ run = runText, dir = os.tmpdir() } = {}) {
+  const file = path.join(dir, `dixi-screen-${Date.now()}.png`);
+  try { await run('screencapture', ['-x', '-m', file], { timeout: 5000 }); return (await ocr(file, { run, maxPages: 1 })).text.trim(); }
+  catch { return ''; } finally { fs.rm(file, { force: true }).catch(() => {}); }
+}
+
 // ---- clipboard history: what you copied today, searchable ----
 /** Polls the clipboard. Password managers mark what they copy (concealed / transient): never kept. */
 export function clipboardHistory({ clipboard, everyMs = 1000, keepMs = 24 * 3600e3, max = 300, onClip = () => {}, now = Date.now } = {}) {
