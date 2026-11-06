@@ -268,7 +268,7 @@ export function openProfile(userData, onSaved = () => {}) {
     ipcMain.on('profile:close', (e) => { if (mine(e)) pw.win.close(); });
   }
   const w = new BrowserWindow({ width: 560, height: 820, minWidth: 420, minHeight: 560, title: 'Your profile', show: false, titleBarStyle: 'hiddenInset',
-    vibrancy: 'hud', visualEffectState: 'active', backgroundColor: '#00000000', fullscreenable: false, minimizable: false,
+    backgroundColor: '#0a0a0a', fullscreenable: false, minimizable: false,
     webPreferences: { preload: path.join(here, '../preload/profile.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
   w.setContentProtection(true);   // never in the screenshots Dixi sends to Claude
   w.webContents.on('will-navigate', (e) => e.preventDefault());
