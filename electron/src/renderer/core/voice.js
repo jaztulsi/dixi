@@ -257,6 +257,8 @@ export class VoiceAgent {
     try { json = JSON.parse(raw); } catch { return; }
     // Say it on screen: a silent speech-service error looks like Dixi ignoring you.
     if (json.type === 'Error' || json.type === 'FatalError') { console.warn('[voice]', json.description ?? json.message); this.set({ statusLine: `Voice problem: ${String(json.description ?? json.message ?? 'speech service error').slice(0, 120)}` }); return; }
+    // The speech socket dropped: main reconnects and replays the audio (the mic stays open), so say so.
+    if (json.type === 'Reconnecting' || json.type === 'Reconnected') { const on = json.type === 'Reconnecting'; this.set({ reconnecting: on, statusLine: on ? 'Reconnecting…' : '' }); return; }
     if (json.type === 'TurnInfo') { this.handleTurn(json); if (/Update|EndOfTurn/.test(json.event)) this.flushed?.(); }   // a flush's words
   }
 
