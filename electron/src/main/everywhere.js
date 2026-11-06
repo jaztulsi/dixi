@@ -354,10 +354,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   };
   const show = (data) => {
     if (!state.overlay?.isVisible()) overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
+    clearTimeout(state.hideTimer);   // an earlier card's "back to idle" never lands in the middle of this one
     state.shown = data.state;
     ui('ew:state', data.state === 'done' ? { undo: Date.now() - (state.fileChangeAt ?? 0) < 120000, ...data } : data);
     if (data.state === 'done' || data.state === 'error' || data.state === 'idle') {
-      clearTimeout(state.hideTimer);
       // Idle is the small mascot pill, always on screen (Nov 5): the window stays up, clicks pass through again.
       // unref: a lingering card never keeps a plain-Node run (the unit tests) alive; Electron's loop runs regardless.
       state.hideTimer = setTimeout(() => { ui('ew:state', { state: 'idle' }); state.overlay?.setIgnoreMouseEvents(true, { forward: true }); }, data.state === 'idle' ? 0 : data.linger ?? 9000);
