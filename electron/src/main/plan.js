@@ -84,6 +84,13 @@ export function plannerBody(text, { app = '', apps = [], todo = [], today = new 
     messages: [{ role: 'user', content: user }], output_config: { format: { type: 'json_schema', schema: SCHEMA } } };
 }
 
+/** The same plan for a fast OpenAI-shape model (Groq, Cerebras): same prompt and schema, little reasoning. */
+export function fastBody(text, ctx) {
+  const b = plannerBody(text, ctx);
+  return { max_tokens: 1500, reasoning_effort: 'low', messages: [{ role: 'system', content: SYSTEM }, ...b.messages],
+    response_format: { type: 'json_schema', json_schema: { name: 'plan', schema: SCHEMA } } };
+}
+
 /** Installed apps a word you said points at ("apple music" → Music), so the prompt stays short. */
 export function nearApps(text, apps) {
   const said = tokens(text).filter((w) => w.length >= 4);
@@ -187,7 +194,8 @@ export function salvage(text) {
 
 /**
  * plan(text, ctx, deps) → { steps, source: 'code' | 'model', ms }
- * ctx: { app } (the front app). deps: { apps, commands, recentFiles, model(body, signal, partial?) → Claude reply JSON
+ * ctx: { app } (the front app). deps: { apps, commands, recentFiles, model(body, signal, partial?) → Claude reply JSON,
+ *   fast(body, signal) → OpenAI chat reply JSON (tried first; Haiku plans when it isn't sure)
  *   (a streaming model calls partial(textSoFar) as it goes), onStep(step, i) as each step is final, signal, now }
  */
 export async function plan(text, ctx = {}, deps = {}) {
@@ -236,6 +244,16 @@ export async function plan(text, ctx = {}, deps = {}) {
     const list = merge(check(raw, text, opts));
     emit(list, list.findLastIndex((x) => x.mine) + 1);
   });
+  // The fast model first (deps.fast: Groq or Cerebras, not streamed). Its plan is kept only when it's sure: every
+  // step checks out, every clause is planned, and none needs the screen agent. Otherwise Haiku plans as before.
+  if (deps.fast) {
+    try {
+      const c = (await deps.fast(fastBody(text, { app: ctx.app, apps: opts.apps, todo }), deps.signal))?.choices?.[0];
+      const fast = c?.finish_reason === 'length' ? null : check(JSON.parse(c?.message?.content ?? '').steps, text, opts);
+      const steps = fast?.ok ? merge(fast).map((x) => x.step) : [];
+      if (steps.length && !steps.some((x) => x.do === 'computer')) return finish({ steps, source: 'model', planner: 'fast', ms: Math.round(now() - t0), raw: fast.steps });
+    } catch {}   // refused, timed out or not JSON: Haiku
+  }
   let cut, lost;
   try {
     const j = await deps.model(plannerBody(text, { app: ctx.app, apps: opts.apps, todo }), deps.signal, partial);

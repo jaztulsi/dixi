@@ -42,7 +42,7 @@ export class ElevenLabsBridge {
     const r = await pending;
     if (r.ok || !this.fallback) return r;
     if (this.closes !== closes) return { ok: false, error: 'closed while connecting' };   // never open the fallback after a cancel
-    this.giveUp(r.error, deadAnswer(Number(/HTTP (\d+)/.exec(r.error)?.[1])));
+    this.giveUp(r.error, deadAnswer(Number(/HTTP (\d+)/.exec(r.error)?.[1]), r.error));   // a 'quota'/'credit' text with no HTTP code counts too
     return toFlux();
   }
 

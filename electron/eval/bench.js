@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { plan } from '../src/main/plan.js';
 import { ENDPOINTS, Spend } from '../src/main/providers.js';
 import { localVoice } from '../src/main/localvoice.js';
+import { A3, benchCommands } from './bench-commands.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
@@ -31,12 +32,8 @@ const spend = new Spend(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-be
 
 // ---- everywhere: recorded planner replies + code-only commands ----
 const { apps, fixtures } = createRequire(import.meta.url)('../test/fixtures/plan-live.json');
-// Mac-wide ⌥Space commands (user directive Nov 5): open app, switch window, type, volume, timer, find a file, read the screen, X and Y.
-const CODE_ONLY = ['open Notes', 'open Calendar', 'switch to Safari', 'type hello world', 'turn the volume down', 'mute',
-  'set a timer for 5 minutes', 'find my resume', "what's on my screen", 'open Notes and start a new note'];
-const A3 = ['search lo-fi beats on Apple Music', 'buy a bagel from Safeway', "couldn't find that on this page"];
 const everywhere = [];
-for (const said of [...new Set([...Object.keys(fixtures), ...CODE_ONLY, ...A3])]) {
+for (const said of benchCommands(fixtures)) {
   const f = fixtures[said];
   let called = null;
   const model = async () => {

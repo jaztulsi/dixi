@@ -255,6 +255,17 @@ export async function chat(config, spend, req, fetchImpl = fetch, { backoffMs = 
   }
 }
 
+/** One quick try (plan.js deps.fast): the OpenAI reply JSON, or a throw on a refusal, an error or after budgetMs. */
+export const fastChat = (config, spend, model, budgetMs = 2500, fetchImpl = fetch) => async (body, signal) => {
+  const id = `fast-${performance.now()}-${Math.random()}`, stop = () => abort(id), t = setTimeout(stop, budgetMs);
+  signal?.addEventListener('abort', stop, { once: true });
+  try {
+    const r = await chat(config, spend, { model, body, id }, fetchImpl);
+    if (r.status !== 200) throw new Error(r.json?.error?.message ?? `HTTP ${r.status}`);
+    return r.json;
+  } finally { clearTimeout(t); signal?.removeEventListener('abort', stop); }
+};
+
 async function once(ep, init, ctrl, fetchImpl, req, spend) {
   let sent = false;  // the request went out (an abort after this may still be billed)
   try {
