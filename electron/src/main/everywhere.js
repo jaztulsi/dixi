@@ -38,7 +38,7 @@ import * as brief from './brief.js';
 import { watchIntent, startWatch, stopWatch, isWatching, checkPrompt, CHECK_SCHEMA } from './watch.js';
 import { fileIntent, fileAction } from './files.js';
 import { quickAnswer } from './quick.js';
-import { desktopIntent, runDesktop, exec as desktopExec } from './desktop.js';
+import { desktopIntent, typeIntent, runDesktop, exec as desktopExec } from './desktop.js';
 import { doctorIntent, diagnose } from './doctor.js';
 import { readIntent, readOut } from './reader.js';
 import { SCAM_CHECK, scamCheck } from './scamcheck.js';
@@ -829,6 +829,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (s.kind === 'command') { await runCommand(s.command); return { ok: true, said: true }; }   // it says what it did
       if (s.kind === 'open') return (await input.openApp(s.app)) ? { ok: true } : { ok: false, error: `I couldn't open ${s.app}` };
       if (s.kind === 'quick') { const qa = await quickAnswer(s.clause, { webAnswer }); return qa ? { ok: true, say: qa.say, out: qa.say } : { ok: false, error: "I couldn't work that out" }; }
+      if (s.kind === 'type') { const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why }; }
       if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return { ok: r.ok !== false, say: r.say }; }
       if (s.kind === 'file') {
         const r = await fileAction(s.intent, null, { approve, say, undo });
@@ -1029,6 +1030,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         say(r.say); show({ state: 'done', title: r.title, text: r.text, linger: doc ? 12000 : 3000 });
         return;
       }
+      const ty = !forced && typeIntent(t);   // "type hello world": those words, as said, no AI
+      if (ty) return await typeOut(ty, signal, { literal: true });
       const goal = !forced && tutorIntent(t);   // "teach me how to …" (tutor.js)
       if (goal) return teach(goal);
       // "Read this to me" (reader.js): the selected text first, no picture. ("Read this and reply" is a task.)
@@ -1247,16 +1250,26 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   }
 
   // ---- "take dictation": what you said, cleaned up and typed where your cursor is (any app) ----
-  async function typeOut(text, signal) {
-    if (!systemPreferences.isTrustedAccessibilityClient(false)) { systemPreferences.isTrustedAccessibilityClient(true); say('To type for you, Dixi needs Accessibility permission. Turn Dixi on in the setting that just opened.'); return; }
-    show({ state: 'thinking', text: 'Writing it out…' });
-    const j = await claude({ model: 'claude-haiku-5-5', max_tokens: 2000, system: 'Clean up this dictation so it can be typed: fix punctuation, capitals and obvious mis-hearings, drop fillers (um, uh, you know) and false starts, keep the speaker\'s words and meaning. Spoken formatting ("new paragraph", "new line", "comma", "period") becomes formatting. Reply with only the text.',
-      messages: [{ role: 'user', content: text }] }, signal);
-    const clean = j.content.find((b) => b.type === 'text')?.text?.trim();   // (trimmed: never ends with a newline that sends)
+  const NEED_AX = 'To type for you, Dixi needs Accessibility permission. Turn Dixi on in the setting that just opened.';
+  /** Types `clean` into the focused box, with the checks: { ok, why, checked }. */
+  async function typeText(clean) {
+    if (!systemPreferences.isTrustedAccessibilityClient(false)) { systemPreferences.isTrustedAccessibilityClient(true); return { ok: false, why: NEED_AX }; }
+    if (profileFocused() || secretField(await input.focused())) return { ok: false, why: "That box is for you to type, so I won't type there." };
+    if (/\n/.test(clean) && (await keysBlocked())) return { ok: false, why: "That has line breaks, and a line break in a terminal or code editor can run something, so I didn't type it." };
+    return input.pasteChecked(clean, { name: (await input.frontApp()).name || 'that' });   // read back, like the agent's typing
+  }
+  /** Dictation, cleaned up by Haiku and typed; `literal`: the words exactly as given. */
+  async function typeOut(text, signal, { literal = false } = {}) {
+    if (!systemPreferences.isTrustedAccessibilityClient(false)) { systemPreferences.isTrustedAccessibilityClient(true); say(NEED_AX); return; }
+    let clean = String(text).trim();
+    if (!literal) {
+      show({ state: 'thinking', text: 'Writing it out…' });
+      const j = await claude({ model: 'claude-haiku-5-5', max_tokens: 2000, system: 'Clean up this dictation so it can be typed: fix punctuation, capitals and obvious mis-hearings, drop fillers (um, uh, you know) and false starts, keep the speaker\'s words and meaning. Spoken formatting ("new paragraph", "new line", "comma", "period") becomes formatting. Reply with only the text.',
+        messages: [{ role: 'user', content: text }] }, signal);
+      clean = j.content.find((b) => b.type === 'text')?.text?.trim();   // (trimmed: never ends with a newline that sends)
+    }
     if (!clean || signal.aborted) return;
-    if (profileFocused() || secretField(await input.focused())) { say("That box is for you to type, so I won't type there."); return; }
-    if (/\n/.test(clean) && (await keysBlocked())) { say("That has line breaks, and a line break in a terminal or code editor can run something, so I didn't type it."); return; }
-    const typed = await input.pasteChecked(clean, { name: (await input.frontApp()).name || 'that' });   // read back, like the agent's typing
+    const typed = await typeText(clean);
     if (!typed.ok) { show({ state: 'error', title: "Didn't type it", text: typed.why, linger: 5000 }); say(typed.why); return; }
     show({ state: 'done', title: 'Typed it', text: clean.slice(0, 260), linger: 5000 });
     say(typed.checked ? 'Done.' : "Typed it, but I can't read that box to check.");

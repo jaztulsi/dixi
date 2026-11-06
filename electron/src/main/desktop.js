@@ -103,6 +103,12 @@ export function desktopIntent(text) {
   }
   return null;
 }
+/** "type hello world" → "hello world": the words to type, exactly as said (no AI). Null for what has to be written
+ *  first ("type a reply to Sam", "type my address") or pointed at ("type it"), and for "type of …". */
+export function typeIntent(text) {
+  const m = String(text ?? '').trim().match(/^(?:please\s+)?type\s+(?:out\s+|in\s+)?["“']?(.+?)["”']?[.!]?$/i);
+  return m && !/^(?:of|it|that|this|them|my|me|a|an|the|some|something|what|whatever)\b/i.test(m[1]) ? m[1] : null;
+}
 /** https:// plus a real-looking host, or null. Files ("notes.md") and bare words are not sites. */
 export function validSite(host, p = '') {
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/.test(host) || NOT_TLD.test(host)) return null;

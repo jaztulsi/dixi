@@ -9,7 +9,7 @@
 // The model brings the app knowledge ("text Mom" is Messages); this file names no apps, sites or phrases.
 import { tokens } from '../renderer/core/interpret.js';
 import { split } from '../renderer/core/everywhere-words.js';
-import { desktopIntent } from './desktop.js';
+import { desktopIntent, typeIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
 import { fileIntent } from './files.js';
 import { matchCommand } from './commands.js';
@@ -31,6 +31,8 @@ export function instantOf(clause, { apps = [], commands = [], filesBefore = fals
   if (mine && mine.action !== 'task' && mine.action !== 'skill') return { kind: 'command', command: mine };
   const d = desktopIntent(c);
   if (d) return { kind: 'desktop', intent: d };
+  const ty = typeIntent(c);
+  if (ty) return { kind: 'type', text: ty };
   const q = quickIntent(c);
   if (q) return { kind: 'quick', intent: q };
   // An installed app by its exact name, before files ("open Music" is the app, not a song file).
