@@ -12,6 +12,7 @@ import { split } from '../renderer/core/everywhere-words.js';
 import { desktopIntent, typeIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
 import { fileIntent } from './files.js';
+import { readIntent } from './reader.js';
 import { matchCommand } from './commands.js';
 import { unsafe } from './safesite.js';
 
@@ -33,6 +34,8 @@ export function instantOf(clause, { apps = [], commands = [], filesBefore = fals
   if (d) return { kind: 'desktop', intent: d };
   const ty = typeIntent(c);
   if (ty) return { kind: 'type', text: ty };
+  const rd = readIntent(c);   // "what's on my screen", "read this to me": AX, then on-device OCR
+  if (rd && rd !== 'image') return { kind: 'read', intent: rd };
   const q = quickIntent(c);
   if (q) return { kind: 'quick', intent: q };
   // An installed app by its exact name, before files ("open Music" is the app, not a song file).
@@ -203,10 +206,13 @@ export async function plan(text, ctx = {}, deps = {}) {
   const t0 = now();
   const opts = { apps: deps.apps ?? [], commands: deps.commands ?? [], recentFiles: Boolean(deps.recentFiles), home: deps.home ?? '/Users/me' };
   const clauses = split(text);
-  let filesBefore = opts.recentFiles;
+  let filesBefore = opts.recentFiles, opened = null;
   const instant = clauses.map((clause) => {
     const i = instantOf(clause, { ...opts, filesBefore });
     if (i?.kind === 'file' && i.intent.verb === 'find') filesBefore = true;
+    if (i?.kind === 'open') opened = i.app;   // "open Notes and start a new note": the key goes to Notes, once it's in front
+    else if (opened && i?.kind === 'desktop' && i.intent.verb === 'new') i.intent = { ...i.intent, app: opened };
+    else if (opened && i?.kind === 'type') i.app = opened;
     return i && { do: 'instant', clause, ...i };
   });
   let sent = 0;   // steps already handed to onStep (every step goes there once, in order, whichever path planned it)

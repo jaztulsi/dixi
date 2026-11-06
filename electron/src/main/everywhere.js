@@ -28,7 +28,7 @@ import { indexFolder, watchFolder, indexActivity, addTurn } from './ingest.js';
 import { createJobs } from './jobs.js';
 import { createUndo } from './undo.js';
 import { BUILTIN_TOOLS } from './builtin-tools.js';
-import { grabSelection, pasteText, actOn } from './capture.js';
+import { grabSelection, pasteText, actOn, screenText } from './capture.js';
 import { IRREVERSIBLE, RECURRING } from '../renderer/ui/pagekit.js';
 import { execFile } from 'node:child_process';
 import { pttSession, hotkeyOwner } from './ptt.js';
@@ -38,7 +38,7 @@ import * as brief from './brief.js';
 import { watchIntent, startWatch, stopWatch, isWatching, checkPrompt, CHECK_SCHEMA } from './watch.js';
 import { fileIntent, fileAction } from './files.js';
 import { quickAnswer } from './quick.js';
-import { desktopIntent, typeIntent, runDesktop, exec as desktopExec } from './desktop.js';
+import { desktopIntent, typeIntent, toFront, runDesktop, exec as desktopExec } from './desktop.js';
 import { doctorIntent, diagnose } from './doctor.js';
 import { readIntent, readOut } from './reader.js';
 import { SCAM_CHECK, scamCheck } from './scamcheck.js';
@@ -833,8 +833,16 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (s.kind === 'command') { await runCommand(s.command); return { ok: true, said: true }; }   // it says what it did
       if (s.kind === 'open') return (await input.openApp(s.app)) ? { ok: true } : { ok: false, error: `I couldn't open ${s.app}` };
       if (s.kind === 'quick') { const qa = await quickAnswer(s.clause, { webAnswer }); return qa ? { ok: true, say: qa.say, out: qa.say } : { ok: false, error: "I couldn't work that out" }; }
-      if (s.kind === 'type') { const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why }; }
-      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return { ok: r.ok !== false, say: r.say }; }
+      if (s.kind === 'read') {
+        const r = await readOut({ intent: s.intent, claude, image, signal, screenText });
+        if (r.how) act.log({ kind: 'step', verb: `read the screen by ${r.how}` });
+        return r.text ? { ok: true, say: r.say.join(' '), out: r.text } : { ok: false, error: "I couldn't read any text there" };
+      }
+      if (s.kind === 'type') {
+        if (s.app && !(await toFront(s.app, { open: input.openApp, front: input.frontApp }))?.name) return { ok: false, error: `${s.app} didn't come to the front, so I didn't type` };
+        const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why };
+      }
+      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, open: input.openApp, front: input.frontApp, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return r.ok === false ? { ok: false, error: r.say } : { ok: true, say: r.say }; }
       if (s.kind === 'file') {
         const r = await fileAction(s.intent, null, { approve, say, undo });
         if (r?.results) state.filesAt = Date.now();
@@ -1041,7 +1049,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // "Read this to me" (reader.js): the selected text first, no picture. ("Read this and reply" is a task.)
       const ri = !forced && !/\b(?:and|then|summari[sz]e|reply|respond|explain|translate)\b/i.test(t) && readIntent(t);
       if (ri && ri !== 'image') {
-        const r = await readOut({ intent: ri, claude, image, signal });
+        const r = await readOut({ intent: ri, claude, image, signal, screenText });
+        if (r.how) act.log({ kind: 'step', verb: `read the screen by ${r.how}` });   // which one answered: AX, then on-device OCR (the picture is last)
         if (r.text) return await readAloud(r, signal);
       }
       const prev = state.recent.at(-1);
@@ -1091,7 +1100,11 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         prefs.noticed = true; savePrefs();
         say('One thing first: to answer, Dixi sends a picture of your screen to Claude. Nothing is saved.');
       }
-      if (ri) await readAloud(await readOut({ intent: ri, shot, claude, image, signal, writeClipboard: (x) => clipboard.writeText(x), pid: ctx.pid }), signal);
+      if (ri) {
+        const r = await readOut({ intent: ri, shot, claude, image, signal, writeClipboard: (x) => clipboard.writeText(x), pid: ctx.pid });
+        if (r.how) act.log({ kind: 'step', verb: `read the screen by ${r.how}`, app: ctx.name });
+        await readAloud(r, signal);
+      }
       else if (SCAM_CHECK.test(t)) await checkScam(shot, ctx, signal, found);
       else if (CAL_ADD.test(t)) await addEvent(text, shot, ctx, signal);
       else if (REMEMBER.test(t)) await remember(text, shot, ctx, signal);
