@@ -285,8 +285,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const profileFile = path.join(userData, 'profile.json');
   const editProfile = () => openProfile(userData, () => say("Saved your profile. I'll read it back before I use it on a form."));
   const act = createActivityLog(userData);   // what Dixi did, on this Mac only (activity.js): "what did you do today?"
-  // How the panel looks and sounds (tray toggles): large text, high contrast (unset = follow macOS), sounds.
-  const look = () => ({ large: prefs.large, contrast: prefs.contrast, sounds: prefs.sounds });
+  // How the panel looks and sounds (tray toggles): large text, high contrast (unset = follow macOS), sounds, and
+  // where it sits: the bottom pill (default), or the island at the top, out of the notch.
+  const look = () => ({ large: prefs.large, contrast: prefs.contrast, sounds: prefs.sounds, top: prefs.islandTop });
   const toMain = (ch, d) => getMainWindow()?.webContents.send(ch, d);
   const say = (text) => { if (text) { state.saidAt = Date.now(); toMain('everywhere:say', String(text).slice(0, 400)); } };   // (saidAt: a reply on its way counts as busy)
   // Fast text answers (ask.js: Groq first, then fallbacks), your own things searched locally (index.js), long
@@ -324,7 +325,11 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   }
   // The notch of the display the overlay is on (notch.js): read with each new overlay window and when displays change.
   let screens = [];
-  const notchNow = () => ui('ew:notch', notchOf(screen.getDisplayMatching?.(state.bounds), screens));
+  const notchNow = () => {
+    const d = screen.getDisplayMatching?.(state.bounds);
+    ui('ew:notch', notchOf(d, screens));
+    if (d?.workArea) ui('ew:dock', d.bounds.y + d.bounds.height - d.workArea.y - d.workArea.height);   // the pill sits just above the Dock
+  };
   const renotch = coalesce(readScreens, (s) => { screens = s; notchNow(); });   // a burst of display events: one osascript at a time, newest wins
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on?.(ev, renotch);
   function overlayOn(bounds) {
@@ -1449,6 +1454,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   function setLook(key) {
     if (key === 'sounds') prefs.sounds = prefs.sounds === false;   // on unless turned off
     else if (key === 'contrast') prefs.contrast = prefs.contrast ? undefined : true;
+    else if (key === 'islandTop') prefs.islandTop = !prefs.islandTop;
     else prefs.large = !prefs.large;
     savePrefs(); menu(); ui('ew:prefs', look()); dashChanged();
   }
@@ -1568,6 +1574,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     { label: 'Large text', type: 'checkbox', checked: Boolean(prefs.large), click: () => setLook('large') },
     { label: 'High contrast', type: 'checkbox', checked: Boolean(prefs.contrast), click: () => setLook('contrast') },
     { label: 'Sounds', type: 'checkbox', checked: prefs.sounds !== false, click: () => setLook('sounds') },
+    { label: 'Show Dixi at the top (in the notch)', type: 'checkbox', checked: Boolean(prefs.islandTop), click: () => setLook('islandTop') },
     { type: 'separator' },
     { label: 'Screen Recording permission…', click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture') },
     { label: 'Accessibility permission…', click: () => systemPreferences.isTrustedAccessibilityClient(true) },

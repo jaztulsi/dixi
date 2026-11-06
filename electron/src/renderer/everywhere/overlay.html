@@ -16,21 +16,20 @@
   <p id="polite" class="sr" aria-live="polite"></p>
   <p id="assertive" class="sr" aria-live="assertive"></p>
 
-  <!-- The island: opaque black, grown out of the notch (or a pill at top-center without one). One line. -->
+  <!-- The pill: opaque black, bottom-center above the Dock (or, set in the menu bar, out of the notch). One line. -->
   <section id="pill" class="island" data-state="idle" aria-label="Dixi" hidden>
     <div class="row">
       <span class="lead" aria-hidden="true">
-        <span class="wave"><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
         <span class="dot"></span>
         <svg class="check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg>
       </span>
       <p id="text"></p>
       <button id="undo" class="quiet" hidden>Undo</button>
     </div>
-    <i class="shimmer" aria-hidden="true"></i>
   </section>
 
-  <!-- The card slot under the island: a longer answer, steps, the Claude team; approval only in careful mode. -->
+  <!-- The card slot above the pill (under the island at the top): a longer answer, steps, the Claude team; approval only in careful mode. -->
   <section id="more" class="card" hidden>
     <p id="full"></p>
     <ol id="steps"></ol>

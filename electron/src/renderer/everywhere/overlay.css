@@ -1,11 +1,14 @@
-/* Dixi Everywhere: the island. Opaque black so it merges with the hardware notch (ADDENDUM A6): flush to
-   the top edge, square top corners, rounded bottom ones, wider than the notch. Without a notch it is the
-   same black pill at top-center. Motion: transform and opacity only, 200 ms or less, nothing runs while idle. */
+/* Dixi Everywhere: the Flow pill. A small opaque-black capsule at bottom-center, just above the Dock, with a
+   live waveform of your voice; it widens only as far as its one line needs, then folds back. "Island at the top"
+   (menu bar) puts it in the notch instead (ADDENDUM A6): flush to the top edge, rounded bottom corners, or a
+   top-center pill without a notch. Motion: transform, opacity and the pill's width, 200 ms or less; nothing
+   runs while idle. */
 :root {
   --w: min(380px, calc(100vw - 32px));
   --row: 36px;
   --notch-h: 0px;
   --top: 6px;
+  --dock: 0px;   /* the Dock's height on this display (main sends it), so the pill sits just above it */
   --h: var(--row);
   font: 500 var(--t-m)/1.35 var(--font);
   color: var(--ink);
@@ -15,12 +18,18 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
 button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
-/* ---- the island ---- */
+/* ---- the pill (default): bottom-center, as wide as its content (overlay.js sets --pw) ---- */
 .island {
-  position: fixed; top: var(--top); left: 50%; width: var(--w); height: var(--h); margin-left: calc(var(--w) / -2);
-  background: var(--black); border-radius: calc(var(--row) / 2); box-shadow: var(--shadow);
-  transform-origin: 50% 0; transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  position: fixed; bottom: calc(var(--dock) + 14px); left: 50%; width: var(--pw, 96px); max-width: calc(100vw - 32px); height: var(--row);
+  translate: -50% 0; background: var(--black); border-radius: calc(var(--row) / 2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 6px 24px rgba(0, 0, 0, 0.35);
+  transform-origin: 50% 100%;
+  transition: transform var(--dur) var(--ease), opacity var(--fast) linear, width var(--dur) var(--ease);
 }
+.island[hidden] { display: block; opacity: 0; transform: scale(0.6, 0.5); pointer-events: none; transition-duration: var(--fast); }
+/* ---- at the top (menu bar setting): out of the notch, or a top-center pill; a fixed width ---- */
+html.top .island { top: var(--top); bottom: auto; width: var(--w); height: var(--h); transform-origin: 50% 0; box-shadow: var(--shadow); }
+html.top .island[hidden] { transform: scale(var(--sx, 0.9), var(--sy, 0.7)); }
 html.notch .island { border-radius: 0 0 var(--r-m) var(--r-m); box-shadow: none; }
 /* the notch's concave "ears" where the island meets the top edge, as on the hardware */
 html.notch .island::before, html.notch .island::after {
@@ -28,54 +37,53 @@ html.notch .island::before, html.notch .island::after {
 }
 html.notch .island::before { left: -8px; border-top-right-radius: 8px; box-shadow: 4px -4px 0 4px var(--black); }
 html.notch .island::after { right: -8px; border-top-left-radius: 8px; box-shadow: -4px -4px 0 4px var(--black); }
-.island[hidden] { display: block; opacity: 0; transform: scale(var(--sx, 0.9), var(--sy, 0.7)); pointer-events: none; }
 .row {
-  position: absolute; left: 0; right: 0; bottom: 0; height: var(--row); padding: 0 8px 0 14px;
-  display: flex; align-items: center; gap: 10px; transition: opacity var(--fast) linear 60ms;
+  position: absolute; left: 0; bottom: 0; width: max-content; box-sizing: border-box; height: var(--row); padding: 0 16px;
+  display: flex; align-items: center; justify-content: center; gap: 10px; transition: opacity var(--fast) linear 60ms;
 }
+html.top .row { right: 0; width: auto; justify-content: flex-start; padding: 0 8px 0 14px; }
 .island[hidden] .row { opacity: 0; transition-delay: 0ms; }
-[data-state="listening"] .row { transition-duration: 80ms; transition-delay: 0ms; }   /* "Listening…" fully in by 80 ms */
-#text { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+[data-state="listening"] .row { transition-duration: 80ms; transition-delay: 0ms; }   /* the waveform is fully in by 80 ms */
+.row:has(#undo:not([hidden])) { padding-right: 5px; }
+#text { flex: 0 1 auto; max-width: 340px; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+html.top #text { flex: 1; max-width: none; }
+html.large #text { max-width: 420px; }
+#text:empty { display: none; }   /* the pill is just the waveform until there are words */
+html.top #text:empty { display: block; }
 #text:empty::before { color: var(--ink-3); }
-[data-state="listening"] #text:empty::before { content: "Listening"; }
-[data-state="thinking"] #text:empty::before { content: "Thinking"; }
+html.top [data-state="listening"] #text:empty::before { content: "Listening"; }
+html.top [data-state="thinking"] #text:empty::before { content: "Thinking"; }
+[data-state="listening"] #text, [data-state="thinking"] #text { color: var(--ink-2); }   /* your words, as heard */
 [data-state="error"] #text { color: var(--red); }
-#text, .lead { padding-right: 6px; }
 
-/* leading mark: waveform (listening), dot (thinking, acting), check (done); none on an error */
-.lead { flex: none; width: 22px; height: 16px; display: grid; place-items: center; }
+/* leading mark: waveform (listening; it ripples while thinking), dot (acting), check (done); none on an error */
+.lead { flex: none; height: 18px; display: grid; place-items: center; }
 .lead > * { grid-area: 1 / 1; display: none; }
-[data-state="listening"] .wave, [data-state="thinking"] .dot, [data-state="acting"] .dot, [data-state="done"] .check { display: flex; }
+[data-state="listening"] .wave, [data-state="thinking"] .wave, [data-state="acting"] .dot, [data-state="done"] .check { display: flex; }
 [data-state="error"] .lead { display: none; }
-.wave { gap: 2px; align-items: center; height: 16px; }
-.wave i { width: 3px; height: 16px; border-radius: 2px; background: var(--ink); transform: scaleY(var(--l, 0.18)); transition: transform 80ms linear; }
+.wave { gap: 2.5px; align-items: center; height: 18px; }
+.wave i { width: 2px; height: 18px; border-radius: 1px; background: var(--ink); transform: scaleY(var(--l, 0.12)); transition: transform 70ms linear; }
+[data-state="thinking"] .wave i { animation: ripple 900ms ease-in-out calc(var(--d, 0) * 70ms) infinite; opacity: 0.85; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
 [data-state="acting"] .dot { animation: pulse 900ms ease-in-out infinite alternate; }
-.check { width: 16px; height: 16px; fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.check { width: 16px; height: 16px; fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 @keyframes pulse { to { opacity: 0.35; } }
-
-/* thinking: one soft band sweeps the island (transform only); appears on the first frame */
-.shimmer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; display: none; }
-[data-state="thinking"] .shimmer { display: block; }
-.shimmer::before {
-  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.11), transparent);   /* a highlight, not decoration */
-  transform: translateX(-100%); animation: sweep 1100ms linear infinite;
-}
-@keyframes sweep { to { transform: translateX(250%); } }
+@keyframes ripple { 0%, 100% { transform: scaleY(0.12); } 50% { transform: scaleY(0.55); } }   /* a wave out from the middle: "working on it" */
 
 .quiet { flex: none; height: 26px; padding: 0 12px; border-radius: 13px; font-size: var(--t-s); font-weight: 600; background: rgba(255, 255, 255, 0.14); }
 .quiet:hover { background: rgba(255, 255, 255, 0.2); }
 .quiet:active { background: rgba(255, 255, 255, 0.08); }
 .quiet[hidden] { display: none; }
 
-/* ---- the card slot under the island: collapses with it ---- */
+/* ---- the card slot: just above the pill (under the island at the top); collapses with it ---- */
 .card {
-  position: fixed; top: calc(var(--top) + var(--h) + 8px); left: 50%; width: var(--w); margin-left: calc(var(--w) / -2); box-sizing: border-box;
+  position: fixed; bottom: calc(var(--dock) + 14px + var(--row) + 8px); left: 50%; width: var(--w); margin-left: calc(var(--w) / -2); box-sizing: border-box;
   padding: 12px 14px; background: var(--base); border: 1px solid var(--hairline); border-radius: var(--r-m); box-shadow: var(--highlight), var(--shadow);
   transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
 }
-.card[hidden] { display: block; opacity: 0; transform: translateY(-6px); pointer-events: none; }
+.card[hidden] { display: block; opacity: 0; transform: translateY(6px); pointer-events: none; }
+html.top .card { top: calc(var(--top) + var(--h) + 8px); bottom: auto; }
+html.top .card[hidden] { transform: translateY(-6px); }
 #full { margin: 0; font-size: var(--t-m); line-height: 1.4; text-wrap: pretty; }
 #full:empty, #steps:empty, #hive:empty { display: none; }
 #steps, #hive { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -117,14 +125,16 @@ html.notch .island::after { right: -8px; border-top-left-radius: 8px; box-shadow
 
 @media (prefers-reduced-motion: reduce) {
   .island, .island[hidden], .card, .card[hidden] { transform: none; }
-  .shimmer::before, .dot, .mark, .mark.point::after, .label { animation: none !important; }
-  .shimmer::before { transform: none; width: 100%; background: rgba(255, 255, 255, 0.06); }   /* still reads as "thinking", without motion */
+  .island { transition: opacity var(--fast) linear; }
+  .wave i, .dot, .mark, .mark.point::after, .label { animation: none !important; }
+  [data-state="thinking"] .wave i { transform: scaleY(0.35); opacity: 0.5; }   /* still reads as "working", without motion */
   .cursor.on { animation: fade 900ms linear forwards; }
 }
 @keyframes fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
 
 /* Large text (menu bar setting) and high contrast (setting, or macOS "Increase contrast"). */
 html.large { --row: 44px; --t-m: 18px; --t-s: 15px; --w: min(460px, calc(100vw - 32px)); }
+html.contrast:not(.top) .island { box-shadow: inset 0 0 0 2px var(--ink); }
 html.contrast { --ink-2: #e6e6e6; --ink-3: #c8c8c8; --hairline: #fff; }
 html.contrast .card { border-width: 2px; }
 html.contrast :focus-visible { outline: 3px solid #ffd60a; outline-offset: 3px; }
