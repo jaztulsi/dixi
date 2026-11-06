@@ -28,7 +28,7 @@ export const BUILTIN_TOOLS = [
     name: 'mac_control', priority: 40, source: 'builtin',
     description: 'The Mac itself, with no AI: volume, music, open a website, window layout, timers and reminders, dark mode, lock, battery, screenshot, Wi-Fi, quit an app.',
     match: (t, ctx = {}) => (ctx.forced ? null : desktopIntent(t)),
-    run: async (intent, d) => runDesktop(intent, { exec: desktopExec, say: d.say, approve: d.approve, key: d.key, screens: d.screens }),
+    run: async (intent, d) => runDesktop(intent, { exec: desktopExec, say: d.say, key: d.key, screens: d.screens }),
   },
   {
     name: 'mac_checkup', priority: 39, source: 'builtin',

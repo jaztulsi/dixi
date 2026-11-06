@@ -149,7 +149,7 @@ export async function addToCalendar({ shot, said, claude, image, signal, approve
     if (!v.ok || v.item.allDay || mins(v.item.start) <= at) v = validateItem({ ...raw, date: ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)) }, { now, said });
     picked = true;
   }
-  if (!v.ok && v.why === 'nodate') {   // careful mode: never guess a date, ask for one
+  if (!v.ok && v.why === 'nodate' && careful) {   // careful mode: never guess a date, ask for one
     const a = await askUser(`What day is “${v.title}”?`);
     if (!a) return { ok: false, text: 'No problem, I didn’t add anything.' };
     const d = await claude({ model: 'claude-haiku-5-5', max_tokens: 100, system: `Today is ${ymd(now)}. Turn what the user said into a date. Reply as JSON.`,
