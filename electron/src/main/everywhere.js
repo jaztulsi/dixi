@@ -41,7 +41,7 @@ import { desktopIntent, runDesktop, exec as desktopExec } from './desktop.js';
 import { doctorIntent, diagnose } from './doctor.js';
 import { readIntent, readOut } from './reader.js';
 import { SCAM_CHECK, scamCheck } from './scamcheck.js';
-import { CAL_ADD, addToCalendar } from './calendar.js';
+import { CAL_ADD, addToCalendar, removeFromCalendar } from './calendar.js';
 import { tutorIntent, tutorControl, startTutor } from './tutor.js';
 import { createActivityLog, activityIntent, answerActivity, stepEvent } from './activity.js';
 import { openWelcome, permStatus } from './welcome.js';
@@ -980,6 +980,11 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         prefs.indexFolders = [...new Set([...(prefs.indexFolders ?? []), dir])]; savePrefs(); learnFolder(dir);
         say(`Reading your ${name} folder now. Ask me about it any time.`); show({ state: 'done', title: 'Indexing', text: dir, linger: 4000 }); return;
       }
+      if (UNDO.test(t) && state.calAdded && Date.now() - state.calAdded.at < 120000 && state.calAdded.at > (state.fileChangeAt ?? 0)) {   // the add just said back
+        const c = state.calAdded; state.calAdded = null;
+        const off = await removeFromCalendar(c);
+        say(off ? 'Undone. It’s off.' : 'I couldn’t find it to take it off.'); show({ state: 'done', title: off ? 'Undone' : 'Calendar', text: off ? 'Taken off.' : 'Not found.', linger: 2500 }); return;
+      }
       if (UNDO.test(t) && Date.now() - (state.fileChangeAt ?? 0) < 120000) {
         const u = await undo.undo().catch(() => null);
         if (u) { state.fileChangeAt = 0; say(`Undone: ${u.label}.`); show({ state: 'done', title: 'Undone', text: u.label, linger: 2500 }); return; }
@@ -1167,7 +1172,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // ---- "add this to my calendar" (calendar.js): the date read off the screen, read back in full, then a yes ----
   async function addEvent(text, shot, ctx, signal) {
     show({ state: 'thinking', text: 'Reading the date…', app: contextLine(ctx) });
-    const r = await addToCalendar({ shot, said: text, claude, image, signal, approve, askUser });
+    const r = await addToCalendar({ shot, said: text, claude, image, signal, approve, askUser, careful: prefs.careful });
+    if (r.undo) state.calAdded = { ...r.undo, at: Date.now() };
     if (signal.aborted) return;
     show({ state: 'done', title: r.ok ? 'Added' : 'Calendar', text: r.text, linger: 6000 });
     say(r.text);
