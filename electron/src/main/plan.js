@@ -8,7 +8,7 @@
 //    `computer` step for its own words only.
 // The model brings the app knowledge ("text Mom" is Messages); this file names no apps, sites or phrases.
 import { tokens } from '../renderer/core/interpret.js';
-import { split } from '../renderer/core/everywhere-words.js';
+import { split, MISSED } from '../renderer/core/everywhere-words.js';
 import { desktopIntent, typeIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
 import { fileIntent } from './files.js';
@@ -28,6 +28,7 @@ const lower = (s) => String(s ?? '').toLowerCase().trim();
 /** What Dixi can do with this clause alone, instantly, or null. `filesBefore`: a file search came earlier. */
 export function instantOf(clause, { apps = [], commands = [], filesBefore = false } = {}) {
   const c = String(clause ?? '').trim();
+  if (MISSED.test(c)) return { kind: 'stop' };   // "couldn't find that on this page": stop, no model
   const mine = matchCommand(c, commands);
   if (mine && mine.action !== 'task' && mine.action !== 'skill') return { kind: 'command', command: mine };
   const d = desktopIntent(c);
@@ -213,6 +214,7 @@ export async function plan(text, ctx = {}, deps = {}) {
     if (i?.kind === 'open') opened = i.app;   // "open Notes and start a new note": the key goes to Notes, once it's in front
     else if (opened && i?.kind === 'desktop' && i.intent.verb === 'new') i.intent = { ...i.intent, app: opened };
     else if (opened && i?.kind === 'type') i.app = opened;
+    else opened = null;   // another step came between ("open Notes, go to google.com and type hi"): the typing isn't Notes'
     return i && { do: 'instant', clause, ...i };
   });
   let sent = 0;   // steps already handed to onStep (every step goes there once, in order, whichever path planned it)

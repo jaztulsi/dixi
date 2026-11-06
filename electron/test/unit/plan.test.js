@@ -45,6 +45,8 @@ test(`the code path: ${CODE.length} commands (${CODE.filter(([, k]) => k.length 
   }
   assert.equal((await plan('open Music', {}, deps(never))).steps[0].app, 'Music');   // the app, not a song file
   assert.equal((await plan('open Notes and start a new note', {}, deps(never))).steps[1].intent.app, 'Notes', 'the key waits for Notes');
+  assert.equal((await plan('open Notes, take a screenshot and type hello', {}, deps(never))).steps[2].app, undefined, 'a step between: the typing is not tied to Notes');
+  assert.equal((await plan("couldn't find that on this page", {}, deps(never))).steps[0].kind, 'stop');
   for (const c of ['find my phone', 'find my way home', 'type a reply to Sam', 'type my address', 'type it', 'switch to the New York Times']) assert.equal(instantOf(c, { apps }), null, c);   // written first, or not an app
 });
 

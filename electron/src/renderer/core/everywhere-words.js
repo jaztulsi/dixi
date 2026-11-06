@@ -15,6 +15,9 @@ export function split(text) {
   return String(text ?? '').split(STRONG).flatMap((part) => splitClauses(part)).flatMap((c) => c.split(MORE)).map(tidy).filter((c) => c.length > 1);
 }
 
+/** "couldn't find that on this page", "you didn't find it", "it's not on this page": what Dixi was doing missed,
+ *  so it stops and says so (code only, no model). Not "I couldn't find…" (that asks for help) or a follow-on ask. */
+export const MISSED = /^(?:(?:no|nope|hmm|well|oh|ugh),?\s+)?(?:(?:you|it|dixi)\s+)?(?:(?:could(?:n['’]?t| not)|did(?:n['’]?t| not))\s+find\s+(?:it|that|this|them|anything)|(?:it|that)(?:['’]s| is)\s+not\s+(?:on|in)\s+(?:this|the)\s+(?:page|screen|site))(?:\s+(?:on|in)\s+(?:this|the|that)\s+(?:page|screen|site|window|app))?[.!]*$/i;
 /** Needs the picture of the screen: not for the planner. */
 export const HERE = /\b(?:this|these|here|screen)\b/i;
 

@@ -32,7 +32,7 @@ import { grabSelection, pasteText, actOn, screenText } from './capture.js';
 import { IRREVERSIBLE, RECURRING } from '../renderer/ui/pagekit.js';
 import { execFile } from 'node:child_process';
 import { pttSession, hotkeyOwner } from './ptt.js';
-import { HERE, HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
+import { HERE, MISSED, HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
 import { openMemory, factsLine, memoryTurn, openProfile, loadProfile, profileLine, masked, FORM, secretField, profileFocused } from './memory.js';
 import * as brief from './brief.js';
 import { watchIntent, startWatch, stopWatch, isWatching, checkPrompt, CHECK_SCHEMA } from './watch.js';
@@ -838,6 +838,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         if (r.how) act.log({ kind: 'step', verb: `read the screen by ${r.how}` });
         return r.text ? { ok: true, say: r.say.join(' '), out: r.text } : { ok: false, error: "I couldn't read any text there" };
       }
+      if (s.kind === 'stop') { missed(s.clause); return { ok: true, said: true }; }   // said while a plan runs: it ends here
       if (s.kind === 'type') {
         if (s.app && !(await toFront(s.app, { open: input.openApp, front: input.frontApp }))?.name) return { ok: false, error: `${s.app} didn't come to the front, so I didn't type` };
         const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why };
@@ -1015,6 +1016,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         prefs.indexFolders = [...new Set([...(prefs.indexFolders ?? []), dir])]; savePrefs(); learnFolder(dir);
         say(`Reading your ${name} folder now. Ask me about it any time.`); show({ state: 'done', title: 'Indexing', text: dir, linger: 4000 }); return;
       }
+      if (!forced && MISSED.test(t)) return missed(t);   // "couldn't find that on this page" (before HERE sends it to the screen agent)
       if (UNDO.test(t) && state.undoLast && Date.now() - state.undoLast.at < 120000 && state.undoLast.at > (state.fileChangeAt ?? 0)) {   // what was just done without asking (a calendar add, forget everything)
         const u = state.undoLast; state.undoLast = null;
         const line = await u.run().catch(() => "I couldn't undo that.");
@@ -1116,6 +1118,12 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       show({ state: 'error', title: 'Something went wrong', text: err.message });
       say(err.message);
     } finally { mark(runId, 'done'); if (state.ctrl === ctrl) state.ctrl = null; trayTitle(); micAfter(12000); }
+  }
+  /** What Dixi was doing missed ("couldn't find that on this page"): stop it, say so, log it. No model. */
+  function missed(said) {
+    state.ctrl?.abort(); input.stopAll?.();
+    act.log({ kind: 'step', verb: 'stopped: the user said it missed', text: said });
+    say('Okay, I stopped.'); show({ state: 'done', title: 'Stopped', text: 'Okay, I stopped.', linger: 2000 });
   }
   function stop() {
     if (!state.ctrl && !approvals.size && !asks.size) return false;

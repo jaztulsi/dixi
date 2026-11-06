@@ -222,3 +222,9 @@ test('pageStarted: a tab read that hangs (a permission prompt) counts as unreada
   assert.ok(Date.now() - t0 < 300);
   assert.equal(await pageStarted('https://apple.com', { tab: async () => { throw new Error('not allowed'); }, wait: async () => {} }), true);
 });
+
+test('"couldn\'t find that on this page" is the user saying Dixi missed: a stop, not a request for help', async () => {
+  const { MISSED } = await import('../../src/renderer/core/everywhere-words.js');
+  for (const s of ["couldn't find that on this page", 'you didn\'t find it', "no, it's not on this page", 'Dixi could not find anything.', 'it is not on the screen']) assert.ok(MISSED.test(s), s);
+  for (const s of ["I couldn't find my keys", "find that on this page", "couldn't find that on this page, search Google for it", 'did not find it funny']) assert.ok(!MISSED.test(s), s);
+});
