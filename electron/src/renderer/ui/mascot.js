@@ -61,7 +61,7 @@ export function mountMascot(root, { eyes = true, base = 'assets/' } = {}) {
       Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height * 0.4)) / 400)));
   }, { passive: true });
   // Idle glances when nobody is moving the mouse (hands-free users mostly won't).
-  setInterval(() => { if (Date.now() - lastMove > 2500 && root.offsetParent) look(Math.random() * 1.2 - 0.6, Math.random() * 0.8 - 0.4); }, 1900);
+  setInterval(() => { if (Date.now() - lastMove > 2500 && root.offsetParent && document.hasFocus()) look(Math.random() * 1.2 - 0.6, Math.random() * 0.8 - 0.4); }, 1900);
 
   let current = 'face';
   return {
