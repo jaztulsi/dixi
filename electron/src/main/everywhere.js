@@ -334,7 +334,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (bounds.x !== state.bounds?.x || bounds.y !== state.bounds?.y) { state.bounds = bounds; notchNow(); }   // another display
     }
     clearTimeout(state.hideTimer);
-    if (!state.overlay.isVisible()) state.overlay.showInactive();
+    // Clicks pass through again on every show: a hide with the pointer on the island (ew:mouse inside) left them caught.
+    if (!state.overlay.isVisible()) { state.overlay.setIgnoreMouseEvents(true, { forward: true }); state.overlay.showInactive(); }
   }
   const ui = (channel, data) => {   // sent at once when the page is loaded (⌥Space's 'listening' goes out before any await)
     if (!state.overlay) return;
@@ -348,7 +349,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (data.state === 'done' || data.state === 'error' || data.state === 'idle') {
       clearTimeout(state.hideTimer);
       // unref: a lingering card never keeps a plain-Node run (the unit tests) alive; Electron's loop runs regardless.
-      state.hideTimer = setTimeout(() => { ui('ew:state', { state: 'idle' }); setTimeout(() => state.overlay?.hide(), 500).unref?.(); }, data.state === 'idle' ? 0 : data.linger ?? 9000);
+      state.hideTimer = setTimeout(() => { ui('ew:state', { state: 'idle' }); setTimeout(() => { state.overlay?.setIgnoreMouseEvents(true, { forward: true }); state.overlay?.hide(); }, 500).unref?.(); }, data.state === 'idle' ? 0 : data.linger ?? 9000);
       state.hideTimer.unref?.();
     }
   };
