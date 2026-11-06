@@ -27,6 +27,8 @@ export class DeepgramBridge {
     this.ws = null;
     this.next = 0;   // Flux numbers each connection's turns from 0; Dixi's turn numbers keep rising (each ⌥Space is a new connection)
     this.ring = []; this.ringBytes = 0; this.gen = 0;   // audio Flux hasn't finished a turn on yet: replayed after a drop
+    this.done = -1;   // the newest turn the renderer ended itself, before Flux did
+    this.handshakeMS = 2500;   // a black-holed network (half-dead Wi-Fi) fails in 2.5 s, not never: the 3 tries end and the renderer is told
   }
 
   open({ keyterms = [] } = {}) {
@@ -40,7 +42,7 @@ export class DeepgramBridge {
     const q = new URLSearchParams(DEEPGRAM_PARAMS);
     for (const k of this.keyterms.slice(0, 50)) if (k !== 'Dixi') q.append('keyterm', k);
     const url = `${ENDPOINTS.deepgram.url}?${q}`;
-    const ws = new WebSocket(url, { headers: { Authorization: `Token ${this.apiKey}` } });
+    const ws = new WebSocket(url, { headers: { Authorization: `Token ${this.apiKey}` }, handshakeTimeout: this.handshakeMS });
     this.ws = ws; this.sent = 0;
     return new Promise((resolve) => {
       ws.once('open', () => { ws.opened = true; for (const f of this.ring) this.send(f); resolve({ ok: true }); });   // in order, before live audio
@@ -81,8 +83,15 @@ export class DeepgramBridge {
     // A finished turn's audio is never replayed (it would run again as a new turn). Without Flux's
     // audio_window_end, everything sent so far counts as finished.
     if (m.event === 'EndOfTurn') { this.openTurn = null; this.trim(Number.isFinite(m.audio_window_end) ? m.audio_window_end * BPS : this.sent); }
-    else this.openTurn = m.turn_index;
+    else if (m.turn_index > this.done) this.openTurn = m.turn_index;
     return JSON.stringify(m);
+  }
+
+  // The renderer ended a turn before Flux's EndOfTurn (EagerEndOfTurn + the 700 ms hold): its audio is
+  // finished too, so a drop now replays only what came after, as a new turn, not under the done one.
+  turnDone(turn) {
+    this.done = Math.max(this.done, turn);
+    if (this.openTurn != null && this.openTurn <= turn) { this.openTurn = null; this.trim(this.sent); }
   }
 
   trim(done) {
@@ -99,6 +108,7 @@ export class DeepgramBridge {
   }
 
   sendControl(message) {
+    if (message?.type === 'TurnDone') return this.turnDone(message.turn);   // local only: Flux has no such message
     if (message?.type === 'CloseStream' && this.ws) this.ws.flushing = true;   // its close is the end, not a drop
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(message));
   }

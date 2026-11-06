@@ -2,6 +2,7 @@
 // finished a turn on; the mic never stops. A finished turn's audio is never replayed or run again.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import net from 'node:net';
 import { WebSocketServer } from 'ws';
 import { ENDPOINTS } from '../../src/main/providers.js';
 import { DeepgramBridge } from '../../src/main/deepgram.js';
@@ -94,4 +95,46 @@ test('reconnect: the replay buffer is capped (6 s), and the close after CloseStr
   assert.equal(r.conns.length, 1, 'no reconnect');
   assert.deepEqual(r.types(), []);
   r.s.close();
+});
+
+test('reconnect: a black-holed network gives up after 3 tries and the renderer is told (no "Reconnecting…" forever)', async () => {
+  const r = await rig();
+  r.b.handshakeMS = 100;   // 2.5 s in the app
+  assert.equal((await r.b.open()).ok, true);
+  await until(() => r.conns[0]);
+  const hole = net.createServer(() => {});   // takes the connection, never answers
+  await new Promise((ok) => hole.listen(0, '127.0.0.1', ok));
+  ENDPOINTS.deepgram.url = `ws://127.0.0.1:${hole.address().port}`;
+  r.conns[0].ws.terminate();
+  await until(() => r.closed.length === 1);
+  await new Promise((ok) => setTimeout(ok, 150));
+  assert.equal(r.closed.length, 1, 'told once');
+  assert.deepEqual(r.types(), ['Reconnecting']);
+  hole.close(); r.s.close();
+});
+
+test('reconnect: a turn Dixi ended before Flux did (Eager + the hold) is not replayed: the next words are a new turn, and run', async () => {
+  const r = await rig();
+  const v = new VoiceAgent({ deepgram: { control: (m) => r.b.sendControl(m), onMessage() {}, onClosed() {} }, tabs: { visibleTabs: [] }, llm: {}, tiers: {}, executor: {}, settings: { requireWakeWord: false }, holdMS: 50 });
+  const ran = [];
+  v.handleText = (t) => ran.push(t); v.preconnect = () => {}; v.speculate = () => {}; v.refreshAffordances = () => {};
+  const deliver = async (c, msg) => { const k = r.msgs.length; c.ws.send(msg); await until(() => r.msgs.length > k); v.handleMessage(r.msgs.at(-1)); };
+
+  assert.equal((await r.b.open()).ok, true);
+  for (let i = 1; i <= 10; i++) r.b.sendAudio(frame(i));
+  await until(() => r.conns[0]?.got.length === 10);
+  await deliver(r.conns[0], info('EagerEndOfTurn', 'open the news'));
+  await until(() => ran.length === 1);   // the 700 ms hold (50 here) ends it; Flux's EndOfTurn hasn't come
+  assert.deepEqual(ran, ['open the news']);
+
+  r.conns[0].ws.terminate();
+  r.b.sendAudio(frame(11)); r.b.sendAudio(frame(12));   // the next thing you say, during the drop
+  await until(() => r.conns[1]?.got.length >= 2);
+  await new Promise((ok) => setTimeout(ok, 30));
+  assert.deepEqual(r.conns[1].got, [11, 12], 'the done turn\'s audio is not replayed');
+  await deliver(r.conns[1], info('EndOfTurn', 'go back'));
+  assert.equal(r.last().turn_index, 1, 'a new turn');
+  await until(() => ran.length === 2).catch(() => {});   // its own 50 ms hold
+  assert.deepEqual(ran, ['open the news', 'go back'], 'the new words run');
+  r.b.close(); r.s.close();
 });
