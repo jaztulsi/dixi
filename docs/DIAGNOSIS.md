@@ -81,3 +81,17 @@ Format: symptom | evidence | root cause | fix | verify. "ms" figures are code-le
 - Fix (Phase 3, items 4-5): wait on the same condition that is verified (50 ms ticks or page events). Cache the AX tree per (pid, focused window) with a short TTL and read only the focused window. No screenshot when the deterministic path verified.
 - Verify: Lane B bench per stage, before and after; fake-clock tests that each wait returns as soon as its condition holds.
 
+
+## A3 after (Nov 6): Flux keyterms, same clips as stt-7
+`node eval/audio.js --seed 7 --n 4 --providers flux --keyterms` (16 cached `say` clips, ~$0.015).
+
+| Flux, command clips | before (stt-7, "Dixi" only) | after (+40 site names) |
+|---|---|---|
+| WER, all 8 | 61.9 % (26/42) | 42.9 % (18/42) |
+| WER clean / babble | – | 19.0 % / 66.7 % |
+| entity error | 100 % (8/8) | 50 % (4/8) |
+| wake false accept / reject | – | 0/4, 0/4 |
+
+Gyckbrum and Caishex Travel are now heard right in both conditions. Faistnuk (in the list) is still "face not".
+Caishoux (not in the list) became "Caishex", another listed name: keyterms help with names Dixi knows and pull
+toward them. App names (d1c8ea9) and misheard-app snapping (f09b036: 7/7 by code) cover the ⌥Space side.
