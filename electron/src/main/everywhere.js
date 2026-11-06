@@ -498,7 +498,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         continue;
       }
       if (said) { last = said; step(said); if (!asking) say(turn === 0 && found[0] ? `${found[0].say} ${said}` : said); }
-      if (asking) {
+      if (asking && prefs.careful) {
         const reply = await askUser(said);
         if (!reply || signal.aborted) break;
         step(`You said: ${reply.slice(0, 80)}`);   // seen before anything is typed (a TV could have said it)
