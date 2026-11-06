@@ -83,7 +83,7 @@ const harness = (async () => {
   quiet = () => ons['everywhere:speaking']?.(false);
   const win = mainWin = { isDestroyed: () => false, webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:browse') { events.push(`browse ${d.text}`); setTimeout(() => { events.push(`done ${d.text}`); ons['everywhere:browsed'](d.id, true, ''); }, 30); } if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
   setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
-    userData: (rt2Dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-'))), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
+    userData: (rt2Dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-'))), trashDir: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-trash-')), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
   return (text) => handlers['everywhere:run'](text);
 })();
 async function agentDoes(calls, mac, said = 'organize these notes for me') {
@@ -139,12 +139,14 @@ test('"click X" by name: pressed when the words name it, skipped with one line w
 });
 
 test('a form uses your profile without asking: said on the card, logged without its values', mac, async () => {
-  fs.writeFileSync(path.join(rt2Dir, 'profile.json'), JSON.stringify({ name: 'Pat Example', email: 'pat@example.com' }));
+  fs.writeFileSync(path.join(rt2Dir, 'profile.json'), JSON.stringify({ name: 'Pat Example', email: 'pat@example.com', password: 'hunter2', card: '4111 1111 1111 1111', cvv: '737', code: '481516', ssn: '078-05-1120' }));
   answer = () => false;   // a "no" waiting here must not be what decides
   await agentDoes([], {}, 'fill out this form');
   fs.rmSync(path.join(rt2Dir, 'profile.json'));
   assert.equal(asked.length, 0, 'nothing was asked');
-  assert.match(JSON.stringify(requests[0]?.messages?.[0]), /Pat Example/, 'the agent got the profile');
+  const sent = JSON.stringify(requests.filter((r) => r.tools)[0]?.messages?.[0]);
+  assert.match(sent, /Pat Example/, 'the agent got the profile');
+  assert.doesNotMatch(sent, /hunter2|4111|737|481516|078-05/, 'never a password, card, code or SSN, even typed into the profile');
   const log = fs.readFileSync(path.join(rt2Dir, 'activity.jsonl'), 'utf8');
   assert.match(log, /used your profile/);
   assert.doesNotMatch(log, /pat@example|Pat Example/, 'no profile values in the log');
@@ -334,6 +336,17 @@ test('A1: a crashed Dixi window never leaves Esc held', mac, async () => {
   appOn['render-process-gone']({}, mainWin.webContents);
   assert.deepEqual(released, ['Escape'], 'the main window crashed mid-session: Esc is released');
   await press();
+});
+
+test('"clear my activity" just clears it (no question) and "undo that" brings it back', mac, async () => {
+  const f = path.join(rt2Dir, 'activity.jsonl');
+  fs.appendFileSync(f, JSON.stringify({ t: 1, kind: 'done', text: 'kept for undo' }) + '\n');
+  await agentDoes([], {}, 'clear my activity');
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.ok(!fs.existsSync(f), 'cleared');
+  assert.ok(spoken.some((x) => /undo that/.test(x)), 'and Undo was offered');
+  await agentDoes([], {}, 'undo that');
+  assert.match(fs.readFileSync(f, 'utf8'), /kept for undo/, 'back');
 });
 
 test('A1: the overlay is made hidden at launch, so ⌥Space sends "listening" before any await (no cold window on the first press)', mac, async () => {

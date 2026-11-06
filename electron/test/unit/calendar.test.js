@@ -47,7 +47,7 @@ const fake = (raw) => async () => ({ content: [{ type: 'text', text: JSON.string
 const run = (extra = {}) => {
   const calls = { exec: [], said: [] };
   const o = { shot: {}, said: 'add this to my calendar', claude: fake(dentist), image: () => ({}), signal: new AbortController().signal, now: NOW,
-    approve: async (q) => { calls.said.push(q); return true; }, askUser: async () => null, exec: async (a) => { calls.exec.push(a); return 'ok'; }, ...extra };
+    approve: async (q) => { calls.said.push(q); return true; }, askUser: async () => null, exec: async (a) => { calls.exec.push(a); return 'ok'; }, careful: true, ...extra };
   return addToCalendar(o).then((r) => ({ r, calls }));
 };
 
@@ -95,4 +95,19 @@ test('reminder goes to Reminders with the due time', async () => {
   assert.equal(r.text, "Added. It's on your reminders for Friday.");
   assert.ok(calls.exec[0][4].includes("Application('Reminders')"));
   assert.ok(calls.exec[0][4].includes('"start":"2026-10-30T09:00:00"'));
+});
+
+test('normal mode never asks: added, said back in full, Undo offered; no day said = the next sensible one', async () => {
+  const quiet = { careful: false, approve: async () => assert.fail('asked'), askUser: async () => assert.fail('asked'), exec: async () => 'id:EV-1' };
+  const { r } = await run(quiet);
+  assert.equal(r.text, 'Added “Dentist, Dr. Lee” to your calendar on Friday, November 6th, from 2 to 3 PM, at 12 Main Street. Say “undo that” to take it off.');
+  assert.deepEqual(r.undo, { kind: 'event', id: 'EV-1' });
+  const later = (await run({ ...quiet, claude: fake({ ...dentist, date: null }) })).r;   // 2 PM is still ahead at 8 AM: today
+  assert.equal(later.item.date, '2026-10-29');
+  assert.match(later.text, /^You didn’t say a day, so I picked the next one\. Added/);
+  assert.equal((await run({ ...quiet, claude: fake({ ...dentist, date: null, start: '07:00', end: '08:00' }) })).r.item.date, '2026-10-30');   // 7 AM has passed: tomorrow
+  const { removeArgs, removeFromCalendar } = await import('../../src/main/calendar.js');
+  const evil = 'x"); Application("Finder").quit(); ("';
+  assert.ok(removeArgs({ kind: 'event', id: evil })[4].startsWith(`const A = ${JSON.stringify({ id: evil })};`));
+  assert.equal(await removeFromCalendar({ kind: 'reminder', id: 'R1' }, async (a) => (a[4].includes("Application('Reminders')") ? 'ok' : 'gone')), true);
 });

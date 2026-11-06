@@ -99,7 +99,7 @@ const EVENT = `(() => {
   if (!cal) throw new Error('NOCALENDAR');
   const ev = app.Event({ summary: A.title, startDate: new Date(A.start), endDate: new Date(A.end), alldayEvent: A.allDay, location: A.location, description: A.notes });
   cal.events.push(ev);
-  return 'ok';
+  try { return 'id:' + ev.uid(); } catch (e) { return 'ok'; }   // the id is what "undo that" takes off
 })()`;
 const REMINDER = `(() => {
   const app = Application('Reminders');
@@ -107,13 +107,24 @@ const REMINDER = `(() => {
   if (!list) throw new Error('NOCALENDAR');
   const r = { name: A.title, body: A.notes };
   if (A.allDay) r.alldayDueDate = new Date(A.start); else r.dueDate = new Date(A.start);
-  list.reminders.push(app.Reminder(r));
-  return 'ok';
+  const rem = app.Reminder(r);
+  list.reminders.push(rem);
+  try { return 'id:' + rem.id(); } catch (e) { return 'ok'; }
 })()`;
 export const createArgs = (item) => {
   const start = when(item.date, item.start), end = item.kind === 'event' ? when(item.date, item.allDay ? '23:59' : item.end) : start;
   return jxa(item.kind === 'reminder' ? REMINDER : EVENT, { title: item.title, start, end, allDay: item.allDay, location: item.location, notes: item.notes });
 };
+
+const UNEVENT = `(() => {
+  const app = Application('Calendar');
+  for (const c of app.calendars()) { const e = c.events.whose({ uid: A.id })(); if (e.length) { app.delete(e[0]); return 'ok'; } }
+  return 'gone';
+})()`;
+const UNREMINDER = `(() => { const app = Application('Reminders'); try { app.delete(app.reminders.byId(A.id)); return 'ok'; } catch (e) { return 'gone'; } })()`;
+export const removeArgs = ({ kind, id }) => jxa(kind === 'reminder' ? UNREMINDER : UNEVENT, { id: String(id) });
+/** "undo that" after an add: → true when it was taken off. */
+export const removeFromCalendar = (u, exec = osa) => exec(removeArgs(u)).then((o) => o === 'ok', () => false);
 
 const WHY = {
   nodate: 'I can’t see a date for that.', baddate: 'That date doesn’t look real to me, so I didn’t add it.',
@@ -121,8 +132,9 @@ const WHY = {
   notitle: 'I couldn’t find anything on the screen to add.',
 };
 
-/** The whole flow. Resolves { ok, text } for the lead to say() and show(); nothing is made unless approve() says yes. */
-export async function addToCalendar({ shot, said, claude, image, signal, approve, askUser, exec = osa, now = new Date() }) {
+/** The whole flow. Resolves { ok, text, undo } for the lead to say() and show(). Normal mode never asks: no day said
+ * means the next sensible one (said), and it's added and said back with Undo. Careful mode asks for the day and approves. */
+export async function addToCalendar({ shot, said, claude, image, signal, approve, askUser, exec = osa, now = new Date(), careful = false }) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const ask = `Today is ${now.toDateString()} (${ymd(now)}), time zone ${tz}.\nThe user said: ${said}`;
   const j = await claude({ model: 'claude-haiku-5-5', max_tokens: 600, system: SYSTEM,
@@ -130,8 +142,14 @@ export async function addToCalendar({ shot, said, claude, image, signal, approve
     output_config: { format: { type: 'json_schema', schema: SCHEMA } } }, signal);
   let raw; try { raw = JSON.parse(j.content.find((b) => b.type === 'text')?.text ?? ''); } catch { raw = null; }
   if (!raw || raw.confidence < 0.3) return { ok: false, text: WHY.notitle };
-  let v = validateItem(raw, { now, said });
-  if (!v.ok && v.why === 'nodate') {   // never guess a date: ask for one
+  let v = validateItem(raw, { now, said }), picked = false;
+  if (!v.ok && v.why === 'nodate' && !careful) {   // today if its time is still ahead, else tomorrow
+    const at = now.getHours() * 60 + now.getMinutes();
+    v = validateItem({ ...raw, date: ymd(now) }, { now, said });
+    if (!v.ok || v.item.allDay || mins(v.item.start) <= at) v = validateItem({ ...raw, date: ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)) }, { now, said });
+    picked = true;
+  }
+  if (!v.ok && v.why === 'nodate') {   // careful mode: never guess a date, ask for one
     const a = await askUser(`What day is “${v.title}”?`);
     if (!a) return { ok: false, text: 'No problem, I didn’t add anything.' };
     const d = await claude({ model: 'claude-haiku-5-5', max_tokens: 100, system: `Today is ${ymd(now)}. Turn what the user said into a date. Reply as JSON.`,
@@ -141,13 +159,18 @@ export async function addToCalendar({ shot, said, claude, image, signal, approve
   }
   if (!v.ok) return { ok: false, text: WHY[v.why] ?? WHY.notitle };
   const { item } = v;
-  if (!(await approve(readBack(item, { now, tz })))) return { ok: false, text: 'Okay, I didn’t add it.' };
-  try { await exec(createArgs(item)); } catch (err) {
+  if (careful && !(await approve(readBack(item, { now, tz })))) return { ok: false, text: 'Okay, I didn’t add it.' };
+  let out; try { out = await exec(createArgs(item)); } catch (err) {
     const m = `${err.message} ${err.stderr ?? ''}`;
     if (/-1743|not authori[sz]ed/i.test(m)) return { ok: false, text: `Dixi isn’t allowed to use ${item.kind === 'reminder' ? 'Reminders' : 'Calendar'} yet. Open System Settings, Privacy and Security, Automation, and turn on ${item.kind === 'reminder' ? 'Reminders' : 'Calendar'} under Dixi. Then ask again.` };
     if (/NOCALENDAR/.test(m)) return { ok: false, text: item.kind === 'reminder' ? 'You have no Reminders list to add to.' : 'You have no calendar that can be added to.' };
     return { ok: false, text: 'I couldn’t add that. Calendar didn’t answer.' };
   }
+  const id = /^id:(.+)$/.exec(String(out ?? ''))?.[1], undo = id ? { kind: item.kind, id } : null;
+  if (!careful) {   // nothing was read back first, so it's said now, in full
+    const what = readBack(item, { now, tz }).replace(/\?$/, '.').replace(/^Add /, 'Added ').replace(/^Remind you /, 'I’ll remind you ');
+    return { ok: true, item, undo, text: `${picked ? 'You didn’t say a day, so I picked the next one. ' : ''}${what}${undo ? ' Say “undo that” to take it off.' : ''}` };
+  }
   const day = dayWords(item.date, now, tz, true);   // the weekday is enough: the read-back already said the full date
-  return { ok: true, item, text: `Added. It's on your ${item.kind === 'reminder' ? 'reminders' : 'calendar'} for ${day}.` };
+  return { ok: true, item, undo, text: `Added. It's on your ${item.kind === 'reminder' ? 'reminders' : 'calendar'} for ${day}.` };
 }

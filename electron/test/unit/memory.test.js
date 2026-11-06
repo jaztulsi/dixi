@@ -174,7 +174,7 @@ test('memoryTurn: what Dixi says', async () => {
 
   r = await memoryTurn(mem, 'forget that');
   assert.match(r.say, /forgot that your daughter is Priya/);
-  assert.match((await memoryTurn(mem, 'forget that')).say, /Which one/);   // nothing just said
+  assert.match((await memoryTurn(mem, 'forget that')).say, /Nothing new since Dixi started/);   // nothing just said: a hint, never a question
   assert.match((await memoryTurn(mem, 'forget everything about peanuts')).say, /forgot everything about peanuts/);
   assert.match((await memoryTurn(mem, 'forget everything about Paris')).say, /don't have anything/);
 
@@ -191,4 +191,16 @@ test('memoryTurn: what Dixi says', async () => {
   assert.equal((await memoryTurn(mem, 'open my profile')).profile, true);
   assert.match((await memoryTurn(mem, 'remember that I like turtles')).say, /I can keep things like/);
   assert.deepEqual(mem.all(), []);
+});
+
+test('"forget everything" without a question (normal mode) comes with an Undo that puts every fact back, history too', async () => {
+  const mem = fresh();
+  said(mem, 'my shoe size is 9'); said(mem, 'my shoe size is 10'); said(mem, 'my daughter is Priya');
+  const before = mem.all({ history: true }).map(({ key, value, at, until }) => [key, value, at, until]);
+  const m = await memoryTurn(mem, 'forget everything about me', { approve: async () => true });
+  assert.match(m.say, /undo that/);
+  assert.deepEqual(mem.all({ history: true }), []);
+  m.undo();
+  assert.deepEqual(mem.all({ history: true }).map(({ key, value, at, until }) => [key, value, at, until]), before);
+  assert.deepEqual(mem.all().filter((f) => f.key === 'shoe size').map((f) => f.value), ['10'], 'what was superseded stays superseded');
 });
