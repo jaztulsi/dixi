@@ -109,7 +109,7 @@ window.dixi.onPopup((url) => tabs.createTab(url));
 const ew = window.dixi.everywhere;
 let ewArmed = 0, ewUntil = 0, ewConfirm = null;
 ew?.enabled().then(({ listening = true, phrases = [], apps = [] } = {}) => {
-  voice.terms = [...new Set(apps)].slice(0, 30);   // speech-to-text keyterms (voice.keyterms): your apps' names, heard right
+  voice.terms = [...new Set([...apps.slice(0, 30), ...(voice.terms ?? [])])];   // speech-to-text keyterms (voice.keyterms): your apps' names first, then the site catalog's
   settings.requireWakeWord = listening;   // the Mac-wide "always listening" switch is the experimental wake-word mode
   if (!listening) voice.stop();   // microphone switched off (⌘⌥Space): nothing is heard until it's back on
   ew.onMic((on) => { settings.requireWakeWord = on; if (on) voice.start().catch(() => {}); else if (!voice.session) voice.stop(); });
