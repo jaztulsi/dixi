@@ -27,6 +27,7 @@ export class DeepgramBridge {
     this.ws = null;
     this.next = 0;   // Flux numbers each connection's turns from 0; Dixi's turn numbers keep rising (each ⌥Space is a new connection)
     this.ring = []; this.ringBytes = 0; this.gen = 0;   // audio Flux hasn't finished a turn on yet: replayed after a drop
+    this.handshakeMS = 2500;   // a black-holed network (half-dead Wi-Fi) fails in 2.5 s, not never: the 3 tries end and the renderer is told
   }
 
   open({ keyterms = [] } = {}) {
@@ -40,7 +41,7 @@ export class DeepgramBridge {
     const q = new URLSearchParams(DEEPGRAM_PARAMS);
     for (const k of this.keyterms.slice(0, 50)) if (k !== 'Dixi') q.append('keyterm', k);
     const url = `${ENDPOINTS.deepgram.url}?${q}`;
-    const ws = new WebSocket(url, { headers: { Authorization: `Token ${this.apiKey}` } });
+    const ws = new WebSocket(url, { headers: { Authorization: `Token ${this.apiKey}` }, handshakeTimeout: this.handshakeMS });
     this.ws = ws; this.sent = 0;
     return new Promise((resolve) => {
       ws.once('open', () => { ws.opened = true; for (const f of this.ring) this.send(f); resolve({ ok: true }); });   // in order, before live audio
