@@ -152,6 +152,23 @@ export function desktopIntent(text) {
   }
   return null;
 }
+// "ask Gemini what the capital of Australia is", "paste this into ChatGPT", "select everything and paste it into
+// Gemini and ask it to summarize": that chat site in a new tab, your words (or what's selected) in its box, sent.
+const CHATS = { gemini: ['Gemini', 'https://gemini.google.com/app'], chatgpt: ['ChatGPT', 'https://chatgpt.com/'], claude: ['Claude', 'https://claude.ai/new'], perplexity: ['Perplexity', 'https://www.perplexity.ai/'] };
+const CHAT = '(?:google\\s+)?(gemini|chat\\s?g\\.?\\s?p\\.?\\s?t\\.?|claude|perplexity)';
+const chat = (w) => CHATS[w.replace(/[\s.]/g, '')];
+const POLITE = /^(?:(?:hey\s+)?dixi[,.]?\s+)?(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?/i;
+const ASK = new RegExp(`^(?:(?:open|go\\s+to)\\s+${CHAT}\\s*,?\\s+and\\s+ask(?:\\s+it)?|ask\\s+${CHAT})[,:]?\\s+(?:to\\s+)?(.+?)[.?!]*$`, 'i');
+const PASTE = new RegExp(`^(select\\s+(?:all|everything)(?:\\s+and|,)?\\s+)?(?:copy\\s+(?:it|this|that|everything|all)(?:\\s+and|,)?\\s+)?(?:paste|put|send|drop)\\s+(?:in\\s+)?(it|this|that|them|everything|all of it|the selection|what(?:'s| is) selected|what i copied|the clipboard|my clipboard)?\\s*(?:into|in|to|on)\\s+${CHAT}(?:\\s*,?\\s+and\\s+(?:ask|tell)\\s+it\\s+(?:to\\s+)?(.+?))?[.?!]*$`, 'i');
+/** → { site, url, question } (your words) or { site, url, from: 'all' | 'selection' | 'clipboard', ask? }, else null. */
+export function chatIntent(text) {
+  const t = String(text ?? '').trim().replace(POLITE, '');
+  let m = t.match(ASK);
+  if (m) { const [site, url] = chat((m[1] ?? m[2]).toLowerCase()); return { site, url, question: m[3].trim() }; }
+  if (!(m = t.match(PASTE))) return null;
+  const [site, url] = chat(m[3].toLowerCase());
+  return { site, url, from: m[1] || /^(?:everything|all of it)$/i.test(m[2] ?? '') ? 'all' : /clipboard|copied/i.test(m[2] ?? '') ? 'clipboard' : 'selection', ...(m[4] && { ask: m[4].trim() }) };
+}
 /** "type hello world" → "hello world": the words to type, exactly as said (no AI). Null for what has to be written
  *  first ("type a reply to Sam", "type my address") or pointed at ("type it"), and for "type of …". */
 export function typeIntent(text) {

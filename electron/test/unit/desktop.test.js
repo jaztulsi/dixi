@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desktopIntent, runDesktop, layoutRect, parseBattery, parseDuration, validSite, DESKTOP } from '../../src/main/desktop.js';
+import { desktopIntent, runDesktop, layoutRect, parseBattery, parseDuration, validSite, DESKTOP, chatIntent } from '../../src/main/desktop.js';
+import { quickIntent } from '../../src/main/quick.js';
 
 const I = desktopIntent;
 // A fake exec: records every call, answers from `replies` (a function of the joined args) or ''.
@@ -304,4 +305,19 @@ test('reminders with a day or time go straight into Reminders, said back in full
   assert.match((await runDesktop(I('remind me on Friday to pay rent'), r.deps)).say, /“pay rent” on Friday, November 6th\.$/);
   for (const t of ['remind me to buy milk', 'remind me about this', 'remind me in 5 minutes to stretch']) assert.notEqual(I(t)?.verb, 'remind', t);
   assert.equal(I('remind me in 5 minutes to stretch').verb, 'timer');
+});
+
+test('"ask Gemini …" and "paste this into ChatGPT" go to that site, never a quick answer', () => {
+  const g = 'https://gemini.google.com/app';
+  assert.deepEqual(chatIntent('ask gemini what the capital of australia is'), { site: 'Gemini', url: g, question: 'what the capital of australia is' });
+  assert.equal(quickIntent('ask gemini what the capital of australia is'), null);
+  assert.equal(chatIntent('Hey Dixi, can you ask chat gpt to write a haiku about rain?').question, 'write a haiku about rain');
+  assert.equal(chatIntent('open Gemini and ask it to plan my week').question, 'plan my week');
+  assert.equal(chatIntent('ask ChatGPT about Rome').question, 'about Rome');
+  assert.deepEqual(chatIntent('select everything and paste this into gemini'), { site: 'Gemini', url: g, from: 'all' });
+  assert.equal(chatIntent('paste this into Gemini').from, 'selection');
+  assert.equal(chatIntent('paste what I copied into Perplexity').from, 'clipboard');
+  assert.deepEqual(chatIntent('select all, copy it and paste it into chatgpt and ask it to summarize it'), { site: 'ChatGPT', url: 'https://chatgpt.com/', from: 'all', ask: 'summarize it' });
+  for (const t of ['ask Sam what time it is', 'open gemini', 'paste it', 'what is the capital of australia']) assert.equal(chatIntent(t), null, t);
+  assert.ok(quickIntent('what is the capital of australia'));
 });

@@ -9,7 +9,7 @@
 // The model brings the app knowledge ("text Mom" is Messages); this file names no apps, sites or phrases.
 import { tokens, soundsLike } from '../renderer/core/interpret.js';
 import { split, MISSED } from '../renderer/core/everywhere-words.js';
-import { desktopIntent, typeIntent } from './desktop.js';
+import { desktopIntent, typeIntent, chatIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
 import { fileIntent } from './files.js';
 import { readIntent } from './reader.js';
@@ -33,6 +33,8 @@ export function instantOf(clause, { apps = [], commands = [], filesBefore = fals
   if (MISSED.test(c)) return { kind: 'stop' };   // "couldn't find that on this page": stop, no model
   const mine = matchCommand(c, commands);
   if (mine && mine.action !== 'task' && mine.action !== 'skill') return { kind: 'command', command: mine };
+  const ch = chatIntent(c);   // "ask Gemini …", "paste this into ChatGPT": that site, your words, sent
+  if (ch) return { kind: 'chat', ...ch };
   const d = desktopIntent(c);
   if (d) return { kind: 'desktop', intent: d };
   const ty = typeIntent(c);

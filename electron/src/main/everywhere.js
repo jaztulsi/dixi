@@ -38,7 +38,7 @@ import * as brief from './brief.js';
 import { watchIntent, startWatch, stopWatch, isWatching, checkPrompt, CHECK_SCHEMA } from './watch.js';
 import { fileIntent, fileAction } from './files.js';
 import { quickAnswer } from './quick.js';
-import { desktopIntent, typeIntent, toFront, runDesktop, exec as desktopExec } from './desktop.js';
+import { desktopIntent, typeIntent, chatIntent, toFront, runDesktop, exec as desktopExec } from './desktop.js';
 import { doctorIntent, diagnose } from './doctor.js';
 import { readIntent, readOut } from './reader.js';
 import { SCAM_CHECK, scamCheck } from './scamcheck.js';
@@ -869,6 +869,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         if (r.how) act.log({ kind: 'step', verb: `read the screen by ${r.how}` });
         return r.text ? { ok: true, say: r.say.join(' '), out: r.text } : { ok: false, error: "I couldn't read any text there" };
       }
+      if (s.kind === 'chat') return askChat(s, signal);
       if (s.kind === 'stop') { missed(s.clause); return { ok: true, said: true }; }   // said while a plan runs: it ends here
       if (s.kind === 'type') {
         if (s.app && !(await toFront(s.app, { open: input.openApp, front: input.frontApp }))?.name) return { ok: false, error: `${s.app} didn't come to the front, so I didn't type` };
@@ -1014,6 +1015,18 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         if (r.mode === 'replace' && r.text) { await pasteText({ clipboard, key: input.key, text: r.text }); say('Done. Command Z undoes it.'); }
         else { if (r.text) clipboard.writeText(r.text); say(r.say); }
         show({ state: 'done', title: r.mode === 'replace' ? 'Replaced' : 'Done · copied', text: r.text.slice(0, 600) || r.say, linger: 15000 });
+        return;
+      }
+      // "ask Gemini …", "select everything and paste it into ChatGPT": no planner, no picture (before HERE sends "this" to the screen agent).
+      const ch = !forced && chatIntent(t);
+      if (ch) {
+        head?.ctrl.abort();
+        show({ state: 'acting', text: `Asking ${ch.site}…` });
+        const r = await askChat(ch, signal);
+        if (signal.aborted) return;
+        act.log({ kind: 'step', verb: r.ok ? `asked ${ch.site}` : `couldn't ask ${ch.site}` });
+        say(r.ok ? r.say : `${r.error}.`);
+        show(r.ok ? { state: 'done', title: `Asked ${ch.site}`, text: (ch.question ?? 'Sent what you selected').slice(0, 120), linger: 3000 } : { state: 'error', title: `Couldn't ask ${ch.site}`, text: r.error, linger: 5000 });
         return;
       }
       const ai = activityIntent(t);   // "what did you do today?": from the log, no AI
@@ -1320,6 +1333,34 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (profileFocused() || secretField(await input.focused())) return { ok: false, why: "That box is for you to type, so I won't type there." };
     if (/\n/.test(clean) && (await keysBlocked())) return { ok: false, why: "That has line breaks, and a line break in a terminal or code editor can run something, so I didn't type it." };
     return input.pasteChecked(clean, { name: (await input.frontApp()).name || 'that' });   // read back, like the agent's typing
+  }
+  /** "ask Gemini …", "paste this into ChatGPT" (desktop.js chatIntent): the site in a new tab of your browser, your
+   *  words (or what's selected / copied) in its box, Return. → { ok, say } | { ok: false, error }. */
+  async function askChat({ site, url, question, from, ask }, signal) {
+    let text = question;
+    if (from) {
+      if ((await input.frontApp()).pid === process.pid) return { ok: false, error: `Dixi's own window is in front. Bring the app with the text to the front, then say it again` };
+      if (from === 'all') { await input.key('cmd+a'); await new Promise((r) => setTimeout(r, 120)); }
+      const got = from === 'clipboard' ? null : await grabSelection({ clipboard, key: input.key }).catch(() => null);
+      const body = (got?.kind === 'text' ? got.text : from === 'all' ? '' : await clipboard.readText()).trim();
+      if (!body) return { ok: false, error: from === 'clipboard' ? 'There’s no text on the clipboard' : 'Nothing was selected' };
+      text = ask ? `${ask[0].toUpperCase()}${ask.slice(1)}:\n\n${body}` : body;
+    }
+    if (signal?.aborted) return { ok: false, error: 'Stopped' };
+    await shell.openExternal(url);
+    await pageStarted(url, { tab: async () => input.browserTab((await input.frontApp())?.name ?? ''), ms: 6000 });
+    // The site builds its box after the page loads: look for it (focused, then by name) for up to 8 s.
+    let box = { ok: false };
+    for (const until = Date.now() + 8000; !box.ok && Date.now() < until && !signal?.aborted; ) {
+      box = await input.focusField({ where: url, name: site });
+      if (!box.ok) await new Promise((r) => setTimeout(r, 400));
+    }
+    if (signal?.aborted) return { ok: false, error: 'Stopped' };
+    if (!box.ok) return { ok: false, error: `${site} opened, but I couldn't find its message box. Are you signed in?` };
+    const r = await typeText(text);
+    if (!r.ok) return { ok: false, error: r.why };
+    await input.key('return');
+    return { ok: true, say: `Asked ${site}.` };
   }
   /** Dictation, cleaned up by Haiku and typed; `literal`: the words exactly as given. */
   async function typeOut(text, signal, { literal = false } = {}) {

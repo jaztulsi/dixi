@@ -8,6 +8,8 @@ export const QUICK = /\b(what time|what('?s| is) (the|today'?s) (time|date|weath
 
 // Anything about the screen, an app or the user's own day is never ours.
 const SCREEN = /\b(this|that|these|those|here|screen|window|button|tab|page|email|my day|my calendar)\b|what'?s next\b|what is next\b/;
+// "ask Gemini what the capital of Australia is" goes to Gemini (desktop.js chatIntent), not a quick answer.
+const AI_CHAT = /\b(?:gemini|chat\s?g\.?\s?p\.?\s?t|claude|perplexity)\b/;
 
 const WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
@@ -182,7 +184,7 @@ const WEB = [
 /** → { kind, ... } for the questions in this file, else null. Pure: no clock, no network. */
 export function quickIntent(text) {
   const t = clean(text);
-  if (!t || t.length > 140 || SCREEN.test(t)) return null;
+  if (!t || t.length > 140 || SCREEN.test(t) || AI_CHAT.test(t)) return null;
   let m;
   if ((m = t.match(/^(?:what(?:'s| is) (?:the )?(?:current )?time|what time is it|(?:the )?current time|time)(?: (?:in|at|for) (.+))?$/))) return { kind: 'time', place: m[1]?.replace(/^the\s+/, '') ?? null };
   if ((m = t.match(/^what(?:'s| is)(?: the)? (?:date|day)(?: is it)? (tomorrow|yesterday)$|^what(?:'s| is) (tomorrow|yesterday)(?:'s date)?$/))) return { kind: 'dateIn', days: (m[1] ?? m[2]) === 'tomorrow' ? 1 : -1 };
