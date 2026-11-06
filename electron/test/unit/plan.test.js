@@ -26,7 +26,7 @@ const CODE = [
   ['open Claude', ['open']], ['what time is it', ['quick']], ['set a timer for 10 minutes', ['desktop']],
   ['snap this window left', ['desktop']], ['lock the screen', ['desktop']], ['find my tax PDF from last week', ['file']],
   ['my bank', ['command']], ['go to youtube.com', ['desktop']], ['pause the music', ['desktop']], ['next song', ['desktop']],
-  ['take a screenshot', ['desktop']], ['switch to Safari', ['open']], ['go back to Mail', ['open']], ['type hello world', ['type']],
+  ['take a screenshot', ['desktop']], ['switch to Safari', ['open']], ['go back to Mail', ['open']], ['type hello world', ['type']], ['find my resume', ['file']],
   // compound
   ['volume down and open notes', ['desktop', 'open']], ['open Safari, then set a timer for 5 minutes', ['open', 'desktop']],
   ['mute; then lock the screen', ['desktop', 'desktop']], ['what time is it and set a timer for 20 minutes', ['quick', 'desktop']],
@@ -43,7 +43,7 @@ test(`the code path: ${CODE.length} commands (${CODE.filter(([, k]) => k.length 
     assert.ok(r.steps.every((s) => s.do === 'instant'), said);
   }
   assert.equal((await plan('open Music', {}, deps(never))).steps[0].app, 'Music');   // the app, not a song file
-  for (const c of ['type a reply to Sam', 'type my address', 'type it', 'switch to the New York Times']) assert.equal(instantOf(c, { apps }), null, c);   // written first, or not an app
+  for (const c of ['find my phone', 'find my way home', 'type a reply to Sam', 'type my address', 'type it', 'switch to the New York Times']) assert.equal(instantOf(c, { apps }), null, c);   // written first, or not an app
 });
 
 // Not instant: one planner call, then the checks.

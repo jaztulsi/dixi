@@ -39,6 +39,8 @@ const clean1 = (s) => s.replace(/\s+/g, ' ').trim();
 // A second command after the first ("…, search lo-fi beats", "…and move it to Documents"): the planner splits those, not us.
 const MORE = /(?:[,;]|\b(?:and|then)\b)\s+(?:(?:and|then|also)\s+)?(?:(?:open|find|search|look|play|rename|move|put|show|send|email|share|copy|print|close|quit|go|click|type|tell|read|make|create|add|set|turn|start|save|upload|attach|delete|trash)\b|\w+\s+(?:it|them)\b)/i;
 // Words that only ever mean files. "music", "photos", "slides" alone can be an app ("open Apple Music"), so they need more.
+// ponytail: a short list of things "find my …" means on a Mac that aren't files (Find My, the way); grow it when one shows up.
+const NAMED = /^\s*my\s+(?!(?:i?phone|ipad|mac|macbook|watch|airpods|keys?|car|wallet|friends?|family|location|devices?|way)\b)[\p{L}\p{N}'-]+(?:\s+(?!(?:on|at|to|for|with|from|and|or|in|about|is|are)\b)[\p{L}\p{N}'-]+){0,2}\s*$/iu;
 const FILE_WORD = /\b(?:files?|folders?|director(?:y|ies)|pdfs?|docx?|xlsx?|csv|pptx?|jpe?gs?|pngs?|heic|mp3s?|mp4s?|movs?|zips?|spreadsheets?)\b/i;
 // "open my Downloads folder" → ~/Downloads itself. Music, Pictures and Movies need the word "folder" (they're apps too).
 const HOME_DIR = /^(?:my\s+|the\s+)?(?:(downloads|documents|desktop)(?:\s+folder)?|(downloads|documents|desktop|pictures|music|movies)\s+folder)$/i;
@@ -69,7 +71,9 @@ export function fileIntent(text) {
   const kind = KINDS.find(([, re]) => re.test(rest))?.[0] ?? null;
   const shot = /\bscreenshots?\b|\bscreen shots?\b/i.test(rest);
   const src = shot ? 'screenshot' : kind !== 'folder' && (lead[2] || /\bdownload(?:s|ed)?\b/i.test(rest)) ? 'downloads' : inDir ? inDir[1].toLowerCase() : null;
-  if (!src && !FILE_WORD.test(rest) && !(kind && (w || (/\b(?:my|the)\b/i.test(rest) && !/\bapps?\b/i.test(rest))))) return null;
+  // "find my resume": a find word plus "my" and a name of one to three words is a search by name.
+  const named = /^(?:find|search for|look for|locate)$/i.test(lead[1] ?? '') && NAMED.test(rest);
+  if (!src && !named && !FILE_WORD.test(rest) && !(kind && (w || (/\b(?:my|the)\b/i.test(rest) && !/\bapps?\b/i.test(rest))))) return null;
   const newest = /\b(?:newest|latest|last|most recent|recent)\b/i.test(rest);
   const verb = lead[1]?.toLowerCase() === 'open' || (newest && /^show/i.test(lead[1] ?? '')) ? 'open' : 'find';
   const query = clean1(rest.replace(/\bscreen shots?\b/gi, ' ').replace(NOISE, ' ')).replace(/[^\p{L}\p{N}\s._'-]/gu, ' ').replace(/\s+/g, ' ').trim();
