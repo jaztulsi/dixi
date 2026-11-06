@@ -17,7 +17,7 @@ const STATES = {
   acting: { state: 'acting', title: 'Dixi is on it', steps: [{ label: 'Attaching Resume.pdf in Mail', state: 'running' }] },
   done: { state: 'done', title: 'Moved', text: 'Moved Resume.pdf to Documents', undo: true },
   error: { state: 'error', title: 'Dixi', text: "Couldn't reach Safari. Try again in a moment." },
-  'done-card': { state: 'done', title: 'Dixi', text: 'Your next meeting is Design review at 3:30 with Priya and Tom, in the 4th floor room. You have 40 minutes until then.' },
+  'done-card': { state: 'done', title: 'Next meeting', text: 'Your next meeting is Design review at 3:30 with Priya and Tom, in the 4th floor room. You have 40 minutes until then.' },
 };
 // Shot-only stand-ins drawn under the transparent overlay: a desktop, a menu bar, and the hardware notch.
 const desk = (theme, notch) => `(() => { const d = document.createElement('div'); d.id = 'desk';

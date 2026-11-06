@@ -226,8 +226,9 @@ const toLocal = (shot, [x, y]) => ({ x: Math.round((x * shot.bounds.width) / sho
 const PRESS = { name: 'press', description: 'Press a control from the latest numbered list of controls (a button, link, menu item, tab or checkbox), or put the cursor in a listed text box. Exact: use it instead of clicking coordinates whenever the control is listed.',
   input_schema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: { type: 'integer', description: 'The number in the list' } } } };
 const TALK_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['answer', 'steps', 'marks'],
+  type: 'object', additionalProperties: false, required: ['title', 'answer', 'steps', 'marks'],
   properties: {
+    title: { type: 'string', description: '2-4 words naming what the answer is about, e.g. "Next meeting" or "Sent to Alex"' },
     answer: { type: 'string' },
     steps: { type: 'array', items: { type: 'string' } },
     marks: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['kind', 'x', 'y', 'w', 'h', 'label'],
@@ -417,7 +418,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const marks = (r.marks ?? []).slice(0, 6).map((m) => ({ ...m, ...toLocal(shot, [m.x, m.y]), w: (m.w * shot.bounds.width) / shot.w, h: (m.h * shot.bounds.height) / shot.h }));
     // Guardian's warning goes first, in the same line (a second say() would cut the first one off).
     const warn = found[0] ? `${found[0].say} ` : '';
-    show({ state: 'done', title: found[0] ? 'Dixi Guardian' : 'Dixi', text: warn + r.answer, steps: (r.steps ?? []).slice(0, 6).map((label, i) => ({ label, state: i === 0 ? 'running' : 'queued' })), linger: 14000 });
+    show({ state: 'done', title: found[0] ? 'Dixi Guardian' : r.title || 'Dixi', text: warn + r.answer, steps: (r.steps ?? []).slice(0, 6).map((label, i) => ({ label, state: i === 0 ? 'running' : 'queued' })), linger: 14000 });
     ui('ew:marks', marks);
     say(warn + (r.steps?.length ? `${r.answer} Say “Dixi, do it” and I'll do it for you.` : r.answer));
   }
@@ -1454,7 +1455,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // The agent's own clicks land on real screen points, the panel included: a press on Yes within half a
   // second of one is the agent's, not yours.
   ipcMain.on('ew:approve', (e, id, ok) => { if (fromOverlay(e) && Date.now() - (state.lastSynthetic ?? 0) > 500) approvals.get(Number(id))?.(Boolean(ok)); });
-  ipcMain.on('ew:stop', (e) => { if (fromOverlay(e)) kill(); });
+  ipcMain.on('ew:stop', (e) => { if (fromOverlay(e)) kill(); });   // ponytail: the island has no stop button (⌥Space or the menu bar stops); kept for any page that sends it
   ipcMain.on('ew:mouse', (e, inside) => { if (fromOverlay(e)) state.overlay.setIgnoreMouseEvents(!inside, { forward: true }); });
   ipcMain.on('ew:undo', (e) => { if (fromOverlay(e)) run('undo').catch(() => {}); });
 

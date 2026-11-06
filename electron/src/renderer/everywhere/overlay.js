@@ -62,6 +62,7 @@ const showMore = () => { more.hidden = pill.hidden || !($('full').textContent ||
 
 // A Guardian stop is a state with guard: true; it gets its own low tone and is announced at once.
 let last = 'idle';
+const brief = (t) => { const w = String(t).trim().split(/\s+/); return w.length > 4 ? `${w.slice(0, 4).join(' ')}…` : w.join(' '); };
 window.ew.on('ew:state', (s) => {
   const now = s.guard ? 'guard' : s.state;
   earcon(earconFor(last, now));
@@ -76,8 +77,11 @@ window.ew.on('ew:state', (s) => {
   const line = (view === 'acting' ? running || s.text || s.title : s.text || (view === 'done' || view === 'error' ? s.title : '')) ?? '';
   $('text').textContent = String(line).replace(/\s+/g, ' ').trim();
   $('undo').hidden = !(view === 'done' && s.undo);
-  // The whole answer goes in the card when one line can't hold it.
-  $('full').textContent = (view === 'done' || view === 'error') && $('text').scrollWidth > $('text').clientWidth ? s.text ?? '' : '';
+  // The whole answer goes in the card when one line can't hold it; then the island says only what it's about
+  // (✓ and a few words of the title), so the same sentence never shows twice.
+  const card = (view === 'done' || view === 'error') && $('text').scrollWidth > $('text').clientWidth;
+  $('full').textContent = card ? s.text ?? '' : '';
+  if (card) $('text').textContent = brief(s.title || (view === 'done' ? 'Done' : 'Error'));
   $('steps').innerHTML = (s.steps ?? []).length > 1 ? s.steps.map((x) => `<li data-state="${esc(x.state)}">${esc(x.label)}</li>`).join('') : '';
   $('hive').innerHTML = (s.hive ?? []).map((x) => `<li data-status="${esc(x.status)}"><b>${esc(x.task.slice(0, 70))}</b><span>${esc(x.step ?? '')}</span></li>`).join('');
   showMore();
