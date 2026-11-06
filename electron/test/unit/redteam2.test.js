@@ -83,7 +83,7 @@ const harness = (async () => {
   quiet = () => ons['everywhere:speaking']?.(false);
   const win = mainWin = { isDestroyed: () => false, webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:browse') { events.push(`browse ${d.text}`); setTimeout(() => { events.push(`done ${d.text}`); ons['everywhere:browsed'](d.id, true, ''); }, 30); } if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
   setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
-    userData: (rt2Dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-'))), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
+    userData: (rt2Dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-'))), trashDir: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-trash-')), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
   return (text) => handlers['everywhere:run'](text);
 })();
 async function agentDoes(calls, mac, said = 'organize these notes for me') {
@@ -336,4 +336,15 @@ test('A1: a crashed Dixi window never leaves Esc held', mac, async () => {
   appOn['render-process-gone']({}, mainWin.webContents);
   assert.deepEqual(released, ['Escape'], 'the main window crashed mid-session: Esc is released');
   await press();
+});
+
+test('"clear my activity" just clears it (no question) and "undo that" brings it back', mac, async () => {
+  const f = path.join(rt2Dir, 'activity.jsonl');
+  fs.appendFileSync(f, JSON.stringify({ t: 1, kind: 'done', text: 'kept for undo' }) + '\n');
+  await agentDoes([], {}, 'clear my activity');
+  assert.equal(asked.length, 0, 'nothing was asked');
+  assert.ok(!fs.existsSync(f), 'cleared');
+  assert.ok(spoken.some((x) => /undo that/.test(x)), 'and Undo was offered');
+  await agentDoes([], {}, 'undo that');
+  assert.match(fs.readFileSync(f, 'utf8'), /kept for undo/, 'back');
 });
