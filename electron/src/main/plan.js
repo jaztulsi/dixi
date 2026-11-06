@@ -9,7 +9,7 @@
 // The model brings the app knowledge ("text Mom" is Messages); this file names no apps, sites or phrases.
 import { tokens } from '../renderer/core/interpret.js';
 import { split } from '../renderer/core/everywhere-words.js';
-import { desktopIntent } from './desktop.js';
+import { desktopIntent, typeIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
 import { fileIntent } from './files.js';
 import { matchCommand } from './commands.js';
@@ -20,7 +20,8 @@ import { unsafe } from './safesite.js';
 export { split };
 
 // ---- the instant paths (no AI, no picture) ----
-const OPEN_APP = /^(?:please\s+)?(?:open|launch|start)\s+(?:up\s+)?(?:the\s+|my\s+)?(.+?)(?:\s+app)?[.!]?$/i;
+// "switch to Safari", "go back to Mail", "bring up Notes": only ever an installed app's exact name (instantOf checks), so "go to the Times website" stays a link.
+const OPEN_APP = /^(?:please\s+)?(?:open|launch|start|bring|switch\s+(?:over\s+|back\s+)?to|go\s+(?:back\s+)?to)\s+(?:up\s+)?(?:the\s+|my\s+)?(.+?)(?:\s+app)?[.!]?$/i;
 const lower = (s) => String(s ?? '').toLowerCase().trim();
 
 /** What Dixi can do with this clause alone, instantly, or null. `filesBefore`: a file search came earlier. */
@@ -30,6 +31,8 @@ export function instantOf(clause, { apps = [], commands = [], filesBefore = fals
   if (mine && mine.action !== 'task' && mine.action !== 'skill') return { kind: 'command', command: mine };
   const d = desktopIntent(c);
   if (d) return { kind: 'desktop', intent: d };
+  const ty = typeIntent(c);
+  if (ty) return { kind: 'type', text: ty };
   const q = quickIntent(c);
   if (q) return { kind: 'quick', intent: q };
   // An installed app by its exact name, before files ("open Music" is the app, not a song file).

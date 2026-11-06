@@ -126,6 +126,14 @@ test('P4: a control nobody can read is refused, even in an ordinary app, without
   assert.ok(spoken.some((s) => /can't tell what that button does/.test(s)), 'and the reason was said');
 });
 
+test('"type hello world" types those words as said: no model call, the field checks still apply', mac, async () => {
+  await agentDoes([], {}, 'type hello world');
+  assert.deepEqual(done.filter(([w]) => w === 'type'), [['type', 'hello world']]);
+  assert.equal(requests.length, 0, 'no AI call');
+  await agentDoes([], { box: { role: 'AXTextField', subrole: 'AXSecureTextField', labels: ['Password'], pid: OTHER } }, 'type hunter2');
+  assert.ok(!done.some(([w]) => w === 'type'), 'never into a password box');
+});
+
 test('"click X" by name: pressed when the words name it, skipped with one line when they do not, never asked', mac, async () => {
   answer = () => true;   // a yes waiting here must not be what lets a press through
   const SEND = { ...SAVE, labels: ['Send'] }, WIDE = { ...SAVE, labels: ['Delete Account'] };
