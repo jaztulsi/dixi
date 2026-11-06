@@ -319,6 +319,7 @@ export class VoiceAgent {
     if (json.event === 'EndOfTurn' || json.event === 'EagerEndOfTurn') {
       const wait = json.now ? 0 : this.holdMS - (Date.now() - (this.wordsAt?.turn === turn ? this.wordsAt.at : 0));
       drop();
+      if (wait <= 0 && json.event === 'EagerEndOfTurn') this.deepgram?.control?.({ type: 'TurnDone', turn: Math.max(json.turn_index, this.joined?.from ?? -1) });   // done before Flux said so: a drop mustn't replay it
       if (wait > 0) {
         const ended = json, h = this.hold = { turn, text, timer: setTimeout(() => { if (this.hold === h) { this.hold = null; this.handleTurn({ ...ended, transcript: text, turn_index: turn, now: true }); } }, wait) };
         json = { ...json, event: 'Update' };
