@@ -44,7 +44,7 @@ export class Speaker {
       const end = () => { URL.revokeObjectURL(url); done(); };
       a.onended = end; a.onerror = end;
       a.onplaying = () => this.onSpeaking?.(true);
-      a.play().catch(end);
+      if (!this.paused) a.play().catch(end);   // hushed while the voice was being made: resume() plays it
       return;
     }
     if (!this.synth) { done(); return; }
@@ -56,12 +56,17 @@ export class Speaker {
     this.synth.speak(u);
   }
 
+  /** Barge-in: hush at once, keep the place. ponytail: the page's <audio> only; speechSynthesis
+   *  pause() can stick across utterances, so the OS voice talks on until stop(). */
+  pause() { if (this.speaking && !this.paused) { this.paused = true; this.audio?.pause(); } }
+  resume() { if (!this.paused) return; this.paused = false; this.audio?.play().catch(() => this.stop()); }
+
   /** Cancelled speech has no echo tail: listen again at once (barge-in). */
   stop() {
     this.seq++;
     this.audio?.pause(); this.audio = null;
     this.synth?.cancel();
-    this.speaking = false; this.deafUntil = 0;
+    this.speaking = false; this.deafUntil = 0; this.paused = false;
     const last = this.spans.at(-1); if (last && last.end == null) last.end = Date.now();
     this.onSpeaking?.(false);
   }

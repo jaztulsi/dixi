@@ -62,6 +62,7 @@ export function afterWakeWord(text) {
   return rest;
 }
 
+const HUSH_MS = 600;   // a hushed reply carries on after this long with no words from you
 const STOP = /^(?:stop|cancel|never ?mind|stop (?:it|that|everything)|cancel (?:it|that))[.!]?$/i;
 // Right after Dixi chose between results: take the next one instead.
 const OTHER = /^(?:no[,.]? )?(?:(?:the )?(?:next|other)(?: one)?|not that one)[.!]?$/i;
@@ -328,6 +329,9 @@ export class VoiceAgent {
     return { json, text, turn };
   }
 
+  hush() { clearTimeout(this.hushT); this.speaker.pause?.(); this.hushT = setTimeout(() => this.speaker.resume?.(), HUSH_MS); }
+  unhush() { clearTimeout(this.hushT); this.speaker.resume?.(); }
+
   handleTurn(message) {
     const { json, text, turn } = this.endpoint(message, this.ownWords((message.transcript ?? '').trim()), message.turn_index ?? 0);
     // Which turns began while Dixi was still talking: a yes to "Press Send?" must start after the question.
@@ -340,9 +344,15 @@ export class VoiceAgent {
       // is one stray word (a TV, the tail of its own sentence) unless Dixi asked a question. Anything
       // else is you talking over it.
       const named = afterWakeWord(text) != null;
-      if (!named && (!this.clarify && tokens(text).length < 2)) return;
       // (Its own lines can contain "Dixi": "…, Dixi needs permission". Still its own words.)
-      if ([this.speaker.lastText, ...(this.speaker.recentText ?? [])].some((s) => isEcho(text, s ?? ''))) return;
+      const echo = Boolean(text) && [this.speaker.lastText, ...(this.speaker.recentText ?? [])].some((s) => isEcho(text, s ?? ''));
+      // Barge-in: a turn starting while Dixi talks hushes it at once, keeping its place. Its own words
+      // coming back, the turn ending, or nothing more for HUSH_MS → it carries on; your words → it stops.
+      if (echo || !text || (!named && !this.clarify && tokens(text).length < 2)) {
+        if (echo || json.event === 'EndOfTurn') this.unhush(); else if (text || json.event === 'StartOfTurn') this.hush();
+        return;
+      }
+      clearTimeout(this.hushT);
       this.speaker.stop();
     }
     // ...and after it stops: speech-to-text can deliver Dixi's own words seconds late. Words that repeat

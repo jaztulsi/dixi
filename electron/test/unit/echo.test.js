@@ -137,3 +137,33 @@ test('the short echo tail is only for audio played through the page; speechSynth
   await sleep(1000);
   assert.equal(os.isBusy(), false);
 });
+
+test('barge-in: a turn starting over Dixi hushes it at once; its own echo or silence resumes it; your words stop it', async () => {
+  class FakeAudio { constructor() { this.paused = true; FakeAudio.last = this; } play() { this.paused = false; this.onplaying?.(); return Promise.resolve(); } pause() { this.paused = true; } }
+  const real = globalThis.Audio; globalThis.Audio = FakeAudio;
+  try {
+    const talking = async () => { const s = new Speaker({ synth: null, tts: async () => new Uint8Array([0x52, 0x49, 0, 0]) }); s.say(ANSWER); await sleep(5); assert.equal(FakeAudio.last.paused, false); return s; };
+    const msg = (r, event, turn_index, transcript = '') => r.v.handleMessage(JSON.stringify({ type: 'TurnInfo', event, turn_index, transcript }));
+
+    let s = await talking(), r = rig(s, { wake: false });
+    const t0 = performance.now(); msg(r, 'StartOfTurn', 1);
+    const ms = performance.now() - t0;
+    assert.ok(FakeAudio.last.paused && ms < 150, `hushed in ${ms.toFixed(1)} ms`);
+    msg(r, 'Update', 1, 'the history essay is due Friday');   // its own words through the mic
+    assert.equal(FakeAudio.last.paused, false, 'its echo: it carries on');
+    assert.ok(s.isBusy());
+
+    s = await talking(); r = rig(s, { wake: false });
+    msg(r, 'StartOfTurn', 1); msg(r, 'Update', 1, 'yeah');   // one stray word: still hushed
+    assert.equal(FakeAudio.last.paused, true);
+    await sleep(700);
+    assert.equal(FakeAudio.last.paused, false, 'nothing more: it carries on from where it was');
+
+    s = await talking(); r = rig(s, { wake: false });
+    msg(r, 'StartOfTurn', 1); msg(r, 'Update', 1, 'open Safari');
+    assert.equal(s.isBusy(), false, 'your words: it stopped for good and listens');
+    msg(r, 'EndOfTurn', 1, 'Open Safari.');
+    await sleep(100);
+    assert.deepEqual(r.sent, ['Open Safari.']);
+  } finally { globalThis.Audio = real; }
+});
