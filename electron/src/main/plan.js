@@ -20,7 +20,8 @@ import { unsafe } from './safesite.js';
 export { split };
 
 // ---- the instant paths (no AI, no picture) ----
-const OPEN_APP = /^(?:please\s+)?(?:open|launch|start)\s+(?:up\s+)?(?:the\s+|my\s+)?(.+?)(?:\s+app)?[.!]?$/i;
+// "switch to Safari", "go back to Mail", "bring up Notes": only ever an installed app's exact name (instantOf checks), so "go to the Times website" stays a link.
+const OPEN_APP = /^(?:please\s+)?(?:open|launch|start|bring|switch\s+(?:over\s+|back\s+)?to|go\s+(?:back\s+)?to)\s+(?:up\s+)?(?:the\s+|my\s+)?(.+?)(?:\s+app)?[.!]?$/i;
 const lower = (s) => String(s ?? '').toLowerCase().trim();
 
 /** What Dixi can do with this clause alone, instantly, or null. `filesBefore`: a file search came earlier. */
