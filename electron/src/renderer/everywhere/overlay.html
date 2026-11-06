@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;">
   <title>Dixi Everywhere</title>
+  <link rel="stylesheet" href="../ui/tokens.css">
   <link rel="stylesheet" href="overlay.css">
 </head>
 <body>
@@ -11,31 +12,34 @@
   <div id="cursor" class="cursor" aria-hidden="true"></div>
 
   <!-- What screen readers hear: answers and progress politely; approval cards and Guardian stops at once.
-       Kept outside the pill, so they exist (and stay live) while the pill is hidden. -->
+       Kept outside the island, so they exist (and stay live) while it is hidden. -->
   <p id="polite" class="sr" aria-live="polite"></p>
   <p id="assertive" class="sr" aria-live="assertive"></p>
 
-  <section id="pill" class="glass" data-state="idle" aria-label="Dixi" hidden>
-    <div class="backdrop" aria-hidden="true"></div>
-    <div class="body">
-      <header>
-        <span id="buddy" class="buddy"></span>
-        <div class="heading">
-          <strong id="title">Dixi</strong>
-          <small id="app"></small>
-        </div>
-        <button id="close" class="icon" aria-label="Stop">✕</button>
-      </header>
+  <!-- The island: opaque black, grown out of the notch (or a pill at top-center without one). One line. -->
+  <section id="pill" class="island" data-state="idle" aria-label="Dixi" hidden>
+    <div class="row">
+      <span class="lead" aria-hidden="true">
+        <span class="wave"><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="dot"></span>
+        <svg class="check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg>
+      </span>
       <p id="text"></p>
-      <p id="hint" class="hint" hidden>Press ⌥Space again to stop</p>
-      <ol id="steps"></ol>
-      <ul id="hive"></ul>
-      <div id="card" role="alertdialog" aria-labelledby="question" hidden>
-        <p id="question"></p>
-        <div class="choices">
-          <button id="no" class="choice" aria-keyshortcuts="N Escape">No</button>
-          <button id="yes" class="choice primary" aria-keyshortcuts="Y Enter">Yes</button>
-        </div>
+      <button id="undo" class="quiet" hidden>Undo</button>
+    </div>
+    <i class="shimmer" aria-hidden="true"></i>
+  </section>
+
+  <!-- The card slot under the island: a longer answer, steps, the Claude team; approval only in careful mode. -->
+  <section id="more" class="card" hidden>
+    <p id="full"></p>
+    <ol id="steps"></ol>
+    <ul id="hive"></ul>
+    <div id="ask" role="alertdialog" aria-labelledby="question" hidden>
+      <p id="question"></p>
+      <div class="choices">
+        <button id="no" class="choice" aria-keyshortcuts="N Escape">No</button>
+        <button id="yes" class="choice primary" aria-keyshortcuts="Y Enter">Yes</button>
       </div>
     </div>
   </section>
