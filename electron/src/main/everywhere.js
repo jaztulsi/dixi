@@ -421,7 +421,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const warn = found[0] ? `${found[0].say} ` : '';
     show({ state: 'done', title: found[0] ? 'Dixi Guardian' : r.title || 'Dixi', text: warn + r.answer, steps: (r.steps ?? []).slice(0, 6).map((label, i) => ({ label, state: i === 0 ? 'running' : 'queued' })), linger: 14000 });
     ui('ew:marks', marks);
-    say(warn + (r.steps?.length ? `${r.answer} Say “Dixi, do it” and I'll do it for you.` : r.answer));
+    say(warn + r.answer);   // no "say do it and I'll do it": that's a question. "Do it" still works (DO_IT)
   }
 
   // ---- approvals: one card at a time; your voice or the button, whichever comes first ----
@@ -730,7 +730,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (!r || Date.now() - r.at > 30 * 60000) { say('Ask me to do something first. When it works, say “save that as a skill”.'); return; }
     try {
       const s = saveSkill(userData, { name, said: r.said, steps: r.steps, app: r.app, url: r.url });
-      say(`Saved. Say “${s.name}” and I'll do it again, with no AI. I'll still ask before anything risky.`);
+      say(`Saved. Say “${s.name}” and I'll do it again, with no AI.`);
       show({ state: 'done', title: 'Skill saved', text: `“${s.name}” · ${s.steps.length} steps`, linger: 5000 });
     } catch (err) { say(err.message); show({ state: 'error', title: "Couldn't save that", text: err.message }); }
   }
