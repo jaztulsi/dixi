@@ -1463,7 +1463,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const lineOf = (e) => (e.kind === 'run' ? `You asked: “${e.text}”` : e.kind === 'step' ? cap(`${e.verb}${e.chars ? ` ${e.chars} characters` : ''}${e.label ? ` “${e.label}”` : ''}${e.app ? ` in ${e.app}` : ''}`)
     : e.kind === 'ask' ? `Asked “${e.q}”: ${e.a}` : e.kind === 'guardian' ? `Guardian: ${e.text}` : e.text ?? '');
-  const appNames = () => [...new Set(['/Applications', '/System/Applications', '/System/Applications/Utilities', path.join(os.homedir(), 'Applications')]
+  const appNames = (dirs = ['/Applications', '/System/Applications', '/System/Applications/Utilities', path.join(os.homedir(), 'Applications')]) => [...new Set(dirs
     .flatMap((dir) => { try { return fs.readdirSync(dir).filter((f) => f.endsWith('.app')).map((f) => f.slice(0, -4)); } catch { return []; } }))].sort((a, b) => a.localeCompare(b));
   const dashApi = {
     state: () => ({
@@ -1492,7 +1492,9 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const openDash = () => openDashboard({ here, api: dashApi });
 
   // ---- IPC: from Dixi's own UI (checked by main.js) and from the overlay (checked here) ----
-  handle('everywhere:enabled', () => ({ listening: listening(), phrases: phrases() }));
+  // Speech-to-text keyterms: the apps you installed ("Obsidian", "Roblox": brand names it mishears), not Apple's (plain words).
+  const keyApps = () => appNames(['/Applications', path.join(os.homedir(), 'Applications')]).map((n) => n.replace(/\s*\(.*?\)|\.us$|\s+\d+$/g, '').trim()).filter((n) => n && n.length <= 20);
+  handle('everywhere:enabled', () => ({ listening: listening(), phrases: phrases(), apps: keyApps() }));
   on('everywhere:answer', (id, text) => asks.get(Number(id))?.(text));
   handle('everywhere:run', (text, mode) => run(String(text ?? '').slice(0, 4000), mode));
   on('everywhere:speaking', (talking) => { if (talking) mark(state.runId, 'first_audio'); state.talking = Boolean(talking); if (!talking) state.saidAt = 0; ui('ew:speaking', state.talking); trayTitle(); });
