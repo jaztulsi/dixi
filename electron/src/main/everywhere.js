@@ -951,7 +951,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (ai) return await activityTurn(ai);
       const wi = watchIntent(t);   // "tell me when the download finishes"
       if (wi) return watchScreen(wi);
-      const m = await memoryTurn(mem, t, { approve });   // before RECALL and REMEMBER: they match some of these too
+      const m = await memoryTurn(mem, t, { approve: prefs.careful ? approve : async () => true });   // before RECALL and REMEMBER: they match some of these too. Normal mode: done, with Undo
+      if (m?.undo) state.undoLast = { at: Date.now(), run: async () => { m.undo(); return 'Undone. I remember it all again.'; } };
       if (m) { if (m.profile) editProfile(); say(m.say); show({ state: 'done', title: m.title, text: m.text.slice(0, 260), linger: 8000 }); return; }
       if (SKILL_SAVE.test(t)) return saveLast(t.match(SKILL_SAVE)[1]);
       if (SKILL_LIST.test(t)) return listAloud();
@@ -980,10 +981,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         prefs.indexFolders = [...new Set([...(prefs.indexFolders ?? []), dir])]; savePrefs(); learnFolder(dir);
         say(`Reading your ${name} folder now. Ask me about it any time.`); show({ state: 'done', title: 'Indexing', text: dir, linger: 4000 }); return;
       }
-      if (UNDO.test(t) && state.calAdded && Date.now() - state.calAdded.at < 120000 && state.calAdded.at > (state.fileChangeAt ?? 0)) {   // the add just said back
-        const c = state.calAdded; state.calAdded = null;
-        const off = await removeFromCalendar(c);
-        say(off ? 'Undone. It’s off.' : 'I couldn’t find it to take it off.'); show({ state: 'done', title: off ? 'Undone' : 'Calendar', text: off ? 'Taken off.' : 'Not found.', linger: 2500 }); return;
+      if (UNDO.test(t) && state.undoLast && Date.now() - state.undoLast.at < 120000 && state.undoLast.at > (state.fileChangeAt ?? 0)) {   // what was just done without asking (a calendar add, forget everything)
+        const u = state.undoLast; state.undoLast = null;
+        const line = await u.run().catch(() => "I couldn't undo that.");
+        say(line); show({ state: 'done', title: 'Undo', text: line, linger: 2500 }); return;
       }
       if (UNDO.test(t) && Date.now() - (state.fileChangeAt ?? 0) < 120000) {
         const u = await undo.undo().catch(() => null);
@@ -1173,7 +1174,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   async function addEvent(text, shot, ctx, signal) {
     show({ state: 'thinking', text: 'Reading the date…', app: contextLine(ctx) });
     const r = await addToCalendar({ shot, said: text, claude, image, signal, approve, askUser, careful: prefs.careful });
-    if (r.undo) state.calAdded = { ...r.undo, at: Date.now() };
+    if (r.undo) state.undoLast = { at: Date.now(), run: async () => ((await removeFromCalendar(r.undo)) ? 'Undone. It’s off.' : 'I couldn’t find it to take it off.') };
     if (signal.aborted) return;
     show({ state: 'done', title: r.ok ? 'Added' : 'Calendar', text: r.text, linger: 6000 });
     say(r.text);

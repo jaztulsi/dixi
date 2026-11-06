@@ -115,6 +115,8 @@ export function openMemory(file) {
     /** Newest first; `history: true` includes what was superseded. */
     all({ history = false } = {}) { return q(`SELECT ${COLS} FROM fact ${history ? '' : 'WHERE valid_to IS NULL'} ORDER BY at DESC, rowid DESC`).all().map(row); },
     forgetAll() { const { n } = q('SELECT count(*) AS n FROM fact').get(); db.exec('DELETE FROM fact'); last = null; return n; },
+    /** "undo that" after forgetting everything: the rows all() gave back, put back as they were. */
+    restore(rows) { for (const r of [...rows].reverse()) q('INSERT INTO fact (key, value, said, kind, at, valid_to) VALUES (?, ?, ?, ?, ?, ?)').run(r.key, r.value, r.said, r.kind, r.at, r.until ?? null); },   // oldest first: the same order as before
     close() { db.close(); },
   };
 }
@@ -230,13 +232,14 @@ export async function memoryTurn(mem, text, { approve = async () => false } = {}
   const [, what, everything] = t.match(FORGET);
   if (!what && !everything) {   // "forget that"
     const gone = mem.last ? mem.forget(mem.last) : [];
-    return gone.length ? reply(`Okay, I forgot that ${echo(gone[0])}.`, 'Forgotten') : reply('Which one? Say “forget everything about”, and the thing, like “forget everything about CVS”.');
+    return gone.length ? reply(`Okay, I forgot that ${echo(gone[0])}.`, 'Forgotten') : reply('Nothing new since Dixi started. To forget something older, say “forget everything about” and the thing, like “forget everything about CVS”.');
   }
   if (everything || /^(?:me|myself|everything|all)$/i.test(what)) {
     if (!mem.all({ history: true }).length) return reply("I don't remember anything about you yet.");
     if (!(await approve('Forget everything you told me about yourself?'))) return reply('Okay, I kept everything.');
+    const rows = mem.all({ history: true });   // held in memory only, for "undo that"; never written anywhere
     mem.forgetAll();
-    return reply('Done. I forgot everything you told me.', 'Forgotten');
+    return reply('Done. I forgot everything you told me. Say “undo that” to bring it back.', 'Forgotten', undefined, { undo: () => mem.restore(rows) });
   }
   const gone = mem.forget(what);
   return gone.length ? reply(`Okay, I forgot everything about ${you(what)}.`, 'Forgotten', gone.map((f) => `“${core(f.said)}”`).join(' · ')) : reply(`I don't have anything about ${you(what)}.`);
