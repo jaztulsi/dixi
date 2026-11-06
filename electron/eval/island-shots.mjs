@@ -60,6 +60,16 @@ app.whenReady().then(async () => {
     await wc.executeJavaScript(`new Promise((r) => { const f = () => getComputedStyle(document.querySelector('.shimmer')).display === 'block' ? requestAnimationFrame(() => r()) : requestAnimationFrame(f); f(); })`);
     t.push(performance.now() - t0);
   }
+  // listening: IPC → "Listening…" fully shown (the row's opacity reaches 1)
+  const l = [];
+  for (let i = 0; i < 9; i++) {
+    send('ew:state', { state: 'idle' }); await sleep(260);
+    const t0 = performance.now();
+    send('ew:state', { state: 'listening' });
+    await wc.executeJavaScript(`new Promise((r) => { const f = () => getComputedStyle(document.querySelector('.row')).opacity === '1' && !document.querySelector('#pill').hidden ? r() : requestAnimationFrame(f); f(); })`);
+    l.push(performance.now() - t0);
+  }
+  l.sort((a, b) => a - b);
   // idle CPU of the overlay's renderer, 3 s after it went idle
   send('ew:state', { state: 'idle' });
   await sleep(1000);
@@ -70,6 +80,6 @@ app.whenReady().then(async () => {
   send('ew:state', STATES.thinking); await sleep(500); cpu(); await sleep(2000);
   const thinking = cpu();
   t.sort((a, b) => a - b);
-  console.log(JSON.stringify({ shots: shots.length, dir: path.relative(path.resolve(root, '..'), out), thinkingFirstFrameMs: { p50: +t[4].toFixed(1), max: +t[8].toFixed(1) }, cpuPercent: { idle: +idle.toFixed(2), thinking: +thinking.toFixed(2) } }));
+  console.log(JSON.stringify({ shots: shots.length, dir: path.relative(path.resolve(root, '..'), out), thinkingFirstFrameMs: { p50: +t[4].toFixed(1), max: +t[8].toFixed(1) }, listeningFullMs: { p50: +l[4].toFixed(1), max: +l[8].toFixed(1) }, cpuPercent: { idle: +idle.toFixed(2), thinking: +thinking.toFixed(2) } }));
   app.exit(0);
 });
