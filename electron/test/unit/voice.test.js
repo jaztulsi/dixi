@@ -10,7 +10,7 @@ function rig({ reply = null, wake = false } = {}) {
   const llm = { json: async (_s, user, _m, _t, { signal } = {}) => { llmCalls.push(user); await sleep(30); if (signal?.aborted) return null; return reply ?? JSON.stringify({ clarify: '', steps: [{ act: 'open', said: 'Zentora', guess: '', urls: [], query: '', item: '', qty: 0, n: 0, value: '' }] }); } };
   const tabs = { getCurrentURL: () => 'about:blank', activeTab: null, visibleTabs: [], tabList: () => '', dx: async () => '' };
   const executor = { run: async (s) => { runs.push(s); await sleep(10); return { ok: true, message: `did ${s.act}` }; } };
-  const v = new VoiceAgent({ deepgram: null, tabs, llm, tiers: { fast: ['m'], strong: [] }, executor, settings: { requireWakeWord: wake }, speaker: { say: (t) => spoken.push(t), isBusy: () => false, stop() {} } });
+  const v = new VoiceAgent({ deepgram: null, tabs, llm, tiers: { fast: ['m'], strong: [] }, executor, settings: { requireWakeWord: wake }, speaker: { say: (t) => spoken.push(t), isBusy: () => false, stop() {} }, holdMS: 0 });   // the end-of-turn wait: endpoint.test.js
   const turn = (i, events) => { for (const [event, transcript] of events) v.handleMessage(JSON.stringify({ type: 'TurnInfo', event, turn_index: i, transcript })); };
   return { v, runs, asked, spoken, llmCalls, turn };
 }
