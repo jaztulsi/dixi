@@ -63,6 +63,8 @@ const RULES = [
   rule('screenshot', String.raw`(?:take |grab |capture )(?:a |the |me a )?(?:screen ?shot|screen capture)(?: of (?:my|the) (?:screen|desktop))?|screen ?shot(?: (?:my|the) screen)?|capture (?:my |the )?screen`),
   rule('wifi', String.raw`(?:turn|switch|set) (?:on|off) (?:the |my )?wi[- ]?fi|(?:turn|switch|set) (?:the |my )?wi[- ]?fi (?:on|off)|(?:enable|disable) (?:the |my )?wi[- ]?fi|wi[- ]?fi (?:on|off)`, (m) => ({ on: /\b(on|enable)\b/i.test(m[0]) })),
   rule('newwin', String.raw`(?:open|make|create|start|get|give me|show) (?:a |another |one more )?new (${APPNAME}) window|(?:a |another )?new (${APPNAME}) window|(?:open|make|create) (?:a |another )?new window in (${APPNAME})`, (m) => ({ app: (m[1] ?? m[2] ?? m[3]).trim() })),
+  // "start a new note", "open a new tab", "create a new document": the front app's own New key (⌘N, a tab ⌘T).
+  rule('new', String.raw`(?:start|make|create|open|begin|get) (?:a |an |another )?new (?:blank |empty )?([a-z]+)`, (m) => ({ what: m[1].toLowerCase() })),
   rule('quit', String.raw`(?:force )?quit (?:the )?(${APPNAME})(?: app| application)?`, (m) => ({ app: m[1].trim() })),
 ];
 const mediaApp = (s) => (/spotify/i.test(s) ? 'Spotify' : /apple music/i.test(s) ? 'Music' : undefined);
@@ -98,6 +100,7 @@ export function desktopIntent(text) {
     }
     if (verb === 'timer' && !a.ms) return null;
     if (verb === 'quit' && NOT_APPS.test(a.app)) return null;
+    if (verb === 'new' && /^(?:folder|password|passcode|account|user|profile|card|line|paragraph|one)$/.test(a.what)) return null;   // not a New-key thing
     if (verb === 'newwin' && (NOT_APPS.test(a.app) || /^(?:private|incognito|guest|browser|web|tab)$/i.test(a.app))) return null;   // a kind of window, not an app
     return { verb, ...a };
   }
@@ -150,6 +153,16 @@ const live = [];
 let seq = 0;
 const MEDIA_APPS = ['Spotify', 'Music'];   // ponytail: the first one running wins; "Spotify"/"Apple Music" in your words picks one
 const MEDIA_CMD = { playpause: 'playpause', play: 'play', pause: 'pause', next: 'next track', previous: 'previous track' };
+/** Opens `app` and waits for it to be in front (50 ms ticks, up to 2 s): its front info; 'none' when there's no
+ *  such app; null when it never came. Keys go only to the app that was meant. */
+export async function toFront(app, d = {}) {
+  const { open = openApp, front = frontApp, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = d;
+  if (!(await open(app))) return 'none';
+  const same = (n) => n && n.toLowerCase().replace(/\.app$/, '') === app.toLowerCase();
+  let f = await front();
+  for (let t = 0; t < 40 && !same(f?.name); t++) { await wait(50); f = await front(); }
+  return same(f?.name) ? f : null;
+}
 const out = (say, title = 'Dixi') => ({ say, title, text: say });
 
 /** Run one intent from desktopIntent(). Returns { say, title, text }; never throws.
@@ -333,14 +346,17 @@ const DO = {
   },
   // "open a new Finder window": the app in front, then its own New Window key (⌘N). Never pressed into another app.
   async newwin(i, d) {
-    const { open = openApp, front = frontApp, press = d.key ?? key, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = d;
-    if (!(await open(i.app))) return out(`There's no app called ${i.app} on this Mac.`, 'Window');
-    const same = (n) => n && n.toLowerCase().replace(/\.app$/, '') === i.app.toLowerCase();
-    let f = await front();
-    for (let t = 0; t < 10 && !same(f.name); t++) { await wait(100); f = await front(); }
-    if (!same(f.name)) return out(`${i.app} didn't come to the front, so I didn't press anything.`, 'Window');
-    await press('cmd+n');
+    const f = await toFront(i.app, d);
+    if (f === 'none') return out(`There's no app called ${i.app} on this Mac.`, 'Window');
+    if (!f) return out(`${i.app} didn't come to the front, so I didn't press anything.`, 'Window');
+    await (d.key ?? key)('cmd+n');
     return out(`New ${f.name} window.`, 'Window');
+  },
+  // After "open Notes", i.app: Notes must be in front first, so ⌘N never lands in another app.
+  async new(i, d) {
+    if (i.app && !(await toFront(i.app, d))?.name) return { ...out(`${i.app} didn't come to the front, so I didn't press anything.`, 'New'), ok: false };
+    await (d.key ?? key)(i.what === 'tab' ? 'cmd+t' : 'cmd+n');
+    return out(`New ${i.what}.`, 'New');
   },
   async quit(i, d) {
     const name = String(i.app ?? '');

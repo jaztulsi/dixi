@@ -26,7 +26,7 @@ const CODE = [
   ['open Claude', ['open']], ['what time is it', ['quick']], ['set a timer for 10 minutes', ['desktop']],
   ['snap this window left', ['desktop']], ['lock the screen', ['desktop']], ['find my tax PDF from last week', ['file']],
   ['my bank', ['command']], ['go to youtube.com', ['desktop']], ['pause the music', ['desktop']], ['next song', ['desktop']],
-  ['take a screenshot', ['desktop']], ['switch to Safari', ['open']], ['go back to Mail', ['open']], ['type hello world', ['type']], ['find my resume', ['file']], ["what's on my screen", ['read']],
+  ['take a screenshot', ['desktop']], ['switch to Safari', ['open']], ['go back to Mail', ['open']], ['type hello world', ['type']], ['find my resume', ['file']], ["what's on my screen", ['read']], ['start a new note', ['desktop']],
   // compound
   ['volume down and open notes', ['desktop', 'open']], ['open Safari, then set a timer for 5 minutes', ['open', 'desktop']],
   ['mute; then lock the screen', ['desktop', 'desktop']], ['what time is it and set a timer for 20 minutes', ['quick', 'desktop']],
@@ -34,6 +34,7 @@ const CODE = [
   ['find my resume PDF and open it', ['file', 'file']], ['turn the volume up, then go to youtube.com', ['desktop', 'desktop']],
   ['set the volume to 20 and then open Mail', ['desktop', 'open']], ['take a screenshot after that lock the screen', ['desktop', 'desktop']],
   ['open Messages, then my bank', ['open', 'command']],
+  ['open Notes and start a new note', ['open', 'desktop']], ['open Notes and type hello', ['open', 'type']],
 ];
 test(`the code path: ${CODE.length} commands (${CODE.filter(([, k]) => k.length > 1).length} compound) with no AI`, async () => {
   for (const [said, kinds] of CODE) {
@@ -43,6 +44,7 @@ test(`the code path: ${CODE.length} commands (${CODE.filter(([, k]) => k.length 
     assert.ok(r.steps.every((s) => s.do === 'instant'), said);
   }
   assert.equal((await plan('open Music', {}, deps(never))).steps[0].app, 'Music');   // the app, not a song file
+  assert.equal((await plan('open Notes and start a new note', {}, deps(never))).steps[1].intent.app, 'Notes', 'the key waits for Notes');
   for (const c of ['find my phone', 'find my way home', 'type a reply to Sam', 'type my address', 'type it', 'switch to the New York Times']) assert.equal(instantOf(c, { apps }), null, c);   // written first, or not an app
 });
 
@@ -66,16 +68,16 @@ test('a command code cannot do alone goes to ONE planner call, with a short prom
 
 test('instant clauses stay instant inside a planned command, and are re-checked', async () => {
   let body;
-  const r = await plan('Turn the volume down, open my notes, and start a new note', {}, deps(async (b) => { body = b; return reply([
+  const r = await plan('Turn the volume down, open my notes, and write a note about the trip', {}, deps(async (b) => { body = b; return reply([
     S({ do: 'instant', clause: 'Turn the volume down' }), S({ do: 'instant', clause: 'open my notes' }),
-    S({ do: 'script', clause: 'start a new note', app: 'Notes', lang: 'applescript', code: 'tell application "Notes" to make new note with properties {body:""}' }),
+    S({ do: 'script', clause: 'write a note about the trip', app: 'Notes', lang: 'applescript', code: 'tell application "Notes" to make new note with properties {body:""}' }),
   ])(); }));
   assert.deepEqual(r.steps.map((s) => s.kind ?? s.do), ['desktop', 'open', 'script']);
-  assert.match(body.messages[0].content, /\nPlan: "start a new note"$/);   // the model plans only what code couldn't
+  assert.match(body.messages[0].content, /\nPlan: "write a note about the trip"$/);   // the model plans only what code couldn't
   // ...and code puts its own steps back in spoken order around the model's.
-  const only = await plan('Turn the volume down, start a new note, then lock the screen', {}, deps(reply([{ do: 'script', clause: 'start a new note', app: 'Notes', code: 'tell application "Notes" to make new note' }])));
+  const only = await plan('Turn the volume down, write a note about the trip, then lock the screen', {}, deps(reply([{ do: 'script', clause: 'write a note about the trip', app: 'Notes', code: 'tell application "Notes" to make new note' }])));
   assert.deepEqual(only.steps.map((s) => s.kind ?? s.do), ['desktop', 'script', 'desktop']);
-  const fake = check([S({ do: 'instant', clause: 'start a new note' })], 'start a new note', { apps });
+  const fake = check([S({ do: 'instant', clause: 'write a note about the trip' })], 'write a note about the trip', { apps });
   assert.equal(fake.steps[0].do, 'computer');   // the model said instant, code says no
 });
 
@@ -164,21 +166,21 @@ test('a reply cut off mid-JSON keeps its finished steps; anything the model skip
 
 test('streamed: each step starts as soon as it and everything said before it is settled', async () => {
   const log = [];
-  const steps = [{ do: 'script', clause: 'start a new note', app: 'Notes', code: 'tell application "Notes" to make new note' }];
+  const steps = [{ do: 'script', clause: 'write a note about the trip', app: 'Notes', code: 'tell application "Notes" to make new note' }];
   const full = JSON.stringify({ steps: [...steps, { do: 'web', clause: 'order a pizza' }] });
   const model = async (b, signal, partial) => {
     for (const n of [12, full.indexOf('},{') + 2, full.length - 3]) { log.push(`chunk ${n}`); partial(full.slice(0, n)); }
     log.push('done');
     return { content: [{ type: 'text', text: full }] };
   };
-  const r = await plan('Turn the volume down, start a new note, then lock the screen', {}, { ...deps(model), onStep: (s, i) => log.push(`${i} ${s.do}`) });
+  const r = await plan('Turn the volume down, write a note about the trip, then lock the screen', {}, { ...deps(model), onStep: (s, i) => log.push(`${i} ${s.do}`) });
   // The volume (code) and the note (model) start mid-stream; "order a pizza" was never said, so it's dropped; lock waits for the end.
   assert.deepEqual(log, ['chunk 12', `chunk ${full.indexOf('},{') + 2}`, '0 instant', '1 script', `chunk ${full.length - 3}`, 'done', '2 instant']);
   assert.deepEqual(r.steps.map((s) => s.do), ['instant', 'script', 'instant']);
   assert.match(r.why, /not said/);
   // The planner fails after a step has started: that step stays, the rest is still done.
   const n = [];
-  const broke = await plan('start a new note and text Sam I am late', {}, { ...deps(async (b, sg, partial) => { partial(full.slice(0, full.indexOf('},{') + 2)); throw new Error('reset'); }), onStep: (s) => n.push(s.do) });
+  const broke = await plan('write a note about the trip and text Sam I am late', {}, { ...deps(async (b, sg, partial) => { partial(full.slice(0, full.indexOf('},{') + 2)); throw new Error('reset'); }), onStep: (s) => n.push(s.do) });
   assert.deepEqual(n, ['script', 'computer']);
   assert.equal(broke.source, 'model'); assert.match(broke.why, /reset/);
 });
@@ -196,7 +198,7 @@ test('recorded planner replies pass the checks and keep their meaning', async ()
   const { createRequire } = await import('node:module');
   const { apps: live, fixtures } = createRequire(import.meta.url)('../fixtures/plan-live.json');
   const want = {
-    'Turn the volume down, open my notes, and start a new note': ['instant', 'instant', 'script'],
+    'Turn the volume down, open my notes, and start a new note': ['instant', 'instant', 'instant'],
     'buy a bagel from Safeway': ['web'],
     'open Safari and go to the New York Times website': ['instant', 'open'],
     'make a new folder on my desktop called homework': ['script'],

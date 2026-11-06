@@ -38,7 +38,7 @@ import * as brief from './brief.js';
 import { watchIntent, startWatch, stopWatch, isWatching, checkPrompt, CHECK_SCHEMA } from './watch.js';
 import { fileIntent, fileAction } from './files.js';
 import { quickAnswer } from './quick.js';
-import { desktopIntent, typeIntent, runDesktop, exec as desktopExec } from './desktop.js';
+import { desktopIntent, typeIntent, toFront, runDesktop, exec as desktopExec } from './desktop.js';
 import { doctorIntent, diagnose } from './doctor.js';
 import { readIntent, readOut } from './reader.js';
 import { SCAM_CHECK, scamCheck } from './scamcheck.js';
@@ -834,8 +834,11 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         if (r.how) act.log({ kind: 'step', verb: `read the screen by ${r.how}` });
         return r.text ? { ok: true, say: r.say.join(' '), out: r.text } : { ok: false, error: "I couldn't read any text there" };
       }
-      if (s.kind === 'type') { const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why }; }
-      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return { ok: r.ok !== false, say: r.say }; }
+      if (s.kind === 'type') {
+        if (s.app && !(await toFront(s.app, { open: input.openApp, front: input.frontApp }))?.name) return { ok: false, error: `${s.app} didn't come to the front, so I didn't type` };
+        const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why };
+      }
+      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, open: input.openApp, front: input.frontApp, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return r.ok === false ? { ok: false, error: r.say } : { ok: true, say: r.say }; }
       if (s.kind === 'file') {
         const r = await fileAction(s.intent, null, { approve, say, undo });
         if (r?.results) state.filesAt = Date.now();

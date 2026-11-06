@@ -227,6 +227,17 @@ test('"open a new Finder window": the app comes to the front, then ⌘N; never p
   assert.equal((await runDesktop(desktopIntent('open a new Flurb window'), none.deps)).say, "There's no app called Flurb on this Mac.");
 });
 
+test('"start a new note": the front app\'s New key; after "open Notes", only once Notes is in front', async () => {
+  assert.deepEqual(desktopIntent('start a new note'), { verb: 'new', what: 'note' });
+  for (const c of ['start a new line', 'make a new folder on my desktop called homework', 'create a new password']) assert.notEqual(desktopIntent(c)?.verb, 'new', c);
+  const keys = [], key = async (k) => keys.push(k);
+  await runDesktop(desktopIntent('open a new tab'), rig(() => '', { key }).deps);
+  await runDesktop({ verb: 'new', what: 'note', app: 'Notes' }, rig(() => '', { open: async () => true, front: async () => ({ name: 'Notes' }), key, wait: async () => {} }).deps);
+  assert.deepEqual(keys, ['cmd+t', 'cmd+n']);
+  const r = await runDesktop({ verb: 'new', what: 'note', app: 'Notes' }, rig(() => '', { open: async () => true, front: async () => ({ name: 'Mail' }), key, wait: async () => {} }).deps);
+  assert.deepEqual([r.ok, keys.length], [false, 2], 'Notes never came: no ⌘N into Mail');
+});
+
 test('"play some music": Music carries on, else shuffles your library; an empty library with no subscription is said plainly', async () => {
   assert.deepEqual(desktopIntent('play some music'), { verb: 'media', op: 'play', app: undefined });
   const off = (reply) => rig((c, a) => (/is running/.test(a[1]) ? 'false' : reply(a[1])));
