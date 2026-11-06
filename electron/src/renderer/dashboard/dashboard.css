@@ -1,10 +1,18 @@
-/* Dixi's dashboard. Builds on ../styles.css (the tokens, liquid .glass, the marble, the mascot, .switch):
-   a floating glass sidebar on white marble, bold black type, the black island for what Dixi says.
-   Sizes are in rem so "Large text" (html.large) scales the whole window. */
+/* Dixi's dashboard. Builds on ../styles.css (liquid .glass, the mascot, .switch) with the one look of
+   ../ui/tokens.css (A4): true black, a glass sidebar over faint contour lines (A5), white type, the black
+   island for what Dixi says. Sizes are in rem so "Large text" (html.large) scales the whole window. */
+:root {   /* styles.css's names, in tokens.css's colors */
+  color-scheme: dark;
+  --bg: var(--base); --paper: rgba(255, 255, 255, 0.06); --ink: #fff; --text: #fff; --accent: #fff;
+  --secondary: var(--ink-2); --tertiary: var(--ink-3); --quaternary: rgba(255, 255, 255, 0.07); --separator: var(--hairline);
+  --row-bg: var(--glass); --glass-bg: var(--glass); --glass-border: var(--hairline); --glass-sheen: rgba(255, 255, 255, 0.025);
+  --glass-shadow: var(--highlight), var(--shadow); --island-ring: rgba(255, 255, 255, 0.12); --radius: var(--r-l);
+}
 html { font-size: 16px; }
 html.large { font-size: 19px; }
 body {
   font: 500 1rem/1.45 var(--font);
+  background: var(--base) url("../assets/contour-1.svg") center / cover;
   display: grid; grid-template-columns: 16.5rem minmax(0, 1fr); height: 100vh;
 }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -40,7 +48,7 @@ h1, h2, h3 { color: var(--ink); }
 }
 #nav button [data-icon] { font-size: 1.25rem; }
 #nav button:hover { background: var(--quaternary); }
-#nav button[aria-current="page"] { background: var(--ink); color: var(--paper); }
+#nav button[aria-current="page"] { background: var(--ink); color: var(--black); }
 
 /* ---- content ---- */
 main { min-width: 0; min-height: 0; padding-top: 40px; display: flex; flex-direction: column; }
@@ -68,21 +76,21 @@ h2.sub { margin: 2.5rem 0 0.75rem; font-size: 1.3125rem; font-weight: 700; lette
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.75rem; padding: 0 1.25rem;
-  border-radius: 999px; border: 1px solid rgba(0, 0, 0, 0.14); background: var(--paper); color: var(--ink);
+  border-radius: 999px; border: 1px solid var(--hairline); background: var(--paper); color: var(--ink);
   font-size: 1rem; font-weight: 600; white-space: nowrap; cursor: pointer; transition: transform 0.12s, background 0.15s;
 }
-.btn:hover { background: #f0f0f2; }
+.btn:hover { background: rgba(255, 255, 255, 0.12); }
 .btn:active { transform: scale(0.97); }
 .btn [data-icon], .btn > svg { font-size: 1.125rem; flex: none; }
-.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.btn.primary:hover { background: #000; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--black); }
+.btn.primary:hover { background: var(--ink); opacity: 0.88; }
 .btn.small { min-height: 2.5rem; padding: 0 1rem; font-size: 0.9375rem; }
 .btn.quiet { background: transparent; border-color: transparent; }
 .btn.quiet:hover { background: var(--quaternary); }
 .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2.5rem; }
 #settings .actions { margin-top: 0; }
 
-.empty { padding: 1.75rem; border-radius: 22px; border: 1px dashed rgba(0, 0, 0, 0.2); background: rgba(255, 255, 255, 0.55); }
+.empty { padding: 1.75rem; border-radius: 22px; border: 1px dashed var(--hairline); background: var(--glass); }
 .empty h2 { margin: 0 0 0.25rem; font-size: 1.25rem; font-weight: 700; }
 .empty p { margin: 0; color: var(--secondary); }
 .empty p:not(:last-child) { margin-bottom: 1rem; }
@@ -146,24 +154,24 @@ kbd {
 .cmd-flag .flag-icon { display: none; padding-top: 0.2em; }
 .cmd-flag.warn { color: var(--ink); }
 .cmd-flag.warn .flag-icon { display: inline-flex; }
-.cmd.off { background: rgba(255, 255, 255, 0.6); }
+.cmd.off { background: transparent; }
 .cmd.off .field { color: var(--secondary); }
 
 .field {
-  width: 100%; min-height: 2.75rem; padding: 0 0.875rem; border-radius: 14px; border: 1px solid rgba(0, 0, 0, 0.16);
+  width: 100%; min-height: 2.75rem; padding: 0 0.875rem; border-radius: 14px; border: 1px solid var(--hairline);
   background: var(--bg); color: var(--ink); font: 500 1.0625rem var(--font);
 }
-.field::placeholder { color: #8a8a8e; }
-.field:hover { border-color: rgba(0, 0, 0, 0.3); }
+.field::placeholder { color: var(--ink-3); }
+.field:hover { border-color: rgba(255, 255, 255, 0.24); }
 .field[aria-invalid="true"] { border: 2px solid var(--ink); }
 select.field {
   appearance: none; padding-right: 2.5rem; cursor: pointer;
-  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d1d1f' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.875rem center / 1rem;
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.875rem center / 1rem;
 }
 
 .undo-strip {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 4rem; padding: 0.625rem 0.75rem 0.625rem 1.25rem;
-  border-radius: 22px; border: 1px dashed rgba(0, 0, 0, 0.22); color: var(--secondary); font-weight: 600; overflow-wrap: anywhere;
+  border-radius: 22px; border: 1px dashed var(--hairline); color: var(--secondary); font-weight: 600; overflow-wrap: anywhere;
 }
 .list-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin-top: 1rem; }
 .empty + .list-foot { margin-top: 1rem; }
@@ -172,7 +180,7 @@ select.field {
 .save-status.err { color: var(--ink); }
 .chip-btn {
   display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; padding: 0 1.125rem; border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.14); background: var(--paper); font-size: 1rem; cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--paper); font-size: 1rem; cursor: pointer;
 }
 .chip-btn span { color: var(--secondary); }
 .chip-btn:hover { border-color: var(--ink); }
@@ -200,7 +208,7 @@ select.field {
 }
 .ev.step .ev-icon { font-size: 0.75rem; color: var(--secondary); }
 .ev.done .ev-icon { color: var(--green); }
-.ev.guardian .ev-icon, .ev.run .ev-icon { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.ev.guardian .ev-icon, .ev.run .ev-icon { background: var(--ink); border-color: var(--ink); color: var(--black); }
 .ev time { padding-top: 0.4rem; font-size: 0.9375rem; color: var(--secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ev p { margin: 0; padding-top: 0.35rem; overflow-wrap: anywhere; }
 .ev.step p { color: var(--secondary); }
@@ -220,13 +228,14 @@ select.field {
 .toast-mascot { width: 28px; height: 36px; flex: none; filter: none; }
 
 /* ---- high contrast: solid surfaces, ink outlines ---- */
-html.contrast { --secondary: #1d1d1f; --separator: rgba(0, 0, 0, 0.6); --island-text-2: #fff; --glass-bg: #fff; }
-html.contrast .glass, html.contrast .tip { background: var(--paper); backdrop-filter: none; -webkit-backdrop-filter: none; border: 2px solid var(--ink); }
+html.contrast { --secondary: var(--ink); --separator: rgba(255, 255, 255, 0.6); --island-text-2: #fff; --glass-bg: var(--black); --paper: var(--black); }
+html.contrast body { background: var(--black); }
+html.contrast .glass, html.contrast .tip { background: var(--black); backdrop-filter: none; -webkit-backdrop-filter: none; border: 2px solid var(--ink); }
 html.contrast .card, html.contrast .cmd, html.contrast .skill, html.contrast .field, html.contrast .btn, html.contrast .chip-btn,
 html.contrast .empty, html.contrast .undo-strip { border: 2px solid var(--ink); }
 html.contrast .switch { box-shadow: inset 0 0 0 2px var(--ink); }
 html.contrast .island .switch { box-shadow: inset 0 0 0 2px #fff; }
-html.contrast .field::placeholder { color: #58585c; }
+html.contrast .field::placeholder { color: var(--ink-2); }
 html.contrast .cmd.off { background: var(--paper); }
 
 /* the smallest window (860 wide): a slimmer sidebar keeps each command on two lines */
@@ -239,5 +248,5 @@ html.contrast .cmd.off { background: var(--paper); }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .tip, .empty { background: var(--paper); }
+  .tip, .empty, .glass { background: var(--base); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

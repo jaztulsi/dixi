@@ -429,7 +429,7 @@ function renderSkills() {
       h('span', { class: 'skill-icon', icon: 'skills' }),
       h('h3', { text: name }),
       h('p', { class: 'skill-meta', text: [k.app && str(k.app), `${steps} ${steps === 1 ? 'step' : 'steps'}`].filter(Boolean).join(', ') }),
-      h('p', { class: 'skill-say', text: `Say “Dixi, run my ${name} skill”.` }),
+      h('p', { class: 'skill-say', text: `Press ⌥Space and say “run my ${name} skill”.` }),
       h('button', { class: 'btn small quiet', icon: 'trash', 'data-k': `del-skill:${name}`, 'aria-label': `Delete ${name}`, onclick: () => deleteSkill(name) }, 'Delete'));
   }));
   $('skill-empty').hidden = state.skills.length > 0;

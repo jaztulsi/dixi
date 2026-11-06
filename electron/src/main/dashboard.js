@@ -24,7 +24,7 @@ export function openDashboard({ here, api }) {
     handle('dash:set', (k, v) => (KEYS.has(k) ? d.api.set(k, Boolean(v)) : d.api.state()));
     ipcMain.on('dash:open', (e, what) => { if (mine(e) && OPEN.test(String(what))) d.api.open(String(what)); });
   }
-  const win = new BrowserWindow({ width: 1100, height: 760, minWidth: 860, minHeight: 600, title: 'Dixi', show: false, titleBarStyle: 'hiddenInset', backgroundColor: '#f5f5f7',
+  const win = new BrowserWindow({ width: 1100, height: 760, minWidth: 860, minHeight: 600, title: 'Dixi', show: false, titleBarStyle: 'hiddenInset', backgroundColor: '#0a0a0a',
     webPreferences: { preload: path.join(here, '../preload/dashboard.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
