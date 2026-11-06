@@ -5,9 +5,12 @@ export class Mic {
 
   async start(onChunk) {
     this.stop();
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    const stream = this.stream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
+    // The device went away mid-session (AirPods disconnected, a USB mic unplugged): carry on with the Mac's
+    // default input instead of going deaf. ponytail: a new default mid-session is picked up at the next ⌥Space.
+    stream.getAudioTracks()[0]?.addEventListener('ended', () => { if (this.stream === stream) this.start(onChunk).catch(() => {}); });
     this.ctx = new AudioContext({ sampleRate: 16000 });
     await this.ctx.audioWorklet.addModule(new URL('./mic-worklet.js', import.meta.url));
     const source = this.ctx.createMediaStreamSource(this.stream);
