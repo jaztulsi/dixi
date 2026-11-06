@@ -170,7 +170,7 @@ export function saveProfile(file, data) {
 /** The profile for the agent's prompt, field by field. */
 export function profileLine(p) {
   const parts = PROFILE_FIELDS.filter((k) => p?.[k]).map((k) => `${k === 'zip' ? 'ZIP' : k}: ${p[k]}`);
-  return parts.length ? `\nThe user's profile, which they typed themselves and approved after hearing it read back (use it only for the form they asked about; ask for anything not here, never invent it; never put any of it in a card, SSN, password or code field): ${parts.join('; ')}.` : '';
+  return parts.length ? `\nThe user's profile, which they typed themselves (use it only for the form they asked about; leave anything not here for them, never invent it; never put any of it in a card, SSN, password or code field): ${parts.join('; ')}.` : '';
 }
 // Fields nothing is ever typed into: the user types these. Checked in code on the focused field's AX labels.
 const SECRET_FIELD = /\b(?:pass(?:word|code|phrase)|pin|card|cvv|cvc|csc|security code|expir\w*|ssn|social security|tax id|one[- ]time|otp|verification|(?<!(?:zip|postal|area|country|promo|coupon|discount) )code)\b/i;

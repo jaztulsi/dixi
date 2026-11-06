@@ -139,12 +139,14 @@ test('"click X" by name: pressed when the words name it, skipped with one line w
 });
 
 test('a form uses your profile without asking: said on the card, logged without its values', mac, async () => {
-  fs.writeFileSync(path.join(rt2Dir, 'profile.json'), JSON.stringify({ name: 'Pat Example', email: 'pat@example.com' }));
+  fs.writeFileSync(path.join(rt2Dir, 'profile.json'), JSON.stringify({ name: 'Pat Example', email: 'pat@example.com', password: 'hunter2', card: '4111 1111 1111 1111', cvv: '737', code: '481516', ssn: '078-05-1120' }));
   answer = () => false;   // a "no" waiting here must not be what decides
   await agentDoes([], {}, 'fill out this form');
   fs.rmSync(path.join(rt2Dir, 'profile.json'));
   assert.equal(asked.length, 0, 'nothing was asked');
-  assert.match(JSON.stringify(requests[0]?.messages?.[0]), /Pat Example/, 'the agent got the profile');
+  const sent = JSON.stringify(requests.filter((r) => r.tools)[0]?.messages?.[0]);
+  assert.match(sent, /Pat Example/, 'the agent got the profile');
+  assert.doesNotMatch(sent, /hunter2|4111|737|481516|078-05/, 'never a password, card, code or SSN, even typed into the profile');
   const log = fs.readFileSync(path.join(rt2Dir, 'activity.jsonl'), 'utf8');
   assert.match(log, /used your profile/);
   assert.doesNotMatch(log, /pat@example|Pat Example/, 'no profile values in the log');
