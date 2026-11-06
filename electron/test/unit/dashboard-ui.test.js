@@ -48,8 +48,8 @@ test('permission words and the status pill', () => {
   assert.equal(granted('true'), false);
   assert.deepEqual(['granted', true, 'denied', false, 'restricted', 'not-determined', null, 'unknown', undefined].map(permWord),
     ['On', 'On', 'Off', 'Off', 'Blocked on this Mac', 'Not set up yet', 'Not set up yet', 'Not checked yet', 'Not checked yet']);
-  assert.equal(statusText({ prefs: { listening: true } }), 'Listening');
-  assert.equal(statusText({ prefs: { listening: false } }), 'Mic off');
+  assert.equal(statusText({ prefs: { listening: true } }), 'Listening for “Dixi”');
+  assert.equal(statusText({ prefs: { listening: false }, keys: { ask: '⌥Space' } }), 'Press ⌥Space to talk');
   assert.equal(statusText({ prefs: { listening: true }, watching: 'the download finishes' }), '👁 Watching: the download finishes');
-  assert.equal(statusText(null), 'Mic off');
+  assert.equal(statusText(null), 'Press ⌥Space to talk');
 });

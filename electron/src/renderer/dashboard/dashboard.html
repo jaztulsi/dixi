@@ -15,7 +15,7 @@
       <span id="mascot" class="side-mascot"></span>
       <span class="brand-name">Dixi</span>
     </div>
-    <p id="status" class="status-pill" role="status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">Mic off</span></p>
+    <p id="status" class="status-pill" role="status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">Press ⌥Space to talk</span></p>
     <nav aria-label="Dashboard">
       <ul id="nav">
         <li><button data-go="home" aria-current="page"><span data-icon="home"></span>Home</button></li>
@@ -37,11 +37,11 @@
           <div class="island-top">
             <span class="island-dot" aria-hidden="true"></span>
             <div class="island-words">
-              <h2 id="listen-title">Dixi isn’t listening</h2>
-              <p id="listen-sub">Turn listening on, then say “Dixi” and what you need.</p>
+              <h2 id="listen-title">Press ⌥Space and talk</h2>
+              <p id="listen-sub">The mic opens only while you ask. Switch on to also listen for “Dixi” (experimental).</p>
             </div>
             <label class="switch-hit">
-              <span class="sr">Listening</span>
+              <span class="sr">Listen for “Dixi”</span>
               <input type="checkbox" role="switch" class="switch" data-pref="listening">
             </label>
           </div>
@@ -125,7 +125,7 @@
           <div class="setting">
             <div>
               <label for="listening-set" class="setting-name">Listen for “Dixi”</label>
-              <p class="setting-desc" id="listening-set-d">Off stops the microphone. <span id="mic-key-desc"></span></p>
+              <p class="setting-desc" id="listening-set-d"><span id="mic-key-desc">Experimental. Off, the mic opens only for ⌥Space.</span></p>
             </div>
             <input type="checkbox" role="switch" class="switch" id="listening-set" data-pref="listening" aria-describedby="listening-set-d">
           </div>

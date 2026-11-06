@@ -124,7 +124,7 @@ function render(s) {
   renderStatus();
   renderHome();
   for (const el of document.querySelectorAll('[data-pref]')) el.checked = prefOn(el.dataset.pref);
-  $('mic-key-desc').textContent = state.keys.mic ? `${state.keys.mic} turns it on and off too.` : '';
+  $('mic-key-desc').textContent = state.keys.mic ? `Experimental. Off, the mic opens only for ${state.keys.ask || '⌥Space'}. ${state.keys.mic} turns it on and off too.` : '';
   renderSkills();
   renderActivity();
   // Never redraw the commands under someone's hands: only when nothing is waiting to be saved.
@@ -196,7 +196,7 @@ document.addEventListener('click', (e) => {
 
 // ---- home ----
 const PERMS = [
-  { id: 'mic', name: 'Microphone', why: 'To hear you say “Dixi”.' },
+  { id: 'mic', name: 'Microphone', why: 'To hear you when you ask.' },
   { id: 'screen', name: 'Screen Recording', why: 'To see your screen, only when you ask.' },
   { id: 'ax', name: 'Accessibility', why: 'To click and type for you.' },
   { id: 'automation', name: 'Calendar & Mail', why: 'To tell you about your day. Optional.' },
@@ -204,10 +204,10 @@ const PERMS = [
 function renderHome() {
   const on = Boolean(state.prefs.listening), keys = state.keys;
   $('listen-card').classList.toggle('on', on);
-  $('listen-title').textContent = on ? 'Dixi is listening' : 'Dixi isn’t listening';
-  $('listen-sub').textContent = on ? 'Say “Dixi”, then what you need.' : 'Turn listening on, then say “Dixi” and what you need.';
+  $('listen-title').textContent = on ? 'Dixi is listening' : `Press ${keys.ask || '⌥Space'} and talk`;
+  $('listen-sub').textContent = on ? `Say “Dixi”, then what you need. ${keys.ask || '⌥Space'} works too.` : 'The mic opens only while you ask. Switch on to also listen for “Dixi” (experimental).';
   $('keys').replaceChildren(...[
-    [keys.ask, 'Ask about your screen'], [keys.mic, 'Microphone on or off'], [keys.kill, 'Stop everything'], [keys.yes, 'Say yes when Dixi asks'],
+    [keys.ask, 'Talk to Dixi'], [keys.mic, 'Listen for “Dixi” on or off'], [keys.kill, 'Stop everything'], [keys.yes, 'Say yes when Dixi asks'],
   ].filter(([k]) => k).map(([k, what]) => h('div', {}, h('dt', {}, h('kbd', { text: k })), h('dd', { text: what }))));
   $('keys').hidden = !$('keys').children.length;
 
