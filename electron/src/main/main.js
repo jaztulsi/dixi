@@ -14,6 +14,7 @@ import { Resolver } from './resolve.js';
 import { speakable } from './speakable.js';
 import { setupEverywhere } from './everywhere.js';
 import { watchControl } from './ptt.js';
+import { stillWhenAway } from './still.js';
 import { guardSession, unsafe } from './safesite.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -48,6 +49,7 @@ if (process.env.DIXI_USER_DATA) app.setPath('userData', process.env.DIXI_USER_DA
   }
 }
 if (!app.requestSingleInstanceLock()) app.quit();
+app.on('browser-window-created', (_e, w) => stillWhenAway(w));   // no animation in a window you aren't looking at
 
 let win = null;
 let pendingURL = null;
