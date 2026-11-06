@@ -35,7 +35,7 @@ function rig(speaker, { wake, everywhere = true }) {
   const llm = { json: async () => JSON.stringify({ clarify: '', steps: [] }) };
   const tabs = { getCurrentURL: () => 'about:blank', activeTab: null, visibleTabs: [], tabList: () => '', dx: async () => '' };
   const executor = { run: async () => ({ ok: true, message: 'ok' }) };
-  const v = new VoiceAgent({ deepgram: null, tabs, llm, tiers: { fast: ['m'], strong: [] }, executor, speaker, settings: { requireWakeWord: wake }, settleMS: 20, specMS: 10 });
+  const v = new VoiceAgent({ deepgram: null, tabs, llm, tiers: { fast: ['m'], strong: [] }, executor, speaker, settings: { requireWakeWord: wake }, settleMS: 20, specMS: 10, holdMS: 0 });
   const handleText = v.handleText.bind(v), cancelAll = v.cancelAll.bind(v);
   v.handleText = (t, o) => { handled.push(t); return handleText(t, o); };
   v.cancelAll = (o) => { cancels.push(o); return cancelAll(o); };

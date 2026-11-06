@@ -113,8 +113,8 @@ export function describe(s) {
 
 export class VoiceAgent {
   constructor({ deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry = null, cache = null, agent = null,
-    onChange = () => {}, trace = () => {}, followUpMS = 10000, settleMS = 550, specMS = 250, terms = [] }) {
-    Object.assign(this, { deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry, cache, agent, onChange, trace, followUpMS, settleMS, specMS, terms });
+    onChange = () => {}, trace = () => {}, followUpMS = 10000, settleMS = 550, specMS = 250, holdMS = 700, terms = [] }) {
+    Object.assign(this, { deepgram, mic, tabs, speaker, llm, tiers, executor, settings, registry, cache, agent, onChange, trace, followUpMS, settleMS, specMS, holdMS, terms });
     this.spec = new Map();  // clause words → understanding started early, at a short pause
     this.isListening = false;
     this.isStarting = false;
@@ -196,7 +196,9 @@ export class VoiceAgent {
     if (this.session === s && !this.isListening && !this.isStarting) this.endSession({ cancel: true });   // no mic or no socket
   }
   /** Close the mic now; the words still being transcribed get up to `waitMS` to arrive, then run. */
-  async endSession({ cancel = false, waitMS = 1500 } = {}) {
+  // ⌥Space again is you saying "I'm done": the words heard so far are sent at once (Flux has no
+  // finalize message; waitMS > 0 waits that long for its final words instead).
+  async endSession({ cancel = false, waitMS = 0 } = {}) {
     const s = this.session;
     if (!s) return;
     this.session = null;
@@ -205,7 +207,7 @@ export class VoiceAgent {
     const open = this.heard && !this.turnsDone.has(this.heard.turn) ? this.heard : null;
     if (open && !cancel) {
       for (const until = Date.now() + waitMS; Date.now() < until && !this.turnsDone.has(open.turn);) await new Promise((r) => setTimeout(r, 50));
-      if (!this.turnsDone.has(open.turn)) this.handleTurn({ event: 'EndOfTurn', transcript: this.heard.turn === open.turn ? this.heard.text : open.text, turn_index: open.turn });
+      if (!this.turnsDone.has(open.turn)) this.handleTurn({ event: 'EndOfTurn', transcript: this.heard.turn === open.turn ? this.heard.text : open.text, turn_index: open.turn, now: true });
     }
     await this.stop();
     this.onSessionEnd?.();   // main releases Esc and clears the panel
@@ -225,6 +227,7 @@ export class VoiceAgent {
     this.spec.clear();
     for (const t of this.turns.values()) { clearTimeout(t.timer); clearTimeout(t.specTimer); }
     this.turns.clear();
+    clearTimeout(this.hold?.timer); this.hold = null; this.joined = null;   // Esc during the end-of-turn wait: nothing runs
     this.set({ plan: [], statusLine: '', liveTranscript: '', answer: null, isAwake: false, awakeUntil: 0 });
     if (this.session) await this.endSession({ cancel: true });   // Esc cancels a ⌥Space session: the mic closes
     else if (this.isListening) { await this.stop(); await this.start().catch(() => {}); }
@@ -288,9 +291,32 @@ export class VoiceAgent {
     return null;
   }
 
-  handleTurn(json) {
-    const text = this.ownWords((json.transcript ?? '').trim());
-    const turn = json.turn_index ?? 0;
+  /**
+   * Endpointing. A turn the speech service ends on its own (EndOfTurn / EagerEndOfTurn, no key press) is
+   * over only once the words have been still for holdMS: until then it counts as words so far, so
+   * understanding keeps running and the commit is cheap. New words or TurnResumed cancel the wait; a new
+   * turn during it continues the held one (the same turn, so nothing already done runs twice). The second
+   * ⌥Space never waits (endSession passes now).
+   */
+  endpoint(json, text, turn) {
+    if (this.hold && turn > this.hold.turn) { clearTimeout(this.hold.timer); this.joined = { from: turn, to: this.hold.turn, text: this.hold.text }; this.hold = null; }
+    if (this.joined?.from === turn) { turn = this.joined.to; text = `${this.joined.text} ${text}`.trim(); }
+    const words = tokens(text).join(' '), drop = () => { clearTimeout(this.hold?.timer); this.hold = null; };
+    if (words && (this.wordsAt?.turn !== turn || this.wordsAt.words !== words)) { this.wordsAt = { turn, words, at: Date.now() }; if (this.hold?.turn === turn) drop(); }
+    if (json.event === 'TurnResumed' && this.hold?.turn === turn) drop();
+    if (json.event === 'EndOfTurn' || json.event === 'EagerEndOfTurn') {
+      const wait = json.now ? 0 : this.holdMS - (Date.now() - (this.wordsAt?.turn === turn ? this.wordsAt.at : 0));
+      drop();
+      if (wait > 0) {
+        const ended = json, h = this.hold = { turn, text, timer: setTimeout(() => { if (this.hold === h) { this.hold = null; this.handleTurn({ ...ended, transcript: text, turn_index: turn, now: true }); } }, wait) };
+        json = { ...json, event: 'Update' };
+      }
+    }
+    return { json, text, turn };
+  }
+
+  handleTurn(message) {
+    const { json, text, turn } = this.endpoint(message, this.ownWords((message.transcript ?? '').trim()), message.turn_index ?? 0);
     // Which turns began while Dixi was still talking: a yes to "Press Send?" must start after the question.
     if (!this.bornTalking.has(turn)) { if (this.bornTalking.size > 50) this.bornTalking.clear(); this.bornTalking.set(turn, Boolean(this.speaker?.isBusy?.())); }
     // While Dixi talks the mic also hears Dixi: ignore it, unless you barge in ("stop", or the wake word).
