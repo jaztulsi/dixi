@@ -21,7 +21,7 @@ import { unsafe } from './safesite.js';
 import { exec as macExec, openTarget, runScript, check as checkScript, installedApps } from './mac.js';
 import { mark } from './timing.js';
 import { plan, split } from './plan.js';
-import { ENDPOINTS, chat } from './providers.js';
+import { ENDPOINTS, chat, fastChat } from './providers.js';
 import { makeAsk } from './ask.js';
 import { openIndex } from './index.js';
 import { indexFolder, watchFolder, indexActivity, addTurn } from './ingest.js';
@@ -814,11 +814,15 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // What's said while it runs is planned onto the end of the same queue; only "stop" or a protest ends it.
   const KEYS_IN = /\b(?:keystroke|key code)\b|\.keystroke\(|\.keyCode\(/i;
   const newPlan = async () => ({ steps: [], results: [], planning: 0, wake: null, app: (await input.frontApp()).name, apps: await installedApps().catch(() => []) });
+  // The planner's fast try (plan.js): DIXI_PLAN_FAST="provider:model"; unset = Haiku only until the live A/B
+  // (eval/plan-ab.mjs) shows one matches Haiku. 2.5 s at most, then Haiku.
+  const FAST = env.DIXI_PLAN_FAST ?? '';
+  const fastPlanner = FAST && config.keys[FAST.split(':')[0]] ? fastChat(config, spend, FAST) : null;
   function planInto(q, text, signal, runId, stream = true) {
     q.planning++;
     return plan(text, { app: q.app }, {
       apps: q.apps, commands, home: os.homedir(), recentFiles: Date.now() - (state.filesAt ?? 0) < 300000, signal,
-      model: (body, sig, partial) => claude(body, sig, [], partial),
+      model: (body, sig, partial) => claude(body, sig, [], partial), fast: fastPlanner,
       ...(stream && { onStep: (step) => { q.steps.push(step); q.wake?.(); } }),
     }).catch((err) => ({ steps: [], why: err.message }))
       .finally(() => { mark(runId, 'planned'); q.planning--; q.wake?.(); });

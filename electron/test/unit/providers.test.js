@@ -30,3 +30,16 @@ test('dead services: 401/402/quota are dead, 429/5xx are not; a mark persists ac
   assert.equal(new Dead(file, { now: () => now }).is('elevenlabs'), false, 'retried after 6 h');
   assert.equal(new Dead('/nonexistent/x.json').is('elevenlabs'), false, 'no file = nothing dead');
 });
+
+test('fastChat: the OpenAI reply on a 200; a throw on a refusal; and a hung provider is cut off at its budget (then Haiku plans)', async () => {
+  const { fastChat } = await import('../../src/main/providers.js');
+  const config = { keys: { cerebras: 'k' }, env: {} };
+  const ok = async () => ({ status: 200, headers: new Headers(), text: async () => JSON.stringify({ choices: [{ message: { content: '{}' } }] }) });
+  assert.equal((await fastChat(config, null, 'cerebras:gpt-oss-120b', 2500, ok)({ messages: [] })).choices.length, 1);
+  const no = async () => ({ status: 401, headers: new Headers(), text: async () => '{}' });
+  await assert.rejects(fastChat(config, null, 'cerebras:gpt-oss-120b', 2500, no)({ messages: [] }), /rejected/);
+  const hung = (_u, { signal }) => new Promise((_, rej) => signal.addEventListener('abort', () => rej(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
+  const t0 = performance.now();
+  await assert.rejects(fastChat(config, null, 'cerebras:gpt-oss-120b', 50, hung)({ messages: [] }), /Network error/);
+  assert.ok(performance.now() - t0 < 500, 'cut off at the 50 ms budget, no retry');
+});

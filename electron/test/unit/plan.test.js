@@ -238,3 +238,38 @@ test('never asks: the planner has no "ask" step, its prompt forbids questions ba
   const r = check([S({ do: 'ask', clause: 'play some music', say: 'Which playlist?' })], 'play some music', { apps });
   assert.ok(r.steps.every((s) => !['ask', 'clarify'].includes(s.do) && !/\?/.test(s.say ?? '')), JSON.stringify(r.steps));
 });
+
+// Phase 3: the fast planner (Groq/Cerebras) first; Haiku only when the fast plan isn't sure.
+test('fast planner: a sure plan is used as is and Haiku is never called; an unsure, failed or screen-agent plan goes to Haiku', async () => {
+  const said = 'remind me to call the dentist tomorrow at 9, then text Sam I am late';
+  const good = [{ do: 'script', clause: 'remind me to call the dentist tomorrow at 9', lang: 'applescript', code: 'tell application "Reminders" to make new reminder' },
+    { do: 'script', clause: 'text Sam I am late', lang: 'applescript', code: 'tell application "Messages" to send "I am late" to buddy "Sam"' }];
+  const fast = (steps, finish = 'stop') => async (body) => {
+    assert.equal(body.messages[0].role, 'system');
+    assert.equal(body.response_format.json_schema.schema.required[0], 'steps');
+    return { choices: [{ finish_reason: finish, message: { content: JSON.stringify({ steps }) } }] };
+  };
+  let haiku = 0;
+  const model = async () => { haiku++; return { content: [{ type: 'text', text: JSON.stringify({ steps: good }) }] }; };
+  const run = (f) => plan(said, {}, { apps, home: '/Users/me', model, fast: f });
+
+  let r = await run(fast(good));
+  assert.equal(r.planner, 'fast'); assert.equal(haiku, 0);
+  assert.deepEqual(r.steps.map((s) => s.do), ['script', 'script']);
+  const unsure = {
+    'a clause never said': [good[0], { ...good[1], clause: 'email Bob the quarterly report' }],
+    'a clause left out': [good[0]],
+    'the screen agent': [good[0], { do: 'computer', clause: 'text Sam I am late' }],
+    'cut off': null,
+  };
+  for (const [why, steps] of Object.entries(unsure)) {
+    haiku = 0;
+    r = await run(steps ? fast(steps) : fast(good, 'length'));
+    assert.equal(haiku, 1, why); assert.equal(r.planner, undefined, why);
+    assert.deepEqual(r.steps.map((s) => s.do), ['script', 'script'], why);
+  }
+  for (const f of [async () => { throw new Error('HTTP 401'); }, async () => ({ choices: [{ message: { content: 'not json' } }] })]) {
+    haiku = 0; r = await run(f);
+    assert.equal(haiku, 1); assert.deepEqual(r.steps.map((s) => s.do), ['script', 'script']);
+  }
+});
