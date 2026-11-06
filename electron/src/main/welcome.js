@@ -29,8 +29,7 @@ export function openWelcome({ here: _here, say = () => {}, status, openPane, onD
     ipcMain.on('welcome:say', (e, text) => { if (mine(e) && typeof text === 'string') w.h.say(text.slice(0, 400)); });
     ipcMain.on('welcome:done', (e) => { if (mine(e)) { const win = w.win; setTimeout(() => win.close(), 0); w.h.onDone(); } });
   }
-  const win = new BrowserWindow({ width: 520, height: 640, center: true, title: 'Set up Dixi', show: false, titleBarStyle: 'hiddenInset', vibrancy: 'hud',
-    visualEffectState: 'active', backgroundColor: '#00000000', fullscreenable: false, minimizable: false,
+  const win = new BrowserWindow({ width: 520, height: 640, center: true, title: 'Set up Dixi', show: false, titleBarStyle: 'hiddenInset', backgroundColor: '#0a0a0a', fullscreenable: false, minimizable: false,
     webPreferences: { preload: path.join(_here ?? here, '../preload/welcome.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
   win.setContentProtection(true);
   win.webContents.on('will-navigate', (e) => e.preventDefault());

@@ -6,7 +6,7 @@
 import { mountMascot } from '../ui/mascot.js';
 
 export const STEPS = [
-  { id: 'mic', name: 'Microphone', why: 'so Dixi can hear you say “Dixi”', button: 'Allow the microphone',
+  { id: 'mic', name: 'Microphone', why: 'so Dixi can hear you when you ask', button: 'Allow the microphone',
     line: 'First, the microphone, so I can hear you. Press the big button and choose Allow.' },
   { id: 'screen', name: 'Screen Recording', why: 'so Dixi can see what you see, only when you ask', button: 'Open Screen Recording',
     note: 'After you turn Dixi on, macOS may ask to quit and reopen it. That’s fine: this window comes back.',
@@ -26,8 +26,8 @@ export const nextStep = (perms = {}, skipped = []) => STEPS.find((s) => !granted
 // The "try it" card, with the shortcuts main really registered (they can be changed in .env).
 export const tryLines = (keys = {}) => [
   `Press ${keys.ask ?? '⌥Space'} and ask: “what’s on my screen?”`,
-  'Say: “Dixi, take dictation.”',
-  `${keys.mic ?? '⌘⌥Space'} turns the microphone off.`,
+  `Press ${keys.ask ?? '⌥Space'} and say: “open Safari.”`,
+  `${keys.mic ?? '⌘⌥Space'} turns on listening for “Dixi”, if you like.`,
 ];
 // Key symbols as words, for Dixi's voice ("⌥Space" → "Option Space").
 export const spoken = (s) => s.replace(/⌘/g, 'Command ').replace(/⌥/g, 'Option ').replace(/⌃/g, 'Control ').replace(/⇧/g, 'Shift ');

@@ -1,42 +1,53 @@
-/* The first-run window: the overlay's glass (overlay.css) filling a small window over macOS's own blur
-   (the window is made with vibrancy), with bigger type and buttons: it's the first thing anyone sees. */
-.glass { inset: 0; width: auto; transform: none; border-radius: 0; box-shadow: none; overflow-y: auto; font-size: 16px; }
-header { padding: 22px 22px 10px; -webkit-app-region: drag; }
+/* The first-run window in the one look (../ui/tokens.css): black over faint contour lines (A5), white type,
+   big targets: it's the first thing anyone sees. Self-contained on purpose: it used to borrow overlay.css's
+   glass and broke when the island changed. */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; -webkit-font-smoothing: antialiased; }
+body { color-scheme: dark; color: var(--ink); font: 500 16px/1.45 var(--font); background: var(--base) url("../assets/contour-2.svg") center / cover; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+main { height: 100%; overflow-y: auto; }
+
+header { display: flex; align-items: center; gap: 14px; padding: 40px 22px 12px; -webkit-app-region: drag; }   /* 40px: under the traffic lights */
 header button { -webkit-app-region: no-drag; }
-h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
-.heading small { color: var(--ink-2); font-size: 15px; }
-.buddy { width: 64px; height: 64px; }
-.buddy .mascot { width: 54px; height: 66px; }
+.buddy { flex: none; width: 54px; height: 66px; }   /* the whole mascot, inside its box (A7) */
+.heading { flex: 1; min-width: 0; }
+h1 { margin: 0; font-size: var(--t-xl); font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.heading small { display: block; margin-top: 2px; color: var(--ink-2); font-size: 15px; }
+.icon { flex: none; align-self: flex-start; width: 36px; height: 36px; border-radius: 50%; color: var(--ink-2); }
+.icon:hover { background: var(--glass); color: var(--ink); }
 
 /* the steps, each with a live checkmark */
 #list { list-style: none; margin: 8px 22px; padding: 0; display: grid; gap: 10px; }
-#list li { display: grid; grid-template-columns: 30px 1fr; gap: 14px; padding: 14px 16px; border-radius: 22px;
-  background: rgba(255, 255, 255, 0.07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); animation: rise 320ms var(--spring); }
-#list li[data-state="current"] { background: rgba(255, 255, 255, 0.13); box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.75), 0 0 26px rgba(var(--glow), 0.16); }
+#list li { display: grid; grid-template-columns: 30px 1fr; gap: 14px; padding: 14px 16px; border-radius: var(--r-m);
+  background: var(--glass); box-shadow: inset 0 0 0 1px var(--hairline); animation: rise var(--dur) var(--ease); }
+#list li[data-state="current"] { background: rgba(255, 255, 255, 0.09); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4), var(--highlight); }
 #list li[data-state="later"], #list li[data-state="skipped"] { color: var(--ink-2); }
-#list b { display: block; font-size: 18px; font-weight: 650; }
-.opt { font-weight: 500; color: var(--ink-2); }
-.why { color: var(--ink-2); }
-.tick { width: 28px; height: 28px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; font-weight: 800;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.4); transition: background 300ms ease; }
-[data-state="current"] .tick { box-shadow: inset 0 0 0 3px rgb(var(--glow)); }
-[data-state="done"] .tick { background: rgb(var(--ok)); color: #0b2a17; box-shadow: none; animation: pop 420ms var(--spring); }
+#list b { display: block; font-size: var(--t-l); font-weight: 600; }
+.opt, .why { font-weight: 500; color: var(--ink-2); }
+.tick { width: 28px; height: 28px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; font-weight: 700;
+  box-shadow: inset 0 0 0 2px var(--ink-3); transition: background var(--dur) ease; }
+[data-state="current"] .tick { box-shadow: inset 0 0 0 2px var(--ink); }
+[data-state="done"] .tick { background: var(--green); color: var(--black); box-shadow: none; animation: pop 300ms var(--ease); }
 [data-state="done"] .tick::before { content: "✓"; }
 [data-state="skipped"] .tick::before { content: "–"; }
 .go { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 12px; }
-.go .choice { flex: 1 1 220px; min-height: 56px; padding: 0 22px; }
-.skip { min-height: 44px; padding: 0 8px; background: none; color: var(--ink-2); font-size: 15px; text-decoration: underline; }
+.choice { min-height: 52px; padding: 0 22px; border-radius: var(--r-s); font-weight: 600; background: var(--ink); color: var(--black); transition: opacity var(--fast); }
+.choice:hover { opacity: 0.88; }
+.go .choice { flex: 1 1 220px; }
+.skip { min-height: 44px; padding: 0 8px; color: var(--ink-2); font-size: 15px; text-decoration: underline; }
 .note { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
 
 /* the "try it" card */
-#try { margin: 4px 22px 22px; padding: 18px; border-radius: 22px; background: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(var(--ok), 0.6), 0 0 30px rgba(var(--ok), 0.15); animation: rise 320ms var(--spring); }
+#try { margin: 4px 22px 22px; padding: 18px; border-radius: var(--r-m); background: var(--glass); box-shadow: inset 0 0 0 1px var(--hairline), var(--highlight); animation: rise var(--dur) var(--ease); }
 #try h2 { margin: 0 0 10px; font-size: 20px; }
-#tips { margin: 0 0 16px; padding-left: 1.2em; display: grid; gap: 8px; font-size: 17px; }
+#tips { margin: 0 0 16px; padding-left: 1.2em; display: grid; gap: 8px; font-size: var(--t-l); }
 #done { width: 100%; }
 
-html.contrast #list li, html.contrast #try { background: #000; box-shadow: inset 0 0 0 2px #fff; }
-html.contrast #list li[data-state="current"] { box-shadow: inset 0 0 0 3px rgb(var(--glow)); }
-@media (prefers-reduced-transparency: reduce) {
-  #list li, #try { background: rgb(40, 40, 48); }
-}
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes pop { from { opacity: 0; transform: scale(0.7); } }
+html.contrast body { background: var(--black); }
+html.contrast #list li, html.contrast #try { background: var(--black); box-shadow: inset 0 0 0 2px var(--ink); }
+@media (prefers-reduced-transparency: reduce) { #list li, #try { background: var(--base); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

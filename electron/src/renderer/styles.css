@@ -1,3 +1,4 @@
+@import "ui/mascot.css";   /* the mascot, shared with the first-run window */
 /* Dixi (Electron): "marble and glass", matching the website. White marble chrome, black Dynamic-Island caption,
    liquid-glass bars, grayscale with functional green/red only. Colors as tokens. */
 :root {
@@ -85,18 +86,6 @@ svg { display: block; }
 }
 .examples li span:first-child { color: var(--ink); font-size: 17px; }
 
-/* Mascot */
-.mascot { position: relative; display: inline-block; pointer-events: none; user-select: none; filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.18)); }
-.mascot img, .mascot-face { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); opacity: 0; transition: opacity 0.2s; }
-.mascot-face { height: 100%; aspect-ratio: 463 / 640; }
-.mascot-face img { position: absolute; inset: 0; width: 100%; height: 100%; transform: none; opacity: 1; }
-.mascot-face svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.mascot-pose { height: 74%; width: auto; }   /* bust poses: same head size as the full-body face */
-.mascot .on { opacity: 1; }
-.eye-ball { fill: #000; }
-.glint { fill: #fff; }
-.mascot-blink { transform-box: fill-box; transform-origin: center; animation: blink 3.6s infinite; }
-@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
 
 /* Bottom bar */
 #bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 12px 16px 14px; font-size: 16px; font-weight: 500; }
