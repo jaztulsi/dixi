@@ -1565,5 +1565,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     for (let i = 0; i + 1 < b.length; i += 2) sum += b.readInt16LE(i) ** 2;
     ui('ew:level', Math.min(1, Math.sqrt(sum / Math.max(1, b.length >> 1)) / 5000));
   };
-  return { enabled: true, keepsRunning: true, stop, tray, level, showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
+  // The speech connection dropped mid-session (deepgram.js retries and replays the audio): say so, not a frozen "Listening…".
+  const reconnecting = (on) => { if (ptt.open && !busy()) show({ state: 'listening', text: on ? 'Reconnecting…' : 'Listening…' }); };
+  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
 }

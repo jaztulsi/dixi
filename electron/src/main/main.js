@@ -60,7 +60,11 @@ const dead = new Dead(path.join(app.getPath('userData'), 'dead-services.json'));
 const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');
 const emitToUI = (channel, data) => win?.webContents.send(channel, data);
 // Speech is coming in, so a planner call is about to follow: warm the API connection now (B5; throttled inside).
-const sttEmit = (channel, data) => { if (channel === 'deepgram:message' && config.keys.anthropic) prewarm(); emitToUI(channel, data); };
+const sttEmit = (channel, data) => {
+  if (channel === 'deepgram:message' && config.keys.anthropic) prewarm();
+  if (channel === 'deepgram:message' && /^\{"type":"Reconnect(?:ing|ed)"\}$/.test(data)) everywhere?.reconnecting?.(data.includes('ing'));   // the island says so too
+  emitToUI(channel, data);
+};
 const deepgram = sttName === 'elevenlabs'
   ? new ElevenLabsBridge(config.keys.elevenlabs, sttEmit, { dead, fallback: config.deepgramAPIKey ? new DeepgramBridge(config.deepgramAPIKey, sttEmit) : null })
   : new DeepgramBridge(config.deepgramAPIKey, sttEmit);

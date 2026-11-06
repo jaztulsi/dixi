@@ -376,6 +376,24 @@ test('A1: the overlay is made hidden at launch, so ⌥Space sends "listening" be
   keys['Escape']?.();
 });
 
+test('the speech connection drops mid-session: the island says "Reconnecting…", then "Listening…" again', mac, async () => {
+  const { setupEverywhere } = await import('../../src/main/everywhere.js');
+  mock.timers.enable({ apis: ['setTimeout'] });
+  let api;
+  try {
+    api = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+      userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => mainWin, handle() {}, on() {}, onShowMain() {} });
+    mock.timers.tick(2000);
+  } finally { mock.timers.reset(); }
+  const overlay = Win.last, texts = () => overlay.sent.filter(([ch]) => ch === 'ew:state').map(([, d]) => d.text);
+  await keys['Alt+Space']();
+  api.reconnecting(true);
+  assert.equal(texts().at(-1), 'Reconnecting…');
+  api.reconnecting(false);
+  assert.equal(texts().at(-1), 'Listening…');
+  keys['Escape']?.();
+});
+
 test('the overlay lets clicks through again on every hide and show: the pointer on the island when it hid never leaves the Mac blocked', mac, async () => {
   const { setupEverywhere } = await import('../../src/main/everywhere.js');
   const handlers = {};
