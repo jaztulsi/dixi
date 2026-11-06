@@ -263,6 +263,21 @@ test('talking about Dixi is not talking to Dixi; a protest stops it', async () =
   assert.equal(stops, 1);
 });
 
+test('chatter is not for Dixi (a real log: each of these went to the screen agent): nothing runs, nothing stops', async () => {
+  const { chatter } = await import('../../src/renderer/core/everywhere-words.js');
+  for (const t of ['Dude,', 'Hay Dixi.', 'Come on, Dixi. You got this. Wait. Come on, Dixi. You got this. You go', 'Wait. Shoot. Uh, frost... no. Chest ball. Oh, what was that? Yeah. Yea', "It's gone. I'm done.", 'okay', 'thanks']) assert.ok(chatter(t), t);
+  for (const t of ['okay open Notes', 'yes, do it', 'well, open Safari', "I got a five out of thirty two. What's my grade?", 'who is the founder of this website.', 'oh, what was that?', 'play lo-fi beats', 'I would like to open Notes']) assert.ok(!chatter(t), t);
+  const r = rig({ wake: true });
+  let runs = 0, stops = 0;
+  r.v.everywhere = { wants: () => true, transcript() {}, run: () => { runs++; }, stop: () => { stops++; } };
+  r.v.awakeUntil = Date.now() + 10000;
+  r.turn(1, [['EndOfTurn', 'Dixi, come on. You got this.']]);
+  await sleep(50);
+  assert.deepEqual([runs, stops], [0, 0], 'ignored: the job in progress keeps going');
+  r.turn(2, [['EndOfTurn', 'Dixi, you idiot.']]);
+  assert.equal(stops, 1, 'an insult is a protest: it stops Dixi');
+});
+
 test('never asks (Nov 5): a parse that comes back as a question with no steps is never said as a question', async () => {
   const r = rig({ reply: JSON.stringify({ clarify: 'Which Zentora do you mean?', steps: [] }) });
   r.turn(1, [['Update', 'open zen'], ['EndOfTurn', 'Open zen.']]);

@@ -68,3 +68,15 @@ export const ACTIVITY = /\b(?:what|which)\s+(?:did|have|had)\s+(?:you|dixi)\s+(?
 /** "Add this to my calendar", "remind me about this tomorrow at 9" (main/calendar.js): read back, then a yes. Check before REMEMBER. */
 export const CAL_ADD = /^(?:please\s+)?(?:(?:add|put|save|stick|pop)\s+(?:this|that|it|these)\s+(?:(?:event|appointment|meeting|date)\s+)?(?:to|on|in|into)\s+(?:my\s+|the\s+)?(?:calendar|reminders?)|save\s+(?:this|that)\s+(?:appointment|event|meeting|date)|remind me (?:about|of) (?:this|that)|(?:make|create|set)\s+(?:me\s+)?(?:a\s+)?reminder\s+(?:for|of|about)\s+(?:this|that))\b/i;
 export const COMMAND = new RegExp([CAL_ADD, ACTIVITY, WATCH, FILE_ASK, SKILL_SAVE, SKILL_RUN, SKILL_LIST, SKILL_DELETE, SKILL_SHOW, FACT, ABOUT_ME, FORGET, OPEN_PROFILE, BRIEF, NEXT, TOMORROW, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO].map((r) => `(?:${r.source})`).join('|'), 'i');
+
+// Talk that isn't for Dixi: "Dude,", "Hey Dixi.", "Come on, Dixi. You got this.", "Wait. Shoot. Uh, frost… no. Chest
+// ball. Yeah." (all from a real log, where each one went to the screen agent and it pressed keys). Nothing is done and
+// nothing is said. ponytail: a word list plus a ratio; a long ramble with few fillers still gets through.
+const FILLER_BIT = new RegExp(String.raw`\b(?:hey|hay|hi|hello|yo|ok(?:ay)?|yeah|yea|yep|yes|yup|no+|nope|nah|oh+|ah+|uh+|um+|hmm+|huh|wait|shoot|dang|dude|bro|man|wow|lol|so|like|well|right|alright|cool|nice|come on|you got this|you can do (?:it|this)|let'?s go|i'?m done|it'?s gone|whatever|thanks|thank you|dixi)\b`, 'gi');
+/** → true when every bit of it (or 60 %+ of three or more bits) is filler: an ignore, not a command. Pure. */
+export function chatter(text) {
+  const bits = String(text ?? '').toLowerCase().split(/[.,!?…;:]+|\s[-—–]+\s/).map((b) => b.trim()).filter(Boolean);
+  if (!bits.length) return true;
+  const n = bits.filter((b) => !b.replace(FILLER_BIT, ' ').trim()).length;   // "hay dixi", "oh yeah": nothing but filler
+  return n === bits.length || (bits.length >= 3 && n / bits.length >= 0.6);
+}

@@ -29,6 +29,11 @@ test('math', async () => {
   assert.match((await ask('what is 1 divided by 0')).say, /divide by zero/);
   assert.equal(quickIntent('what is 2 plus eval(1)'), null);
   assert.equal(quickIntent("what's 5 and 6"), null);
+  // spoken numbers, and the Calculator ask from a real run (it got stuck on "Press Enter?")
+  assert.equal((await ask('Open up my calculator and search up ten times ten.')).text, '10 * 10 = 100');
+  assert.match((await ask('what is twenty-five plus seven hundred')).say, /seven hundred twenty-five/);
+  assert.equal((await ask("I got a five out of thirty two. What's my grade?")).text, '5/32 = 15.6%');
+  for (const t of ['one', 'I got one of them', '3 out of 4 people agree', 'type ten times ten']) assert.equal(quickIntent(t), null, t);
 });
 
 test('conversions', async () => {

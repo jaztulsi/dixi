@@ -7,7 +7,7 @@
 
 import { interpret, fastPath, normName, tokens, incomplete, QUESTION, SHOPPING, isDixi, splitClauses } from './interpret.js';
 import { demoSteps, demoPartial } from './demo.js';
-import { HIVE } from './everywhere-words.js';
+import { HIVE, chatter } from './everywhere-words.js';
 
 export { splitClauses };
 
@@ -67,7 +67,7 @@ const STOP = /^(?:stop|cancel|never ?mind|stop (?:it|that|everything)|cancel (?:
 // Right after Dixi chose between results: take the next one instead.
 const OTHER = /^(?:no[,.]? )?(?:(?:the )?(?:next|other)(?: one)?|not that one)[.!]?$/i;
 // "No, no, not that! Oh my god, why did Dixi do that?": nothing but a protest. It stops Dixi, never runs.
-const PROTEST_BIT = String.raw`(?:no+|nope|not(?: (?:that|this|now|yet|again))?|wait|stop|don'?t(?: do (?:that|it|this))?|oh (?:my )?(?:god|gosh|no)|what are you doing|why (?:did|are|is) (?:you|dixi)[^.!?]*)`;
+const PROTEST_BIT = String.raw`(?:no+|nope|not(?: (?:that|this|now|yet|again))?|wait|stop|don'?t(?: do (?:that|it|this))?|oh (?:my )?(?:god|gosh|no)|what are you doing|why (?:did|are|is) (?:you|dixi)[^.!?]*|(?:you )?(?:idiot|stupid|dumb|moron)|shut up)`;
 const PROTEST = new RegExp(String.raw`^${PROTEST_BIT}(?:[\s,.!?]+${PROTEST_BIT})*[\s,.!?]*$`, 'i');
 const YES = /^(yes|yeah|yep|yup|sure|do it|go ahead|confirm|ok(ay)?|please do|place it|that'?s right|correct)\b/i;
 const NO = /^(no|nope|nah|cancel|stop|don'?t|never ?mind|wait)\b/i;
@@ -375,6 +375,7 @@ export class VoiceAgent {
     // (A "stop" still being said keeps the turn open, so "stop and listen" can follow.)
     if (STOP.test(cmd.trim())) { this.cancelAll(); this.carry = null; if (final || !/^stop[.!]?$/i.test(cmd.trim())) this.turnsDone.add(turn); return; }
     if (!this.clarify && PROTEST.test(cmd.trim())) { this.cancelAll(); if (final) this.turnsDone.add(turn); return; }
+    if (!this.clarify && cmd.trim() && chatter(cmd)) { if (final) this.turnsDone.add(turn); return; }   // "Dude,", "come on Dixi, you got this": not for Dixi
     if (DICTATE.test(cmd.trim())) {
       if (final) { this.turnsDone.add(turn); this.dictation = { parts: [], at: Date.now(), type: TYPE_IT.test(cmd.trim()) }; this.dictate(cmd.trim().replace(DICTATE, ''), turn, true, { first: true }); }
       return;

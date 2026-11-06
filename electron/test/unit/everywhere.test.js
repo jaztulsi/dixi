@@ -25,6 +25,9 @@ test('the click gate fails closed', () => {
 test('Enter asks unless it is a search box; ⌘Enter, ⌘Q, ⌘⌫ always ask', () => {
   assert.ok(keyRisk('Return', el('AXTextArea', ['Message'])));
   assert.equal(keyRisk('Return', el('AXTextField', ['Search'], 'AXSearchField')), null);
+  assert.equal(keyRisk('Return', null, { app: 'Calculator' }), null, 'Enter is "=" in Calculator: never refused');
+  assert.ok(keyRisk('Return', null, { app: 'Calculator', sensitive: true }));
+  assert.ok(keyRisk('Return', null, { app: 'Messages' }));
   assert.equal(keyRisk('Return', el('AXTextField', ['Address and search bar'])), null);
   assert.ok(keyRisk('Return', el('AXTextField', ['Search']), { sensitive: true }));
   assert.ok(keyRisk('Return', null));

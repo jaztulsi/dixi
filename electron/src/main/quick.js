@@ -58,9 +58,16 @@ function clockWords(now, tz) {
 
 // ---------- math ----------
 // Words → symbols, then a small recursive-descent parser. No eval, no Function.
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+// "ten times ten", "twenty-five plus seven hundred": speech-to-text writes small numbers as words.
+const numerals = (s) => s
+  .replace(new RegExp(`\\b(${TENS.slice(2).join('|')})(?:[ -](${ONES.slice(1, 10).join('|')}))?\\b`, 'g'), (_, t, o) => TENS.indexOf(t) * 10 + (o ? ONES.indexOf(o) : 0))
+  .replace(new RegExp(`\\b(${ONES.join('|')})\\b`, 'g'), (w) => ONES.indexOf(w))
+  .replace(/\b(\d+) hundred(?: and)?(?: (\d\d?)\b)?/g, (_, h, r) => +h * 100 + (r ? +r : 0));
 function mathTokens(s) {
-  const e = s
-    .replace(/^(?:what(?:'s| is)|calculate|compute|how much is|work out)\s+/, '')
+  const e = numerals(s)
+    .replace(/^(?:open (?:up )?(?:my |the )?calculator,? (?:and |to |then )?)?(?:what(?:'s| is)|calculate|compute|how much is|work out|search up|search|do|enter|punch in|put in)\s+/, '')
     .replace(/\s*(?:equals|is)?\s*[?.!]*$/, '')
     .replace(/square root of/g, ' sqrt ').replace(/\bsquared\b/g, ' sq ').replace(/\bcubed\b/g, ' cube ')
     .replace(/(?:percent|%) of/g, ' pctof ')
@@ -188,6 +195,8 @@ export function quickIntent(text) {
   }
   if ((m = t.match(CONV_A))) return { kind: 'convert', n: WORDS[m[1]] ?? Number(m[1].replace(/,/g, '')), a: m[2], b: m[3] };
   if ((m = t.match(CONV_B))) return { kind: 'convert', n: m[2] ? WORDS[m[2]] ?? Number(m[2].replace(/,/g, '')) : 1, a: m[3], b: m[1] };
+  // "I got a five out of thirty two, what's my grade?": the percentage
+  if ((m = numerals(t).match(/\b(\d+(?:\.\d+)?) out of (\d+(?:\.\d+)?)\b/)) && +m[2] > 0 && /\b(?:grade|percent(?:age)?|score|what(?:'s| is) (?:that|it|my))\b/.test(t)) return { kind: 'outof', a: +m[1], b: +m[2] };
   if (WEB.some((r) => r.test(t))) return { kind: 'web', question: String(text).trim().slice(0, 300) };
   const tok = mathTokens(t);
   if (tok && tok.some((x) => /^(?:[*/+]|sqrt|sq|cube|pctof|-)$/.test(x)) && tok.some((x) => /\d/.test(x))) {
@@ -234,6 +243,10 @@ export async function quickAnswer(text, { webAnswer, now = new Date(), tz } = {}
     }
     const lead = q.kind === 'date' ? "It's " : q.days === -1 ? 'Yesterday was ' : q.days ? "Tomorrow's " : `In ${plural(q.n, q.unit)} it'll be `;
     return done(`${lead}${longDate(d).replace(/\d+$/, (x) => nth(+x))}.`, longDate(d, true), 'Date');
+  }
+  if (q.kind === 'outof') {
+    const p = Math.round((q.a / q.b) * 1000) / 10;
+    return done(`${q.a} out of ${q.b} is ${p} percent.`, `${q.a}/${q.b} = ${p}%`, 'Percent');
   }
   if (q.kind === 'spell') {
     const letters = [...q.word.toUpperCase()].filter((c) => /[A-Z]/.test(c));

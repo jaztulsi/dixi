@@ -32,7 +32,7 @@ import { grabSelection, pasteText, actOn, screenText } from './capture.js';
 import { IRREVERSIBLE, RECURRING } from '../renderer/ui/pagekit.js';
 import { execFile } from 'node:child_process';
 import { pttSession, hotkeyOwner } from './ptt.js';
-import { HERE, MISSED, HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
+import { chatter, HERE, MISSED, HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
 import { openMemory, factsLine, memoryTurn, openProfile, loadProfile, profileLine, masked, FORM, secretField, profileFocused } from './memory.js';
 import * as brief from './brief.js';
 import { watchIntent, startWatch, stopWatch, isWatching, checkPrompt, CHECK_SCHEMA } from './watch.js';
@@ -111,8 +111,10 @@ export function controlsText(list) {
 const TEXT_INPUT = /^AX(TextField|TextArea|ComboBox|SearchField)$/;
 /** Why a key press must be approved first, or null. Enter submits and sends; Space presses a focused
  *  button; ⌘Q quits; ⌘⌫ deletes; a bare ⌫ outside a text box deletes the selected file or message. */
-export function keyRisk(combo, focusedEl, { sensitive = false } = {}) {
+const ENTER_SAFE = /^(Calculator|Notes|TextEdit|Pages|Numbers|Keynote|Preview|Photos|Music|Maps)$/;   // Enter can't send anything here
+export function keyRisk(combo, focusedEl, { sensitive = false, app = '' } = {}) {
   const k = String(combo).toLowerCase().replace(/\s+/g, '');
+  if (/^(return|enter|kp_enter)$/.test(k) && ENTER_SAFE.test(app) && !sensitive) return null;   // "=" in Calculator, a new line in Notes
   const f = focusedEl;
   const typing = f && TEXT_INPUT.test(f.role);
   // Space or Enter on a focused button presses it: the same check as clicking it.
@@ -680,7 +682,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       return acted(ok(r.checked ? 'Typed; the text is in the box.' : "Typed, but that box can't be read back, so look before going on."), f);
     }
     if (n === 'key' || n === 'hold_key') {
-      const why = keyRisk(c.input.text, await input.focused(), { sensitive });
+      const front = /^\s*(return|enter)\s*$/i.test(c.input.text) ? (await input.frontApp()).name : ctx?.name;   // the app the key lands in (the agent may have opened it)
+      const why = keyRisk(c.input.text, await input.focused(), { sensitive, app: front });
       if (why && !asked && !(await yes(why))) return no(why);
       await input.key(c.input.text, { repeat: c.input.repeat ?? 1, holdSecs: n === 'hold_key' ? c.input.duration ?? 1 : 0 }); await pause(); return acted(ok());
     }
@@ -979,6 +982,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     mark(runId, 'stt_final');
     const head = forced ? null : state.spec;
     state.spec = null;
+    if (!forced && chatter(text)) { head?.ctrl.abort(); if (!busy()) show({ state: 'idle' }); return; }   // filler, not a request: nothing done, nothing stopped
     if (!forced && state.plan && state.ctrl) { head?.ctrl.abort(); mark(runId, 'routed'); planInto(state.plan, text, state.ctrl.signal, runId); return; }   // added to the running plan
     state.runId = runId;
     state.ctrl?.abort();
