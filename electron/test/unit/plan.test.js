@@ -50,6 +50,14 @@ test(`the code path: ${CODE.length} commands (${CODE.filter(([, k]) => k.length 
   for (const c of ['find my phone', 'find my way home', 'type a reply to Sam', 'type my address', 'type it', 'switch to the New York Times']) assert.equal(instantOf(c, { apps }), null, c);   // written first, or not an app
 });
 
+test('a misheard app name opens the one app it sounds like, by code; a site or a near-miss short word does not', () => {
+  const mine = [...apps, 'Discord', 'Obsidian', 'Roblox', 'Granola', 'Xcode', 'WhatsApp'];
+  const heard = { 'open discored': 'Discord', 'open up obsidion': 'Obsidian', 'launch roblocks': 'Roblox', 'open granular': 'Granola', 'open x code': 'Xcode', "open what's app": 'WhatsApp', 'switch to google crome': 'Google Chrome' };
+  for (const [c, app] of Object.entries(heard)) assert.deepEqual(instantOf(c, { apps: mine }), { kind: 'open', app }, c);
+  for (const c of ['open gmail', 'open notion', 'go to the kitchen', 'start a timer']) assert.equal(instantOf(c, { apps: mine }), null, c);
+  assert.equal(instantOf('go to discord.com', { apps: mine }).intent.verb, 'site', 'the site, not the app');
+});
+
 // Not instant: one planner call, then the checks.
 test('a command code cannot do alone goes to ONE planner call, with a short prompt', async () => {
   let calls = 0, body;

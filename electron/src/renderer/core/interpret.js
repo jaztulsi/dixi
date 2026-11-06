@@ -168,6 +168,15 @@ function editDistance(a, b) {
 }
 /** Same name, spelled or spaced differently ("Brindle mart" / "Brindlemart", "Faza" / "Fazza"). */
 export const closeSpelling = (a, b) => { const x = squashed(a), y = squashed(b); return editDistance(x, y) <= Math.max(1, Math.round(Math.max(x.length, y.length) * 0.25)); };
+/** The one name that `heard` is a misheard spelling or sound of ("discored" → Discord, "roblocks" → Roblox,
+ *  "x code" → Xcode), else null. ponytail: ≤25% edits or the same consonant skeleton; under 6 letters only
+ *  a respacing counts ("gmail" isn't Mail). */
+export function soundsLike(heard, names) {
+  const h = squashed(heard), sk = skeleton(h), one = (xs) => { const u = [...new Set(xs)]; return u.length === 1 ? u[0] : null; };
+  const same = names.filter((n) => squashed(n) === h);
+  if (same.length || h.length < 6) return one(same);
+  return one(names.filter((n) => closeSpelling(h, n) || (sk.length >= 4 && skeleton(squashed(n)) === sk)));
+}
 
 // ---- fast path: no AI ----
 const OPEN_VERBS = ['open up', 'open', 'go to', 'pull up', 'bring up', 'take me to', 'launch', 'visit', 'navigate to', 'load up', 'fire up', 'head to', 'switch to'];

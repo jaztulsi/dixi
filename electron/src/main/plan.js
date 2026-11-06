@@ -7,7 +7,7 @@
 //    invented (no names, text or sites you didn't say), no shell. A step that fails a check becomes a
 //    `computer` step for its own words only.
 // The model brings the app knowledge ("text Mom" is Messages); this file names no apps, sites or phrases.
-import { tokens } from '../renderer/core/interpret.js';
+import { tokens, soundsLike } from '../renderer/core/interpret.js';
 import { split, MISSED } from '../renderer/core/everywhere-words.js';
 import { desktopIntent, typeIntent } from './desktop.js';
 import { quickIntent } from './quick.js';
@@ -46,7 +46,9 @@ export function instantOf(clause, { apps = [], commands = [], filesBefore = fals
   const f = fileIntent(c);
   // A search for files; "open it" / "rename it" / "move it to Documents" only after one (in this sentence or just before).
   if (f && (f.verb === 'find' ? Boolean(f.query || f.kind || f.src) : filesBefore)) return { kind: 'file', intent: f };
-  return null;
+  // A misheard app name ("open discored"): the one installed app it sounds like, instead of a planner call. Not a site ("discord.com").
+  const near = o && !/\.[a-z]{2,}\b/i.test(o[1]) && (soundsLike(o[1], apps) ?? (/\sapp[.!]?$/i.test(c) ? soundsLike(`${o[1]} app`, apps) : null));   // "what's app": the "app" was the name
+  return near ? { kind: 'open', app: near } : null;
 }
 
 /** "find the PDF I downloaded yesterday, rename it, and move it to Documents": a file search, then clauses that only point
