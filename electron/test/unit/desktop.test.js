@@ -40,7 +40,7 @@ test('phrasings match the right verb', () => {
 });
 
 test('screen questions, general requests and things left out do not match', () => {
-  for (const t of ['what is this', 'open the first link', 'click send', 'open Spotify', 'open Notes', 'play lo fi beats', 'play the song despacito', 'remind me to call mom tomorrow',
+  for (const t of ['what is this', 'open the first link', 'click send', 'open Spotify', 'open Notes', 'play lo fi beats', 'play the song despacito', 'remind me to buy milk',
     'center this text', 'open notes.md', 'open index.html', 'go to the next page', 'volume', 'quit', 'quit this', 'quit it', 'quit Dixi',
     'empty the trash', 'shut down', 'restart the computer', 'delete this file', 'delete all my files', 'turn it up', 'set a timer', 'lock the door', 'what is the battery of this screen mean?',
     'what song is it', 'how do I turn on dark mode in this app and also email it', 'skip', 'next', 'move it somewhere']) assert.equal(I(t), null, t);
@@ -289,4 +289,19 @@ test('everyday keys, web searches and folders are code, never the model', async 
   await runDesktop(I('make a new folder on my desktop called homework'), { ...r.deps, exists: () => false });
   assert.deepEqual(r.calls, [['open', '/Users/sam/Downloads'], ['mkdir', '/Users/sam/Desktop/homework']]);
   assert.match((await runDesktop(I('make a new folder on my desktop called homework'), { ...r.deps, exists: () => true })).say, /already/);
+});
+
+test('reminders with a day or time go straight into Reminders, said back in full, undo-able', async () => {
+  const r = rig((cmd, args) => (args.join(' ').includes("Application('Reminders')") ? 'id:x-apple-reminder://R1' : ''));
+  r.deps.now = () => new Date(2026, 10, 5, 14, 5);   // Thursday Nov 5, 2:05 PM
+  const res = await runDesktop(I('remind me to call the dentist tomorrow at 9'), r.deps);
+  assert.equal(res.say, 'I’ll remind you “call the dentist” on Friday, November 6th, at 9 AM.');
+  assert.deepEqual(res.undo, { kind: 'reminder', id: 'x-apple-reminder://R1' });
+  assert.equal(r.calls[0][0], 'osascript');
+  assert.match(r.calls[0].at(-1), /"title":"call the dentist","start":"2026-11-06T09:00:00"/, 'the words go in as JSON, never as script');
+  assert.match((await runDesktop(I('remind me to call mom tonight'), r.deps)).say, /Thursday, November 5th, at 8 PM/);
+  assert.match((await runDesktop(I('remind me at 5 to stretch'), r.deps)).say, /“stretch” on Thursday.*5 PM/);
+  assert.match((await runDesktop(I('remind me on Friday to pay rent'), r.deps)).say, /“pay rent” on Friday, November 6th\.$/);
+  for (const t of ['remind me to buy milk', 'remind me about this', 'remind me in 5 minutes to stretch']) assert.notEqual(I(t)?.verb, 'remind', t);
+  assert.equal(I('remind me in 5 minutes to stretch').verb, 'timer');
 });

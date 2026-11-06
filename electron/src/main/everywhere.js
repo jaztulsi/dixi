@@ -869,7 +869,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         if (s.app && !(await toFront(s.app, { open: input.openApp, front: input.frontApp }))?.name) return { ok: false, error: `${s.app} didn't come to the front, so I didn't type` };
         const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why };
       }
-      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, appKey, open: input.openApp, front: input.frontApp, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); return r.ok === false ? { ok: false, error: r.say } : { ok: true, say: r.say, said: r.quiet }; }   // quiet: a key press needs no "Done."
+      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, appKey, open: input.openApp, front: input.frontApp, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); if (r.undo) state.undoLast = calUndo(r.undo); return r.ok === false ? { ok: false, error: r.say } : { ok: true, say: r.say, said: r.quiet }; }   // quiet: a key press needs no "Done."
       if (s.kind === 'file') {
         const r = await fileAction(s.intent, null, { approve, say, undo });
         if (r?.results) state.filesAt = Date.now();
@@ -1070,6 +1070,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       const doc = !forced && !dk && doctorIntent(t);
       if (dk || doc) {
         const r = dk ? await runDesktop(dk, { exec: desktopExec, say, approve: async () => true, key: input.key, appKey, screens: () => screen.getAllDisplays().map((d) => d.workArea) }) : await diagnose(doc, {});
+        if (r.undo) state.undoLast = calUndo(r.undo);
         say(r.say); show({ state: 'done', title: r.title, text: r.text, linger: r.quiet ? 1200 : doc ? 12000 : 3000 });
         return;
       }
@@ -1248,11 +1249,12 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     Promise.resolve(lesson.done).finally(() => { if (state.lesson === lesson) state.lesson = null; });
   }
 
+  const calUndo = (u) => ({ at: Date.now(), run: async () => ((await removeFromCalendar(u)) ? 'Undone. It’s off.' : 'I couldn’t find it to take it off.') });
   // ---- "add this to my calendar" (calendar.js): the date read off the screen, read back in full, then a yes ----
   async function addEvent(text, shot, ctx, signal) {
     show({ state: 'thinking', text: 'Reading the date…', app: contextLine(ctx) });
     const r = await addToCalendar({ shot, said: text, claude, image, signal, approve, askUser, careful: prefs.careful });
-    if (r.undo) state.undoLast = { at: Date.now(), run: async () => ((await removeFromCalendar(r.undo)) ? 'Undone. It’s off.' : 'I couldn’t find it to take it off.') };
+    if (r.undo) state.undoLast = calUndo(r.undo);
     if (signal.aborted) return;
     show({ state: 'done', title: r.ok ? 'Added' : 'Calendar', text: r.text, linger: 6000 });
     say(r.text);

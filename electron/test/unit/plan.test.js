@@ -256,8 +256,8 @@ test('never asks: the planner has no "ask" step, its prompt forbids questions ba
 
 // Phase 3: the fast planner (Groq/Cerebras) first; Haiku only when the fast plan isn't sure.
 test('fast planner: a sure plan is used as is and Haiku is never called; an unsure, failed or screen-agent plan goes to Haiku', async () => {
-  const said = 'remind me to call the dentist tomorrow at 9, then text Sam I am late';
-  const good = [{ do: 'script', clause: 'remind me to call the dentist tomorrow at 9', lang: 'applescript', code: 'tell application "Reminders" to make new reminder' },
+  const said = 'add milk to my grocery list, then text Sam I am late';
+  const good = [{ do: 'script', clause: 'add milk to my grocery list', lang: 'applescript', code: 'tell application "Reminders" to make new reminder' },
     { do: 'script', clause: 'text Sam I am late', lang: 'applescript', code: 'tell application "Messages" to send "I am late" to buddy "Sam"' }];
   const fast = (steps, finish = 'stop') => async (body) => {
     assert.equal(body.messages[0].role, 'system');

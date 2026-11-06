@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { unsafe } from './safesite.js';
+import { spokenReminder, readBack, createArgs } from './calendar.js';
 import { findControls, pressControl, openApp, frontApp, key, windowTexts } from './input.js';
 
 /** The real exec: (cmd, args) → stdout. execFile, never a shell. The tests pass a fake. */
@@ -59,6 +60,7 @@ const RULES = [
   rule('timer', String.raw`(?:set |start )(?:a |an )?(${DUR}) timer`, (m) => ({ ms: parseDuration(m[1]) })),
   rule('timer', String.raw`remind me in (${DUR}) to (.{1,100})`, (m) => ({ ms: parseDuration(m[1]), label: m[2].trim() })),
   rule('timer', String.raw`remind me to (.{1,100}?) in (${DUR})`, (m) => ({ ms: parseDuration(m[2]), label: m[1].trim() })),
+  rule('remind', String.raw`remind me (.{3,160})`, (m) => ({ said: `remind me ${m[1]}` })),   // "… tomorrow at 9": Reminders (calendar.js)
   rule('timers', String.raw`what timers (?:do i have|are (?:running|set))|(?:list|show)(?: my)?(?: the)? timers|how (?:much time(?: is)?|long(?: is)?) left(?: on (?:the|my) timer)?|do i have any timers`),
   rule('cancel', String.raw`(?:cancel|stop|clear|delete|remove) (?:the |my |all |all my |every )?(?:timers?|reminders?)`, (m) => ({ all: /\b(all|every)\b|timers\b|reminders\b/i.test(m[0]) })),
   rule('dark', String.raw`(?:toggle|flip|switch)(?: the)? (?:dark mode|appearance)`, () => ({ mode: 'toggle' })),
@@ -142,6 +144,7 @@ export function desktopIntent(text) {
     }
     if (verb === 'mkdir' && (/^\.|\.\.|^\s*$/.test(a.name) || NOT_APPS.test(a.name))) return null;
     if (verb === 'timer' && !a.ms) return null;
+    if (verb === 'remind' && !spokenReminder(a.said)) return null;   // no day or time said: the planner's
     if (verb === 'quit' && NOT_APPS.test(a.app)) return null;
     if (verb === 'new' && /^(?:folder|password|passcode|account|user|profile|card|line|paragraph|one)$/.test(a.what)) return null;   // not a New-key thing
     if (verb === 'newwin' && (NOT_APPS.test(a.app) || /^(?:private|incognito|guest|browser|web|tab)$/i.test(a.app))) return null;   // a kind of window, not an app
@@ -352,6 +355,16 @@ const DO = {
     await (d.appKey ?? d.key ?? key)(i.combo);
     const pretty = i.combo.replace(/cmd\+/g, '⌘').replace(/ctrl\+/g, '⌃').replace(/shift\+/g, '⇧').replace('pagedown', 'Page Down').replace('pageup', 'Page Up').replace(/tab$/, 'Tab').replace(/up$/, '↑').replace(/down$/, '↓').replace(/(^|[⌘⌃⇧])([a-z])$/, (_, m, k) => m + k.toUpperCase());
     return { say: '', title: 'Done', text: pretty, quiet: true };
+  },
+  // "remind me to call the dentist tomorrow at 9": straight into Reminders, said back with the full date, undo-able.
+  // ponytail: careful mode doesn't read it back first here (the screen path does); "undo that" takes it off.
+  async remind(i, d) {
+    const now = d.now(), item = spokenReminder(i.said, now);
+    if (!item) return out("I didn't catch when.", 'Reminders');
+    const [cmd, ...args] = createArgs(item);
+    const id = /^id:(.+)$/.exec(String(await d.exec(cmd, args)))?.[1];
+    const say = readBack(item, { now }).replace(/\?$/, '.').replace(/^Remind you /, 'I’ll remind you ');
+    return { ...out(say, 'Reminder'), undo: id ? { kind: 'reminder', id } : null };
   },
   async window(i, d) {
     const win = JSON.parse(await jxa(d, `const p = Application('System Events').applicationProcesses.whose({frontmost: true})[0]; const w = p.windows[0];

@@ -66,6 +66,48 @@ export function validateItem(raw, { now = new Date(), said = '' } = {}) {
   return { ok: true, item: { kind, title, date, start: s == null ? null : hhmm(s), end: e == null ? null : hhmm(e), allDay, location: clean(r.location, 120), notes: clean(r.notes, 200) } };
 }
 
+const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const DAY_RE = /\b(tomorrow|today|tonight|this (?:morning|afternoon|evening)|(?:on |this |next )?(sunday|monday|tuesday|wednesday|thursday|friday|saturday))(?: (morning|afternoon|evening|night))?\b/i;
+const AT_RE = /\b(?:at|by) (\d{1,2})(?::([0-5]\d))? ?(a\.?m\.?|p\.?m\.?)?(?=\s|$|[.,!?])|\bat (noon|midnight)\b/i;
+
+/** "remind me to call the dentist tomorrow at 9" → a checked reminder item, no AI and no screen; null when the words
+ *  don't say when (a day or a time) or point at the screen ("remind me about this"). Pure.
+ *  ponytail: a weekday is its next one (today's weekday = a week out); "next Friday" = the same. */
+export function spokenReminder(said, now = new Date()) {
+  const m = /^(?:please )?remind me (.{3,160})$/i.exec(String(said ?? '').trim().replace(/[.!?]+$/, ''));
+  if (!m || /^in \d|^in (?:a|an|one|two|five|ten|half)\b/i.test(m[1])) return null;   // "remind me in 5 minutes": a timer
+  let rest = m[1], date = null, start = null, late = false;
+  const at = AT_RE.exec(rest);
+  if (at) {
+    rest = rest.replace(at[0], ' ');
+    if (at[4]) start = at[4].toLowerCase() === 'noon' ? '12:00' : '23:59';
+    else if (+at[1] >= 1 && +at[1] <= 12) start = { h: +at[1] % 12, mm: at[2] ?? '00', ap: at[3]?.[0]?.toLowerCase() };
+    else return null;
+  }
+  const day = DAY_RE.exec(rest);
+  if (day) {
+    rest = rest.replace(day[0], ' ');
+    const w = day[1].toLowerCase(), add = w === 'tomorrow' ? 1 : day[2] ? (DAYS.indexOf(day[2].toLowerCase()) - now.getDay() + 7) % 7 || 7 : 0;
+    date = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + add));
+    late = /tonight|evening|night|afternoon/i.test(day[0]);
+    const part = /morning/i.test(day[0]) ? '09:00' : /afternoon/i.test(day[0]) ? '15:00' : late ? '20:00' : null;
+    start ??= part;   // "tonight" with no time: 8 PM, not all day
+  }
+  if (!date && !start) return null;
+  if (start && typeof start === 'object') {   // bare "at 9" is 9 AM, "at 3" is 3 PM (spoken() above); "tonight at 9" is 9 PM
+    const pm = start.ap ? start.ap === 'p' : late || (start.h >= 1 && start.h <= 6);
+    start = hhmm((start.h + (pm ? 12 : 0)) * 60 + +start.mm);
+  }
+  if (!date) {   // a time and no day: today if it's still ahead, else tomorrow
+    const ahead = mins(start) > now.getHours() * 60 + now.getMinutes();
+    date = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + (ahead ? 0 : 1)));
+  }
+  const title = rest.replace(/\s+/g, ' ').trim().replace(/^(?:to|about|that i (?:need|have) to|that)\s+/i, '').replace(/[\s,]+(?:to|and|then)?$/i, '').trim();
+  if (!title || /^(?:this|that|it|these|those)$/i.test(title)) return null;
+  const v = validateItem({ kind: 'reminder', title, date, start, end: null, allDay: !start, location: '', notes: '' }, { now });
+  return v.ok ? v.item : null;
+}
+
 const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
 const clock = (t, ampm = true) => { const m = mins(t), h = Math.floor(m / 60) % 12 || 12; return `${h}${m % 60 ? `:${pad(m % 60)}` : ''}${ampm ? ` ${m >= 720 ? 'PM' : 'AM'}` : ''}`; };
 const dayWords = (date, now, tz, short) => {
