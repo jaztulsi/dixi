@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><script type="module">
+import { Mic } from '../../src/renderer/ui/mic.js';
+const { ipcRenderer } = require('electron');
+const q = new URLSearchParams(location.search), [ec, ns, agc] = q.get('flags').split(',').map((x) => x === '1');
+const info = [], chunks = [];
+const mic = new Mic({ processing: { echoCancellation: ec, noiseSuppression: ns, autoGainControl: agc }, report: (m) => info.push(m) });
+// Cold open, then a warm one (the graph kept from the first): both first-chunk times are reported.
+if (q.get('cold') === '1') { await mic.start(() => {}); mic.stop(); }
+await mic.start((c) => chunks.push(new Int16Array(c)));
+await new Promise((r) => setTimeout(r, Number(q.get('secs')) * 1000));
+await mic.drain(); mic.stop();
+const n = chunks.reduce((a, c) => a + c.length, 0), pcm = new Int16Array(n);
+let o = 0; for (const c of chunks) { pcm.set(c, o); o += c.length; }
+ipcRenderer.send('done', { pcm: pcm.buffer, info });
+</script>

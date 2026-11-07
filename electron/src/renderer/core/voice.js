@@ -205,7 +205,8 @@ export class VoiceAgent {
     if (!s) return;
     this.session = null;
     clearInterval(this.sessionTimer);
-    this.mic?.stop();
+    if (!cancel && this.mic?.drain) await this.mic.drain();   // the last part-frame (≤ 80 ms, the end of your last word) goes out first
+    if (!this.session) this.mic?.stop();   // ⌥Space again during that drain: the new session keeps the mic
     const open = this.heard && !this.turnsDone.has(this.heard.turn) ? this.heard : null;
     if (cancel) this.ewWait();
     if (open && !cancel) {

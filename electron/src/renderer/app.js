@@ -99,7 +99,7 @@ const executor = new Executor({
 const agent = new BrowserAgent({ tabs, llm, executor, onChange: () => render() });
 executor.agent = agent;
 // Remembered understandings persist across launches, so repeats cost no AI call.
-const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic(), tabs, speaker, llm, tiers: config.tiers, executor, settings, terms: catalog?.names ?? [],
+const voice = new VoiceAgent({ deepgram: window.dixi.deepgram, mic: new Mic({ report: (mic) => window.dixi.deepgram.control({ type: 'MicInfo', mic }) }), tabs, speaker, llm, tiers: config.tiers, executor, settings, terms: catalog?.names ?? [],
   registry, cache: new ParseCache(localStorage), agent, trace, onChange: () => render() });
 window.dixi.onPopup((url) => tabs.createTab(url));
 

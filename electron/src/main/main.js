@@ -15,6 +15,7 @@ import { speakable } from './speakable.js';
 import { setupEverywhere } from './everywhere.js';
 import { watchControl } from './ptt.js';
 import { stillWhenAway } from './still.js';
+import { AudioDump } from './audiodump.js';
 import { guardSession, unsafe } from './safesite.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -61,9 +62,11 @@ app.on('before-quit', () => { quitting = true; input.stopAll(); });   // C3: no 
 // A service that refused its key or ran out of credit is skipped for 6 h, across relaunches (STT and TTS share it).
 const dead = new Dead(path.join(app.getPath('userData'), 'dead-services.json'));
 const sttName = config.env.DIXI_STT || (config.keys.elevenlabs ? 'elevenlabs' : 'deepgram');
+const audioDump = config.env.DIXI_DEBUG_AUDIO ? new AudioDump(path.join(app.getPath('userData'), 'audio-debug'), { provider: () => (deepgram.fallen || sttName === 'deepgram' ? 'deepgram-flux' : 'elevenlabs-scribe') }) : null;
 const emitToUI = (channel, data) => win?.webContents.send(channel, data);
 // Speech is coming in, so a planner call is about to follow: warm the API connection now (B5; throttled inside).
 const sttEmit = (channel, data) => {
+  if (channel === 'deepgram:message' && audioDump && data.includes('"EndOfTurn"')) audioDump.heard('EndOfTurn');
   if (channel === 'deepgram:message' && config.keys.anthropic) prewarm();
   if (channel === 'deepgram:message' && /^\{"type":"Reconnect(?:ing|ed)"\}$/.test(data)) everywhere?.reconnecting?.(data.includes('ing'));   // the island says so too
   emitToUI(channel, data);
@@ -393,10 +396,14 @@ export function searchFormTemplate(html, base) {
 }
 on('net:preconnect', (url) => { if (/^https?:\/\//i.test(url)) tabsSession().preconnect({ url, numSockets: 2 }); });
 
-handle('deepgram:open', (params) => deepgram.open({ keyterms: (params?.keyterms ?? []).slice(0, 50).map(String) }));
-on('deepgram:audio', (chunk) => { deepgram.sendAudio(chunk); everywhere?.level?.(chunk); });
-on('deepgram:control', (message) => deepgram.sendControl(message));
-handle('deepgram:close', () => deepgram.close());
+handle('deepgram:open', (params) => { audioDump?.begin(); return deepgram.open({ keyterms: (params?.keyterms ?? []).slice(0, 50).map(String) }); });
+on('deepgram:audio', (chunk) => { deepgram.sendAudio(chunk); audioDump?.add(chunk); everywhere?.level?.(chunk); });
+on('deepgram:control', (message) => {
+  if (message?.type === 'MicInfo') return audioDump?.info(message.mic);   // local only, never sent to the provider
+  if (message?.type === 'CloseStream') audioDump?.hotkey();
+  deepgram.sendControl(message);
+});
+handle('deepgram:close', () => { audioDump?.end(); return deepgram.close(); });
 
 handle('tab:screenshot', async (webContentsId) => {
   const wc = webContents.fromId(Number(webContentsId));

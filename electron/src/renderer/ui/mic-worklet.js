@@ -5,6 +5,11 @@ class PCM16Chunker extends AudioWorkletProcessor {
     super();
     this.buffer = new Int16Array(1280);  // 80 ms at 16 kHz: Flux's recommended chunk
     this.length = 0;
+    this.port.onmessage = (e) => {
+      if (e.data === 'drain' && this.length) this.port.postMessage(this.buffer.buffer.slice(0, this.length * 2));
+      if (e.data === 'drain') this.port.postMessage({ drained: true });
+      this.length = 0;   // 'reset' too: the next session never starts with this one's leftovers
+    };
   }
 
   process(inputs) {
