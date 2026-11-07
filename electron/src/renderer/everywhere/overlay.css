@@ -13,7 +13,6 @@
   --dock: 0px;        /* the Dock's height on this display (main sends it), so the pill sits just above it */
   --h: var(--row);
   --ph: var(--row);
-  --orange: #ff9f0a;  /* the mic-on dot, the same color as macOS's own */
   font: 500 var(--t-m)/1.35 var(--font);
   color: var(--ink);
 }
@@ -64,21 +63,16 @@ html.large #text { max-width: 420px; }
 #text:empty, [data-state="idle"] #text, [data-state="listening"] #text, [data-state="thinking"] #text { display: none; }   /* only Dixi's answers go in the pill */
 [data-state="error"] #text { color: var(--red); }
 
-/* leading mark: waveform (listening; it ripples while thinking), dot (acting), check (done); none idle or on an error */
+/* leading mark: waveform (listening; it ripples while thinking or acting), check (done); none idle or on an error.
+   No orange "mic on" dot and no pulsing dot: the live waveform already says it is listening, and macOS shows its own mic indicator. */
 .lead { flex: none; height: 18px; display: grid; place-items: center; }
 .lead > * { grid-area: 1 / 1; display: none; }
-[data-state="listening"] .wave, [data-state="thinking"] .wave, [data-state="acting"] .dot, [data-state="done"] .check { display: flex; }
+[data-state="listening"] .wave, [data-state="thinking"] .wave, [data-state="acting"] .wave, [data-state="done"] .check { display: flex; }
 [data-state="error"] .lead, [data-state="idle"] .lead { display: none; }
 .wave { gap: 2.5px; align-items: center; height: 18px; }
 .wave i { width: 2px; height: 18px; border-radius: 1px; background: var(--ink); transform: scaleY(var(--l, 0.12)); transition: transform 70ms linear; }
-[data-state="thinking"] .wave i { animation: ripple 900ms ease-in-out calc(var(--d, 0) * 70ms) infinite; opacity: 0.85; }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
-[data-state="acting"] .dot { animation: pulse 900ms ease-in-out infinite alternate; }
+[data-state="thinking"] .wave i, [data-state="acting"] .wave i { animation: ripple 900ms ease-in-out calc(var(--d, 0) * 70ms) infinite; opacity: 0.85; }
 .check { width: 16px; height: 16px; fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-/* the mic is on: a small orange dot, only after ⌥Space */
-.rec { display: none; flex: none; width: 6px; height: 6px; margin-left: -2px; border-radius: 50%; background: var(--orange); }
-[data-state="listening"] .rec { display: block; }
-@keyframes pulse { to { opacity: 0.35; } }
 @keyframes ripple { 0%, 100% { transform: scaleY(0.12); } 50% { transform: scaleY(0.55); } }   /* a wave out from the middle: "working on it" */
 
 /* ---- your words, under the pill: the newest end in view; the hint takes the same place when you point at idle Dixi ---- */
@@ -150,7 +144,7 @@ html.top .card[hidden] { transform: translateY(-6px); }
 @media (prefers-reduced-motion: reduce) {
   .island, .island:hover, .card, .card[hidden] { transform: none !important; }
   .island, .buddy, .buddy img { transition: none; }
-  .wave i, .dot, .mark, .mark.point::after, .label { animation: none !important; }
+  .wave i, .mark, .mark.point::after, .label { animation: none !important; }
   [data-state="thinking"] .wave i { transform: scaleY(0.35); opacity: 0.5; }   /* still reads as "working", without motion */
   .cursor.on { animation: fade 900ms linear forwards; }
 }
