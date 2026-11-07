@@ -66,7 +66,7 @@ const audioDump = config.env.DIXI_DEBUG_AUDIO ? new AudioDump(path.join(app.getP
 const emitToUI = (channel, data) => win?.webContents.send(channel, data);
 // Speech is coming in, so a planner call is about to follow: warm the API connection now (B5; throttled inside).
 const sttEmit = (channel, data) => {
-  if (channel === 'deepgram:message' && audioDump && data.includes('"EndOfTurn"')) audioDump.heard('EndOfTurn');
+  if (channel === 'deepgram:message' && audioDump && data.includes('"EndOfTurn"')) { try { audioDump.heard('EndOfTurn', JSON.parse(data).transcript); } catch {} }
   if (channel === 'deepgram:message' && config.keys.anthropic) prewarm();
   if (channel === 'deepgram:message' && /^\{"type":"Reconnect(?:ing|ed)"\}$/.test(data)) everywhere?.reconnecting?.(data.includes('ing'));   // the island says so too
   emitToUI(channel, data);
@@ -404,6 +404,7 @@ on('deepgram:control', (message) => {
   deepgram.sendControl(message);
 });
 handle('deepgram:close', () => { audioDump?.end(); return deepgram.close(); });
+if (audioDump) ipcMain.on('everywhere:transcript', (_e, t) => audioDump.shown(t));   // what the island showed
 
 handle('tab:screenshot', async (webContentsId) => {
   const wc = webContents.fromId(Number(webContentsId));

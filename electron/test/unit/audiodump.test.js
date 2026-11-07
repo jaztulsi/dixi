@@ -8,7 +8,7 @@ import { AudioDump, levels } from '../../src/main/audiodump.js';
 test('debug audio: one 16 kHz WAV per session with levels, first-word check, dropped audio and how it ended; old WAVs pruned', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-dump-'));
   let now = Date.parse('2026-11-07T10:00:00Z');
-  const d = new AudioDump(dir, { now: () => now, provider: () => 'deepgram-flux' });
+  const d = new AudioDump(dir, { now: () => now, provider: () => 'deepgram-flux', lateMS: 0 });
   const old = path.join(dir, 'old.wav'); fs.writeFileSync(old, 'x'); fs.utimesSync(old, new Date(now - 8 * 864e5), new Date(now - 8 * 864e5));
   d.begin();
   const quiet = new Int16Array(3200), loud = new Int16Array(16000).map((_, i) => Math.round(Math.sin(i / 5) * 8000));
@@ -27,4 +27,14 @@ test('debug audio: one 16 kHz WAV per session with levels, first-word check, dro
   d.begin(); d.add(loud.buffer); assert.equal(d.end().firstWordCut, true);
   d.begin(); assert.equal(d.end(), null, 'nothing heard: no file');
   assert.equal(levels(new Int16Array(4)).rmsDb, -Infinity);
+});
+
+test('audiodump: the last turn and the on-screen words that arrive after key-up still land in the log line', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dump-'));
+  const d = new AudioDump(dir, { lateMS: 20 });
+  d.begin(); d.add(new Int16Array(1600).fill(3000).buffer); d.heard('EndOfTurn', 'the first half'); d.end();
+  d.heard('EndOfTurn', 'and the rest'); d.shown('the first half and the rest');
+  await new Promise((r) => setTimeout(r, 60));
+  const rec = JSON.parse(fs.readFileSync(path.join(dir, 'capture.log'), 'utf8'));
+  assert.equal(rec.said, 'the first half and the rest'); assert.equal(rec.shown, 'the first half and the rest'); assert.equal(rec.providerTurns, 2);
 });

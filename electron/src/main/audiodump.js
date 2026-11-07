@@ -30,12 +30,17 @@ export function wav(samples) {
 }
 
 export class AudioDump {
-  constructor(dir, { now = Date.now, provider = () => '' } = {}) { this.dir = dir; this.now = now; this.provider = provider; this.cur = null; }
+  // lateMS: the provider's last turn and the transcript on screen can arrive just after the mic closes; the
+  // log line waits that long so they land in it.
+  constructor(dir, { now = Date.now, provider = () => '', lateMS = 2500 } = {}) { Object.assign(this, { dir, now, provider, lateMS, cur: null, late: null }); }
 
-  begin() { this.end('reopened'); this.cur = { at: this.now(), chunks: [], mic: null, eot: 0 }; }
+  begin() { this.end('reopened'); this.cur = { at: this.now(), chunks: [], mic: null, eot: 0, said: [], shown: '' }; }
   add(chunk) { this.cur?.chunks.push(Buffer.from(chunk)); }
   info(mic) { if (this.cur) this.cur.mic = { ...this.cur.mic, ...mic }; }
-  heard(event) { if (this.cur && event === 'EndOfTurn') this.cur.eot++; }
+  /** A provider event; an EndOfTurn's transcript is what the provider heard, before any of Dixi's filters. */
+  heard(event, text) { const c = this.cur ?? this.late; if (c && event === 'EndOfTurn') { c.eot++; if (text) c.said.push(text); } }
+  /** The words on screen (after Dixi's filters): the last one wins. */
+  shown(text) { const c = this.cur ?? this.late; if (c) c.shown = String(text ?? ''); }
   hotkey() { if (this.cur) this.cur.hotkey = true; }
 
   /** Writes the WAV and the log line; returns the record (null when nothing was heard). */
@@ -59,8 +64,14 @@ export class AudioDump {
       providerTurns: c.eot,
     };
     rec.firstWordCut = rec.first200Db > -40;   // already speech-loud in the first 200 ms: the mic opened mid-word
-    fs.appendFileSync(path.join(this.dir, 'capture.log'), JSON.stringify(rec) + '\n');
-    this.prune();
+    const log = () => {
+      if (this.late === c) this.late = null;
+      Object.assign(rec, { providerTurns: c.eot, said: c.said.join(' '), shown: c.shown });
+      fs.appendFileSync(path.join(this.dir, 'capture.log'), JSON.stringify(rec) + '\n');
+      this.prune();
+    };
+    this.late = c;
+    if (this.lateMS) setTimeout(log, this.lateMS); else log();
     return rec;
   }
 
