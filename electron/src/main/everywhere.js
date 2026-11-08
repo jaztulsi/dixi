@@ -1012,7 +1012,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (!r.ok) return asOut(r);
       await new Promise((ok) => setTimeout(ok, 300));
       const c = await context().catch(() => ({}));
-      return { ok: true, out: `Front: ${c.name ?? '?'}${c.url ? ` · URL ${c.url}` : ''}${c.title ? ` · window "${c.title.slice(0, 80)}"` : ''}` };
+      return { ok: true, out: `Opened ${url || app}. Front: ${c.name ?? '?'}${c.url ? ` · URL ${c.url}` : ''}${c.title ? ` · window "${c.title.slice(0, 80)}"` : ''}` };
     },
     mac: async ({ command }, sig) => {
       const dk = desktopIntent(command);
