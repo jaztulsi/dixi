@@ -55,6 +55,13 @@ test('when Haiku fails, it tries once more on Sonnet in the same conversation, t
   assert.equal(calls.models.at(-1), HAIKU);
 });
 
+test('an account error (no credit) is said plainly and not retried on Sonnet', async () => {
+  const { query, calls } = fakeQuery(() => ({ error: true, text: 'Credit balance is too low' }));
+  const r = await createAgent({ apiKey: 'k', query }).run('open spotify');
+  assert.equal(r.text, "I couldn't: the Anthropic account is out of credit.");
+  assert.deepEqual(calls.models, [HAIKU]);
+});
+
 test('a stop interrupts the turn and returns', async () => {
   let release;
   const { query, calls } = fakeQuery(() => new Promise((r) => { release = () => r({ text: '' }); }));

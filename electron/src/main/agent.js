@@ -179,9 +179,12 @@ export function createAgent({ apiKey, workspace, impl = {}, onTool = () => {}, q
     run.signal = signal; run.said = false;
     const c = { tools: [], cost: 0, turns: 0, usage: [], model: HAIKU };
     let r = await attempt(s, userMessage(said, ctx, { unsure, clipboard }), c, signal);
+    // The account itself refused (no credit, bad key): a bigger model won't help, and the raw API text isn't for speaking.
+    const ACCOUNT = /credit balance|invalid x-api-key|authentication_error|permission_error/i;
+    if (!r.ok && ACCOUNT.test(r.text)) r = { ok: false, text: /credit/i.test(r.text) ? "I couldn't: the Anthropic account is out of credit." : "I couldn't: the Anthropic key isn't working." };
     // One retry on the bigger model, in the same conversation (it sees what was tried), when Haiku failed.
     const failed = !r.ok || /^I couldn['’]t\b/i.test(r.text);
-    if (failed && !c.why && !signal?.aborted && !s.dead) {
+    if (failed && !c.why && !signal?.aborted && !s.dead && !/Anthropic (account|key)/.test(r.text)) {
       await s.handle.setModel(SONNET).catch(() => {});
       c.model = SONNET;
       const r2 = await attempt(s, 'That did not work. Try once more a different way (the next tool on the list), then give the one-sentence reply.', c, signal);
