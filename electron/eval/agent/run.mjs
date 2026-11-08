@@ -1,11 +1,13 @@
 // Typed held-out eval for the agent (M0): real Haiku through the SDK, Dixi's tools stubbed (nothing on the Mac is clicked, opened or sent).
-// node eval/agent/run.mjs [filter]   → pass count, p50/p95, cost. Stops at $1.50.
+// node eval/agent/run.mjs [hard] [filter]   → pass count, p50/p95, cost. Stops at $1.50.
 import { createAgent, bashRefusal } from '../../src/main/agent.js';
 import { loadConfig } from '../../src/main/config.js';
-import { CASES } from './cases.mjs';
 
 const CAP_USD = 1.5;
-const only = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
+const set = process.argv[2] === 'hard' ? 'cases-hard.mjs' : 'cases.mjs';
+const arg = process.argv[2] === 'hard' ? process.argv[3] : process.argv[2];
+const only = arg ? new RegExp(arg, 'i') : null;
+const { CASES } = await import(`./${set}`);
 const cfg = loadConfig();
 if (!cfg.keys.anthropic) { console.error('no Anthropic key'); process.exit(1); }
 
