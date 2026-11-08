@@ -51,14 +51,15 @@ for (const c of CASES) {
   if (only && !only.test(c.say)) continue;
   if (spent > CAP_USD) { console.log('spend cap reached'); break; }
   calls = []; screen = c.screen ?? '';
-  const r = await agent.run(c.heard ?? c.say, c.ctx ?? { name: 'Finder', bundle: 'com.apple.finder' });
+  const r = await agent.run(c.heard ?? c.say, c.ctx ?? { name: 'Finder', bundle: 'com.apple.finder' }, { clipboard: c.clip });
   spent += r.cost;
   let pass = false;
   try { pass = Boolean(c.check(calls, r.text)); } catch {}
   const acts = calls.filter((x) => x.tool !== 'read_screen');
   const unsafe = acts.some((x) => BAD.test(JSON.stringify(x)) || c.bad?.test(JSON.stringify(x)));
-  rows.push({ say: c.say, pass: pass && !unsafe, unsafe, ms: r.ms, cost: r.cost, one: c.one, model: r.model });
-  const brief = calls.map((x) => `${x.tool}:${JSON.stringify(Object.fromEntries(Object.entries(x).filter(([k]) => k !== 'tool'))).slice(0, 90)}`).join(' | ');
+  const cls = { Bash: 'files', WebFetch: 'web', WebSearch: 'web', browser: 'web', type_text: 'key' }[calls[0]?.tool] ?? calls[0]?.tool ?? 'answer';
+  rows.push({ cls, say: c.say, pass: pass && !unsafe, unsafe, ms: r.ms, cost: r.cost, one: c.one, model: r.model });
+  const brief = calls.map((x) => `${x.tool}:${JSON.stringify(Object.fromEntries(Object.entries(x).filter(([k]) => k !== 'tool'))).slice(0, process.env.WIDE ? 700 : 90)}`).join(' | ');
   console.log(`${unsafe ? 'UNSAFE' : pass ? 'PASS' : 'FAIL'} ${String(r.ms).padStart(6)}ms $${r.cost.toFixed(4)} ${r.model === 'claude-sonnet-5-5' ? 'S' : 'H'} "${c.say}"${c.heard && c.heard !== c.say ? ` (heard "${c.heard}")` : ''} → ${brief || '(no tool)'} → "${r.text.slice(0, 100)}"`);
 }
 agent.close();
@@ -66,6 +67,8 @@ agent.close();
 const pct = (xs, p) => { const s = [...xs].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(p * s.length))] ?? 0; };
 const one = rows.filter((r) => r.one).map((r) => r.ms);
 console.log(`\n${rows.filter((r) => r.pass).length}/${rows.length} passed · ${rows.filter((r) => r.unsafe).length} unsafe · p50 ${pct(rows.map((r) => r.ms), 0.5)}ms p95 ${pct(rows.map((r) => r.ms), 0.95)}ms · one-action p50 ${pct(one, 0.5)}ms · $${spent.toFixed(4)}`);
+const kinds = [...new Set(rows.map((r) => r.cls))];
+console.log('median cost / p50 by kind: ' + kinds.map((k) => { const rs = rows.filter((r) => r.cls === k); return `${k} ${rs.length}× $${pct(rs.map((r) => r.cost), 0.5).toFixed(4)} ${pct(rs.map((r) => r.ms), 0.5)}ms`; }).join(' · '));
 process.exit(0);
 
 async function hear(cases) {
