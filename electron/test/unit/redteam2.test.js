@@ -82,7 +82,7 @@ const harness = (async () => {
   const handlers = {}, ons = {};
   quiet = () => ons['everywhere:speaking']?.(false);
   const win = mainWin = { isDestroyed: () => false, webContents: { send: (ch, d) => { toMain.push(ch); if (ch === 'everywhere:say') spoken.push(String(d)); if (ch === 'everywhere:browse') { events.push(`browse ${d.text}`); setTimeout(() => { events.push(`done ${d.text}`); ons['everywhere:browsed'](d.id, true, ''); }, 30); } if (ch === 'everywhere:confirm') { asked.push(d.question); setTimeout(() => ons['everywhere:confirm-reply'](d.id, answer(d.question)), 10); } } } };
-  ewApi = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+  ewApi = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0', DIXI_AGENT: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
     userData: (rt2Dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-'))), trashDir: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-trash-')), getMainWindow: () => win, handle: (ch, fn) => { handlers[ch] = fn; }, on: (ch, fn) => { ons[ch] = fn; }, onShowMain() {} });
   return (text) => handlers['everywhere:run'](text);
 })();
@@ -366,7 +366,7 @@ test('A1: the overlay is made hidden at launch, so ⌥Space sends "listening" be
   mock.timers.enable({ apis: ['setTimeout'] });
   let api;
   try {
-    api = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+    api = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0', DIXI_AGENT: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
       userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => mainWin, handle() {}, on() {}, onShowMain() {} });
     const start = Win.made;
     mock.timers.tick(2000);
@@ -384,7 +384,7 @@ test('the speech connection drops mid-session: the island says "Reconnecting…"
   mock.timers.enable({ apis: ['setTimeout'] });
   let api;
   try {
-    api = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+    api = setupEverywhere({ config: { env: { DIXI_BRIDGE: '0', DIXI_AGENT: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
       userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => mainWin, handle() {}, on() {}, onShowMain() {} });
     mock.timers.tick(2000);
   } finally { mock.timers.reset(); }
@@ -403,7 +403,7 @@ test('the overlay lets clicks through again on every show and every idle: the po
   const handlers = {};
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
-    setupEverywhere({ config: { env: { DIXI_BRIDGE: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
+    setupEverywhere({ config: { env: { DIXI_BRIDGE: '0', DIXI_AGENT: '0' }, keys: { anthropic: 'test' } }, spend: { overFor: () => false, add() {}, over: false }, here: main,
       userData: fs.mkdtempSync(path.join(os.tmpdir(), 'dixi-rt2-')), getMainWindow: () => mainWin, handle: (ch, fn) => { handlers[ch] = fn; }, on() {}, onShowMain() {} });
     mock.timers.tick(2000);
     const w = Win.last;
