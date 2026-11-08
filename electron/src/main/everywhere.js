@@ -1072,7 +1072,8 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const qa = await quickAnswer(t, { webAnswer });   // the time, sums, conversions, the weather: in code, instant
     if (qa) { say(qa.say); show({ state: 'done', title: qa.title, text: qa.text, linger: 6000 }); return; }
     if (spend.overFor('anthropic')) throw new Error("Dixi's spending cap is reached.");
-    const ctx = await context().catch(() => ({}));
+    const [ctx, el] = await Promise.all([context().catch(() => ({})), input.focused().catch(() => null)]);
+    ctx.typing = input.isEditable(el);
     state.guard = guardian.track(state.guard, [...guardian.checkContext(ctx), ...guardian.checkText(`${ctx.title ?? ''}\n${t}`)], ctx);
     act.log({ kind: 'run', text: t, app: ctx.name });
     if (state.guard.open.length) { act.log({ kind: 'guardian', text: state.guard.open[0].say, app: ctx.name }); say(state.guard.open[0].say); }
