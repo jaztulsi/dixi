@@ -450,6 +450,7 @@ test('Phase 4: send, pay and delete-for-good stop one step before, unless that k
   assert.equal(scriptFinal('tell application "Messages" to send "hi" to buddy "Mom"', {}), 'send');
   assert.equal(scriptFinal('tell application "Messages" to send "hi" to buddy "Mom"', { allowSend: true }), null);
   assert.equal(scriptFinal('tell application "Music" to play', {}), null);
+  assert.equal(scriptFinal('tell application "Finder" to delete file "a.png" of desktop', {}), 'delete');
 });
 
 test('Phase 4: "send it" said out loud still stops before Send when sending is off', mac, async () => {

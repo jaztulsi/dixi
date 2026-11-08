@@ -68,7 +68,7 @@ const HELD = { send: 'send it', spend: 'pay', delete: 'delete it' };
 export const heldLine = (q, kind) => { const l = String(q ?? '').match(/“([^”]+)”/)?.[1]; return `It's ready. I stopped before ${l ? `“${l}”` : `the last step`}: ${kind === 'spend' ? 'pay' : 'press it'} yourself, or let Dixi ${HELD[kind]} in Settings`; };
 // A script that would send (Messages/Mail `send`, JXA .send()) or empty the Trash runs as screen steps instead,
 // so the same one-step-before stop applies.
-export const scriptFinal = (code, prefs = {}) => (prefs.careful ? null : /\bsend\b|\.send\(/i.test(code) && !prefs.allowSend ? 'send' : /\bempty\s+(the\s+)?trash\b/i.test(code) && !prefs.allowDelete ? 'delete' : null);
+export const scriptFinal = (code, prefs = {}) => (prefs.careful ? null : /\bsend\b|\.send\(/i.test(code) && !prefs.allowSend ? 'send' : /\bempty\s+(the\s+)?trash\b|\bdelete\b/i.test(code) && !prefs.allowDelete ? 'delete' : null);
 export const riskyLabel = (s) => Boolean(s) && (IRREVERSIBLE.test(s.trim()) || RECURRING.test(s) || DESKTOP_RISKY.test(s) || GET.test(s));
 // Dixi asks no questions. A step that would have asked goes ahead only when the user's own words ask for it: they said
 // "send" and the button is Send. Otherwise it is refused (and a plan stops there): "Open anyway", "Always allow",

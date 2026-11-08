@@ -51,11 +51,12 @@ export function userMessage(said, ctx = {}, { unsure = [], clipboard = '', now =
 const OK_CMDS = new Set(['open', 'mdfind', 'mdls', 'ls', 'cat', 'head', 'tail', 'wc', 'date', 'cal', 'pmset', 'sw_vers', 'system_profiler', 'df', 'du', 'uptime', 'whoami', 'pwd', 'echo', 'grep', 'find', 'file', 'stat', 'defaults', 'shortcuts', 'sips', 'mv', 'mkdir', 'cp', 'zip', 'bc', 'sort', 'uniq', 'basename', 'dirname', 'pbcopy', 'say', 'top', 'ps', 'vm_stat', 'sysctl', 'ioreg', 'scutil', 'ipconfig', 'ifconfig', 'pgrep', 'osascript']);
 const PLACES = ['/Applications', '/System/Applications', '/tmp', '/private/tmp', '/Volumes'];
 /** null when the command may run, else why not (said to the model). */
-export function bashRefusal(cmd, home = os.homedir()) {
+export function bashRefusal(cmd, home = os.homedir(), { allowDelete = false } = {}) {
   const c = String(cmd ?? '').trim();
   if (!c) return 'Empty command.';
   if (/[`]|\$\(|<\(|>\(/.test(c)) return 'No command substitution.';
   if (/(^|\s)(?:sudo|su)\s/.test(c)) return 'No sudo.';
+  if (!allowDelete && /_to_delete/.test(c)) return 'Deleting is off in Dixi\'s settings (Allow deleting). Tell the user that, and do nothing else.';
   if (/[<>]/.test(c.replace(/\d?>&\d|&?\d?>\s*\/dev\/null/g, ''))) return 'No redirection into files.';
   for (const seg of c.split(/&&|\|\||;|\|/)) {
     const words = seg.trim().split(/\s+/).filter((w) => !/^[A-Z_]+=/.test(w));
@@ -102,7 +103,7 @@ export function dixiTools(impl, run) {
  * createAgent({ apiKey, workspace, impl, onTool, log, query }) → { run(said, ctx, opts), warm(), close() }.
  * run → { ok, text, said, cost, ms, turns, tools, model }. `said`: a tool already spoke, so the reply is only shown.
  */
-export function createAgent({ apiKey, workspace, impl = {}, onTool = () => {}, query = sdkQuery, cwd = os.homedir(), env = process.env } = {}) {
+export function createAgent({ apiKey, workspace, impl = {}, onTool = () => {}, query = sdkQuery, cwd = os.homedir(), env = process.env, bashCheck = bashRefusal } = {}) {
   let sess = null;
   const run = { signal: null, said: false };
   const server = createSdkMcpServer({ name: 'dixi', version: '1.0.0', tools: dixiTools(impl, run) });
@@ -123,17 +124,16 @@ export function createAgent({ apiKey, workspace, impl = {}, onTool = () => {}, q
       options: {
         model: HAIKU, systemPrompt: SYSTEM, cwd, env: childEnv,
         tools: ['Bash', 'WebSearch', 'WebFetch'], mcpServers: { dixi: server }, strictMcpConfig: true,
-        allowedTools: ['mcp__dixi', 'WebSearch', 'WebFetch'],
         canUseTool: async (name, input) => {
           if (name !== 'Bash') return { behavior: 'allow', updatedInput: input };
-          const no = bashRefusal(input.command);
+          const no = bashCheck(input.command);
           return no ? { behavior: 'deny', message: no } : { behavior: 'allow', updatedInput: input };
         },
         settingSources: [], persistSession: false, maxTurns: 14, effort: 'low',
         stderr: () => {},
       },
     });
-    const s = { handle, count: 0, cur: null, dead: false, send: (m) => { inbox.push(m); wake?.(); wake = null; } };
+    const s = { handle, count: 0, spent: 0, cur: null, dead: false, send: (m) => { inbox.push(m); wake?.(); wake = null; } };
     (async () => {
       try { for await (const m of handle) route(s, m); } catch (err) { s.error = err; }
       s.dead = true;
@@ -148,8 +148,8 @@ export function createAgent({ apiKey, workspace, impl = {}, onTool = () => {}, q
     if (m.type === 'assistant') {
       for (const b of m.message?.content ?? []) if (b.type === 'tool_use') { c.tools.push(b.name.replace(/^mcp__dixi__/, '')); onTool(b.name.replace(/^mcp__dixi__/, ''), b.input ?? {}); }
     }
-    if (m.type === 'result') {
-      c.cost += m.total_cost_usd ?? 0; c.turns += m.num_turns ?? 0; c.usage.push({ model: c.model, usage: m.usage });
+    if (m.type === 'result') {   // total_cost_usd is the session's running total
+      const tot = m.total_cost_usd ?? 0; c.cost += Math.max(0, tot - s.spent); s.spent = tot; c.turns += m.num_turns ?? 0; c.usage.push({ model: c.model, usage: m.usage });
       c.finish({ ok: !m.is_error && m.subtype === 'success', text: String(m.result ?? '').trim() });
     }
   }
