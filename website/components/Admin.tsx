@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { preconnect } from 'react-dom';
 import { Button } from '@/components/ui/button';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -19,6 +20,8 @@ const toCsv = (rows: Row[]) =>
 /** Waitlist admin. Signs in to Supabase Auth as ADMIN_EMAIL with the password typed here and reads the table with that
  *  session; the "admin can read" policy in supabase/waitlist.sql decides who sees rows. The session lives in memory only. */
 export function Admin() {
+  // Open the connection while the password is being typed, so sign-in and the list don't pay for it.
+  if (SUPABASE_URL) preconnect(SUPABASE_URL, { crossOrigin: 'anonymous' });
   const [token, setToken] = useState('');
   const [rows, setRows] = useState<Row[] | null>(null);
   const [query, setQuery] = useState('');
