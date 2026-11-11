@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { startEar, stripName, findEar } from '../../src/main/ear.js';
 
-function rig(opts = {}) {
+function rig(opts = {}, apiMore = {}) {
   const log = [], sent = [], timers = new Map(); let now = 0, id = 0, kids = 0, child;
   const spawn = () => {
     kids++;
@@ -15,7 +15,7 @@ function rig(opts = {}) {
   const api = {
     open: (m) => log.push(`open:${m}`), show: (m) => log.push(`show:${m}`), mode: (m) => log.push(`mode:${m}`), partial: (t) => log.push(`partial:${t}`),
     level: () => {}, context: (c) => log.push(`ctx:${c.app}`), cancel: (w) => log.push(`cancel:${w}`), final: (t, m) => { log.push(`final:${m}:${t}`); },
-    unavailable: (w) => log.push(`unavailable:${w}`), vocab: async () => ['Safari', 'Dixi'],
+    unavailable: (w) => log.push(`unavailable:${w}`), vocab: async () => ['Safari', 'Dixi'], ...apiMore,
   };
   const ear = startEar({ bin: '/x/dixi-ear', api, spawn, now: () => now,
     setTimer: (f, ms) => { timers.set(++id, { f, at: now + ms }); return id; }, clearTimer: (t) => timers.delete(t), ...opts });
@@ -108,4 +108,41 @@ test('learning from corrections: the new names in a quick retry, not a whole new
   assert.deepEqual(learnedWords('open discored', 'open Discord', ['discord']), [], 'already known');
   assert.deepEqual(learnedWords('open Safari', 'what is the weather like in Tokyo tomorrow morning'), [], 'a different command');
   assert.deepEqual(learnedWords('open notes', 'open the notes'), [], 'only common words changed');
+});
+
+import { endPause } from '../../src/main/ear.js';
+test('hands-free: a finished sentence ends at 0.8 s, a hanging one waits 2.6 s, otherwise 1.2 s', () => {
+  assert.equal(endPause('Add this to my cart.'), 800);
+  assert.equal(endPause('add this to my cart'), 1200);
+  assert.equal(endPause('search for the best ramen near me on Google maps and'), 2600);
+  assert.equal(endPause('put two oat milks in my'), 2600);
+  assert.equal(endPause('remove that'), 1200, '"that" ends a command ("remove that")');
+  assert.equal(endPause(''), Infinity);
+});
+
+test('hands-free shopping: double-tap, then each command is sent at its pause with the mic left open; Fn ends it', async () => {
+  const { log, sent, say, key, to } = rig();
+  const finals = [];
+  log.push = new Proxy(log.push, { apply: (f, that, args) => { if (String(args[0]).startsWith('final')) finals.push(args[0]); return f.apply(that, args); } });
+  key('fn_down', 0); key('fn_up', 80); key('fn_down', 250); key('fn_up', 320);   // double-tap: locked
+  say({ ev: 'partial', text: 'add this to my cart', seg: 1 }, 1000);
+  to(2100); assert.ok(!sent.some((m) => m.cmd === 'next'), 'not yet: 1.1 s of quiet');
+  to(2300); assert.deepEqual(sent.at(-1), { cmd: 'next' }, '1.2 s of quiet: this command is done');
+  say({ ev: 'partial', text: 'add this to my cart', seg: 1 }, 2350);   // a late word from the sent segment: ignored
+  say({ ev: 'final', text: 'Add this to my cart.', ms: 90, seg: 1 }, 2400);
+  say({ ev: 'partial', text: 'remove the milk from my', seg: 2 }, 3000);
+  to(4500); assert.equal(sent.filter((m) => m.cmd === 'next').length, 1, 'hanging on "my": still waiting at 1.5 s');
+  say({ ev: 'partial', text: 'remove the milk from my cart', seg: 2 }, 4600);
+  to(5900); assert.equal(sent.filter((m) => m.cmd === 'next').length, 2);
+  say({ ev: 'final', text: 'Remove the milk from my cart.', ms: 80, seg: 2 }, 5950);
+  key('fn_down', 9000); key('fn_up', 9100);   // Fn: the end; nothing more was said
+  say({ ev: 'final', text: '', ms: 10, seg: 3 }, 9150);
+  assert.deepEqual(finals, ['final:command:Add this to my cart.', 'final:command:Remove the milk from my cart.']);
+});
+
+test('Esc while Dixi is working (no talk session) stops the work', () => {
+  const stops = [];
+  const { say } = rig({}, { busy: () => true, stop: () => stops.push(1) });
+  say({ ev: 'key', type: 'esc', t: 100 }, 100);
+  assert.equal(stops.length, 1);
 });

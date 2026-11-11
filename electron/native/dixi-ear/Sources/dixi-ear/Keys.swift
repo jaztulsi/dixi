@@ -11,7 +11,6 @@ final class Keys {
 
   var trigger: Trigger = .fn
   var onDown: () -> Void = {}            // the mic starts here, before anything else
-  var recording: () -> Bool = { false }  // hands-free: Esc still counts with no key held
 
   private var tap: CFMachPort?
   private(set) var held = false          // the talk key (Fn, or Ctrl+Option) is down
@@ -82,7 +81,7 @@ final class Keys {
 
     case .keyDown:
       let code = event.getIntegerValueField(.keyboardEventKeycode)
-      if code == Keys.kEsc && (held || recording()) { key("esc", event); return Unmanaged.passUnretained(event) }
+      if code == Keys.kEsc { key("esc", event); return Unmanaged.passUnretained(event) }   // also stops a task Dixi is doing
       guard held else { return Unmanaged.passUnretained(event) }
       if code == Keys.kSpace {
         if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 { key("space", event) }

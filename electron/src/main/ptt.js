@@ -73,7 +73,7 @@ export const hotkeyOwner = (ps) => LAUNCHERS.find((n) => String(ps).split('\n').
  * onOpen(mode) opens the mic at once; onShow() is the island, `showMs` later, so Fn+arrow never flashes it;
  * onSend(mode) and onCancel(why, {silent}) end it. Exactly one of onSend/onCancel follows every onOpen.
  */
-export function fnGestures({ onOpen, onShow = () => {}, onSend, onCancel, onMode = () => {}, tapMs = 200, doubleMs = 500, showMs = 90, maxMs = 300000,
+export function fnGestures({ onOpen, onShow = () => {}, onSend, onCancel, onMode = () => {}, onLock = () => {}, tapMs = 200, doubleMs = 500, showMs = 90, maxMs = 300000,
   setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t) }) {
   let st = 'idle';        // idle | held | tapped | locked
   let mode = 'command', downAt = 0, fnDown = false, shown = false;
@@ -89,7 +89,7 @@ export function fnGestures({ onOpen, onShow = () => {}, onSend, onCancel, onMode
   };
   const send = () => { if (st === 'idle') return; stopTimers(); st = 'idle'; onSend(mode); };
   const cancel = (why, silent = false) => { if (st === 'idle') return; stopTimers(); const quiet = silent || !shown; st = 'idle'; onCancel(why, { silent: quiet }); };
-  const lock = () => { clearTimer(tapTimer); tapTimer = null; st = 'locked'; show(); };
+  const lock = () => { clearTimer(tapTimer); tapTimer = null; st = 'locked'; show(); onLock(mode); };
 
   return (ev) => {
     switch (ev.type) {

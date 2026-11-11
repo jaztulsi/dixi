@@ -17,6 +17,7 @@ let locale = Locale(identifier: arg("--locale") ?? Locale.current.identifier)
 var hearing: Hearing? = nil
 var recording = false
 var capTimer: DispatchWorkItem?
+var seg = 0   // segments of this talk session: hands-free sends one per pause ({cmd:'next'})
 
 func endSession() { recording = false; capTimer?.cancel(); capTimer = nil; mic.stop() }
 
@@ -24,20 +25,21 @@ func endSession() { recording = false; capTimer?.cancel(); capTimer = nil; mic.s
 keys.onDown = {
   if recording { return }   // hands-free is on: this press is Dixi's "send", which Dixi will ask for
   recording = true
-  hearing?.begin()
+  seg += 1
+  hearing?.begin(seg: seg)
   mic.start()
   Context.snapshot()
   let cap = DispatchWorkItem { if recording { hearing?.finish(); endSession() } }   // never left open (5.5 min)
   capTimer = cap
   DispatchQueue.main.asyncAfter(deadline: .now() + 330, execute: cap)
 }
-keys.recording = { recording }
 mic.onBuffer = { buf in hearing?.feed(buf) }
 
 In.start { m in
   switch m["cmd"] as? String {
-  case "stop":   if recording { hearing?.finish(); endSession() } else { Out.emit(["ev": "final", "text": "", "ms": 0, "why": "not recording"]) }
+  case "stop":   if recording { hearing?.finish(); endSession() } else { Out.emit(["ev": "final", "text": "", "ms": 0, "seg": seg, "why": "not recording"]) }
   case "cancel": if recording { hearing?.cancel(); endSession() }
+  case "next":   if recording { hearing?.finish(); seg += 1; hearing?.begin(seg: seg) }   // this segment's final; the mic stays open
   case "paste":  if let t = m["text"] as? String, !t.isEmpty { Paste.text(t) }
   case "vocab":  if let w = m["words"] as? [String] { hearing?.setVocabulary(w) }
   case "quit":   exit(0)

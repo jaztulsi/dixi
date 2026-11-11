@@ -223,7 +223,21 @@ const on = (channel, fn) => ipcMain.on(channel, (e, ...args) => { if (ours(e)) f
 // Dixi Everywhere (macOS): ⌥Space to talk about the app in front, again to send. Off in tests and with DIXI_EVERYWHERE=0.
 app.whenReady().then(() => {
   if (EVAL || process.env.DIXI_FAKE_AUDIO) return;
-  everywhere = setupEverywhere({ config, spend, here, userData: app.getPath('userData'), getMainWindow: () => win, handle, on, onShowMain: showMain, webAnswer });
+  everywhere = setupEverywhere({ config, spend, here, userData: app.getPath('userData'), getMainWindow: () => win, handle, on, onShowMain: showMain, webAnswer,
+    // Your own browser (browse.js): the same models, site lookup and learned sites as Dixi's browser.
+    browseDeps: {
+      chat: (req) => chat(config, spend, { model: req.model, body: req.body, id: req.id }),
+      tiers: () => tiers(config, found),
+      resolve: (q) => resolver.resolve({ said: String(q?.said ?? '').slice(0, 120), guess: String(q?.guess ?? '').slice(0, 120), urls: (q?.urls ?? []).slice(0, 3).map(String), fast: q?.fast !== false }),
+      registry: {
+        get entries() { return [...new Set(Object.values(resolver.entries ?? {}))].filter((e) => e.fail < 2); },
+        byHost: (h) => [...new Set(Object.values(resolver.entries ?? {}))].find((e) => e.host === h || e.finalHost === h) ?? null,
+        outcome: (host, ok) => resolver.outcome(String(host), Boolean(ok)),
+        confirm: (said, hit) => resolver.confirm(String(said), { url: String(hit.url), host: String(hit.host), finalHost: String(hit.finalHost ?? hit.host), name: String(hit.name) }),
+        setSearchTemplate: (host, tpl) => resolver.setSearchTemplate(String(host), String(tpl)),
+      },
+      host: { discoverSearch: (url) => discoverSearch(String(url)).catch(() => null), openSearchTemplate: async (url) => openSearchTemplate((await fetchPage(String(url)).catch(() => null))?.html ?? '') },
+    } });
   if (everywhere?.control) app.on('will-quit', watchControl(everywhere.control));
   // npm run smoke (eval/smoke.mjs): typed commands through the real run(), one result line each, then quit. No speech.
   if (process.env.DIXI_SMOKE_FILE && everywhere?.run) setTimeout(async () => {

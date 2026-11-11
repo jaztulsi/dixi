@@ -6,7 +6,7 @@ import Speech
 protocol Hearing: AnyObject {
   var name: String { get }
   func setVocabulary(_ words: [String])
-  func begin()
+  func begin(seg: Int)
   func feed(_ buf: AVAudioPCMBuffer)
   func finish()
   func cancel()
@@ -39,6 +39,7 @@ final class AnalyzerHearing: Hearing {
     var converter: AVAudioConverter?
     var results: Task<Void, Never>?
     var transcript = Transcript()
+    var seg = 0   // which segment of the talk session this analyzer hears (hands-free sends one per pause)
     init(transcriber: DictationTranscriber, analyzer: SpeechAnalyzer, format: AVAudioFormat, input: AsyncStream<AnalyzerInput>.Continuation) {
       self.transcriber = transcriber; self.analyzer = analyzer; self.format = format; self.input = input
     }
@@ -98,13 +99,14 @@ final class AnalyzerHearing: Hearing {
         for try await r in t.results {
           let piece = String(r.text.characters)
           if r.isFinal { s.transcript.final(piece) } else { s.transcript.guess = piece }
-          Out.emit(["ev": "partial", "text": s.transcript.text])
+          Out.emit(["ev": "partial", "text": s.transcript.text, "seg": s.seg])
         }
       } catch { Out.error("hearing", "Speech stopped: \(error.localizedDescription)") }
     }
     do { try await a.start(inputSequence: stream) } catch { Out.error("hearing", "Couldn't start the speech model: \(error.localizedDescription)"); return }
     lock.lock()
     if recording && active == nil {   // the talk key went down while this was getting ready: it takes the waiting audio
+      s.seg = seg
       active = s
       let old = backlog; backlog = []
       lock.unlock()
@@ -115,10 +117,12 @@ final class AnalyzerHearing: Hearing {
     }
   }
 
-  func begin() {
+  private var seg = 0
+  func begin(seg n: Int) {
     lock.lock()
-    recording = true; backlog = []
+    recording = true; backlog = []; seg = n
     active = ready; ready = nil
+    active?.seg = n
     lock.unlock()
     if active == nil { Task { await prepareNext() } }
   }
@@ -152,12 +156,12 @@ final class AnalyzerHearing: Hearing {
   func finish() {
     let t0 = Out.nowMs()
     lock.lock(); recording = false; let s = active; active = nil; backlog = []; lock.unlock()
-    guard let s else { Out.emit(["ev": "final", "text": "", "ms": 0, "why": "not ready"]); Task { await prepareNext() }; return }
+    guard let s else { Out.emit(["ev": "final", "text": "", "ms": 0, "seg": seg, "why": "not ready"]); Task { await prepareNext() }; return }
     Task {
       s.input.finish()   // finalizeAndFinishThroughEndOfInput waits for the input to end
       do { try await s.analyzer.finalizeAndFinishThroughEndOfInput() } catch { Out.error("hearing", "finish: \(error.localizedDescription)") }
       _ = await s.results?.value
-      Out.emit(["ev": "final", "text": s.transcript.text, "ms": Int(Out.nowMs() - t0)])
+      Out.emit(["ev": "final", "text": s.transcript.text, "ms": Int(Out.nowMs() - t0), "seg": s.seg])
       await self.prepareNext()
     }
   }
@@ -177,11 +181,19 @@ final class SFHearing: Hearing {
   let name = "speech"
   private let recognizer: SFSpeechRecognizer
   private var words: [String] = ["Dixi"]
-  private var request: SFSpeechAudioBufferRecognitionRequest?
-  private var task: SFSpeechRecognitionTask?
-  private var transcript = ""
-  private var finishing: (t0: Double, sent: Bool)?
   private let lock = NSLock()
+
+  /// One segment: its own request, task and text, so starting the next never loses this one's final.
+  private final class Session {
+    let seg: Int
+    let request = SFSpeechAudioBufferRecognitionRequest()
+    var task: SFSpeechRecognitionTask?
+    var text = ""
+    var t0: Double = 0
+    var finishing = false, sent = false
+    init(seg: Int) { self.seg = seg }
+  }
+  private var current: Session?
 
   init?(locale: Locale) {
     guard let r = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US")), r.supportsOnDeviceRecognition else { return nil }
@@ -191,41 +203,42 @@ final class SFHearing: Hearing {
 
   func setVocabulary(_ list: [String]) { lock.lock(); words = Array(list.prefix(100)); lock.unlock() }
 
-  func begin() {
-    let req = SFSpeechAudioBufferRecognitionRequest()
-    req.requiresOnDeviceRecognition = true   // never the network
-    req.shouldReportPartialResults = true
-    req.addsPunctuation = true
-    lock.lock(); req.contextualStrings = words; request = req; transcript = ""; finishing = nil; lock.unlock()
-    task = recognizer.recognitionTask(with: req) { [weak self] result, error in
+  func begin(seg: Int) {
+    let s = Session(seg: seg)
+    s.request.requiresOnDeviceRecognition = true   // never the network
+    s.request.shouldReportPartialResults = true
+    s.request.addsPunctuation = true
+    lock.lock(); s.request.contextualStrings = words; current = s; lock.unlock()
+    s.task = recognizer.recognitionTask(with: s.request) { [weak self] result, error in
       guard let self else { return }
       if let r = result {
-        self.lock.lock(); self.transcript = r.bestTranscription.formattedString; self.lock.unlock()
-        Out.emit(["ev": "partial", "text": r.bestTranscription.formattedString])
-        if r.isFinal { self.sendFinal() }
-      } else if error != nil { self.sendFinal() }
+        self.lock.lock(); s.text = r.bestTranscription.formattedString; let fin = s.finishing; self.lock.unlock()
+        if !fin { Out.emit(["ev": "partial", "text": s.text, "seg": s.seg]) }
+        if r.isFinal { self.sendFinal(s) }
+      } else if error != nil { self.sendFinal(s) }
     }
   }
 
-  func feed(_ buf: AVAudioPCMBuffer) { lock.lock(); let r = request; lock.unlock(); r?.append(buf) }
+  func feed(_ buf: AVAudioPCMBuffer) { lock.lock(); let s = current; lock.unlock(); if let s, !s.finishing { s.request.append(buf) } }
 
-  private func sendFinal() {
+  private func sendFinal(_ s: Session) {
     lock.lock()
-    guard let f = finishing, !f.sent else { lock.unlock(); return }
-    finishing = (f.t0, true)
-    let text = transcript
+    guard s.finishing, !s.sent else { lock.unlock(); return }
+    s.sent = true
+    let text = s.text, t0 = s.t0
     lock.unlock()
-    Out.emit(["ev": "final", "text": text, "ms": Int(Out.nowMs() - f.t0)])
+    Out.emit(["ev": "final", "text": text, "ms": Int(Out.nowMs() - t0), "seg": s.seg])
   }
 
   func finish() {
-    lock.lock(); finishing = (Out.nowMs(), false); let r = request; request = nil; lock.unlock()
-    r?.endAudio()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { self.sendFinal(); self.task?.cancel(); self.task = nil }   // never wait longer for the last word
+    lock.lock(); let s = current; current = nil; s?.finishing = true; s?.t0 = Out.nowMs(); lock.unlock()
+    guard let s else { return }
+    s.request.endAudio()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { self.sendFinal(s); s.task?.cancel() }   // never wait longer for the last word
   }
 
   func cancel() {
-    lock.lock(); finishing = (0, true); let r = request; request = nil; lock.unlock()
-    r?.endAudio(); task?.cancel(); task = nil
+    lock.lock(); let s = current; current = nil; s?.finishing = true; s?.sent = true; lock.unlock()
+    s?.request.endAudio(); s?.task?.cancel()
   }
 }
