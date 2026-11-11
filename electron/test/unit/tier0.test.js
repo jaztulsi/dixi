@@ -111,3 +111,21 @@ test('runShell: checked again before running, exit code decides, 8 s cap', async
   assert.equal(no.refused, true);
   assert.equal(calls.length, 1, 'a refused command never reaches the shell');
 });
+
+test('"open the bluetooth settings" opens that System Settings pane by its link, no model', async () => {
+  const s = await one('open the bluetooth settings');
+  assert.deepEqual(s.intent, { verb: 'prefs', pane: 'bluetooth' });
+  const { runDesktop } = await import('../../src/main/desktop.js');
+  const ran = [];
+  const r = await runDesktop(s.intent, { exec: async (...a) => { ran.push(a); return { stdout: '' }; } });
+  assert.deepEqual(ran, [['open', ['x-apple.systempreferences:com.apple.BluetoothSettings']]]);
+  assert.notEqual(r.ok, false);
+  assert.equal(desktopIntent('show me wi-fi settings')?.pane, 'wi-fi');
+});
+
+test('the smoke run\'s three planner commands: the likely fast replies pass the checks as spoken shell steps', () => {
+  for (const [said, cmd] of [['how much free disk space do I have', 'df -h /'], ['what version of macOS am I running', 'sw_vers -productVersion'], ["what's my computer's name", 'scutil --get ComputerName']]) {
+    const r = check([{ do: 'shell', clause: said, cmd, speak: true }], said, { apps, home: '/Users/me' });
+    assert.deepEqual([r.ok, r.steps[0].do, r.steps[0].speak], [true, 'shell', true], `${said}: ${r.steps[0].why ?? ''}`);
+  }
+});

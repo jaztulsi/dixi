@@ -225,6 +225,21 @@ app.whenReady().then(() => {
   if (EVAL || process.env.DIXI_FAKE_AUDIO) return;
   everywhere = setupEverywhere({ config, spend, here, userData: app.getPath('userData'), getMainWindow: () => win, handle, on, onShowMain: showMain, webAnswer });
   if (everywhere?.control) app.on('will-quit', watchControl(everywhere.control));
+  // npm run smoke (eval/smoke.mjs): typed commands through the real run(), one result line each, then quit. No speech.
+  if (process.env.DIXI_SMOKE_FILE && everywhere?.run) setTimeout(async () => {
+    const list = JSON.parse(fs.readFileSync(process.env.DIXI_SMOKE_FILE, 'utf8'));
+    for (const said of list) {
+      const t0 = performance.now();
+      let err = null;
+      try { await everywhere.run(said); } catch (e) { err = e.message; }
+      const ms = Math.round(performance.now() - t0);
+      await new Promise((r) => setTimeout(r, 300));
+      const { shown, route } = everywhere.smoke();
+      process.stdout.write(`SMOKE ${JSON.stringify({ said, ms, route, state: shown?.state ?? null, text: String(shown?.text ?? '').slice(0, 160), err })}\n`);
+      await new Promise((r) => setTimeout(r, 1500));   // let the app that opened settle before the next one
+    }
+    app.exit(0);
+  }, 4000);
   // The Fn key + on-device hearing (ear.js): the default voice path when the helper is built (npm run build:ear).
   // DIXI_VOICE_PATH=cloud (or the voicePath pref) keeps the old ⌥Space + cloud speech path only.
   const earBin = everywhere?.ear && everywhere.voicePath() !== 'cloud' ? findEar(path.join(here, '../..')) : null;

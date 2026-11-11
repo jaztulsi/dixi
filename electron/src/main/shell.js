@@ -25,6 +25,7 @@ export function bashRefusal(cmd, home = os.homedir(), { allowDelete = false } = 
     if (w0 === 'osascript') return 'Use the applescript tool instead.';
     if (w0 === 'find' && words.some((x) => /^-(?:delete|exec|execdir|ok)$/.test(x))) return 'find: no -delete or -exec.';
     if (w0 === 'find' && /^['"]?(?:~|\$HOME|\/)\/?['"]?$|^['"]?\/Users\/[^/]+\/?['"]?$/.test(words[1] ?? '')) return 'find over the whole home folder takes minutes: use mdfind, or find in one folder such as ~/Desktop.';
+    if (w0 === 'df') continue;   // reads free space only; any disk path is harmless
     for (const x of words.slice(1)) {
       const p = x.replace(/^['"]|['"]$/g, '').replace(/^~(?=\/|$)/, home);
       if (p.includes('..')) return 'No ".." in paths.';

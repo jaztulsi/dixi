@@ -51,6 +51,19 @@ const SITE_SAID = `${said(Object.keys(SEARCH).filter((k) => k !== 'directions' &
 const STORE_SAID = said(STORES);
 const siteKey = (w) => { const k = w.toLowerCase().replace(/\s+/g, ' '); return SAID[k] ?? k; };
 
+// System Settings panes (macOS 13+) by their link id. An id macOS doesn't know still opens System Settings.
+const PANES = {
+  bluetooth: 'com.apple.BluetoothSettings', 'wi-fi': 'com.apple.wifi-settings-extension', wifi: 'com.apple.wifi-settings-extension',
+  sound: 'com.apple.Sound-Settings.extension', display: 'com.apple.Displays-Settings.extension', displays: 'com.apple.Displays-Settings.extension',
+  battery: 'com.apple.Battery-Settings.extension', network: 'com.apple.Network-Settings.extension', keyboard: 'com.apple.Keyboard-Settings.extension',
+  trackpad: 'com.apple.Trackpad-Settings.extension', mouse: 'com.apple.Mouse-Settings.extension', notification: 'com.apple.Notifications-Settings.extension',
+  notifications: 'com.apple.Notifications-Settings.extension', privacy: 'com.apple.settings.PrivacySecurity.extension', security: 'com.apple.settings.PrivacySecurity.extension',
+  focus: 'com.apple.Focus-Settings.extension', wallpaper: 'com.apple.Wallpaper-Settings.extension', appearance: 'com.apple.Appearance-Settings.extension',
+  general: 'com.apple.systempreferences.GeneralSettings', accessibility: 'com.apple.Accessibility-Settings.extension', printer: 'com.apple.Print-Scan-Settings.extension',
+  printers: 'com.apple.Print-Scan-Settings.extension', users: 'com.apple.Users-Groups-Settings.extension', 'lock screen': 'com.apple.Lock-Screen-Settings.extension',
+  'screen time': 'com.apple.Screen-Time-Settings.extension', 'software update': 'com.apple.Software-Update-Settings.extension', storage: 'com.apple.settings.Storage',
+};
+
 const rule = (verb, body, args = () => ({})) => ({ verb, re: new RegExp(`^${PRE}(?:${body})${POST}$`, 'i'), args });
 const RULES = [
   rule('volume', String.raw`(?:set |turn |put )?(?:the )?(?:volume|sound)(?: level)?(?: to| at)? (\d{1,3})(?: ?%| percent)?`, (m) => ({ op: 'set', pct: Math.min(100, Number(m[1])) })),
@@ -83,6 +96,8 @@ const RULES = [
   rule('remind', String.raw`remind me (.{3,160})`, (m) => ({ said: `remind me ${m[1]}` })),   // "… tomorrow at 9": Reminders (calendar.js)
   rule('timers', String.raw`what timers (?:do i have|are (?:running|set))|(?:list|show)(?: my)?(?: the)? timers|how (?:much time(?: is)?|long(?: is)?) left(?: on (?:the|my) timer)?|do i have any timers`),
   rule('cancel', String.raw`(?:cancel|stop|clear|delete|remove) (?:the |my |all |all my |every )?(?:timers?|reminders?)`, (m) => ({ all: /\b(all|every)\b|timers\b|reminders\b/i.test(m[0]) })),
+  // "open the bluetooth settings", "show me wi-fi settings": that pane of System Settings, by its link. No model.
+  rule('prefs', String.raw`(?:open|show(?: me)?|go to|take me to|bring up)(?: the| my)? (${Object.keys(PANES).join('|')})(?: settings| preferences| options)`, (m) => ({ pane: m[1].toLowerCase().replace(/\s+/g, ' ') })),
   rule('dark', String.raw`(?:toggle|flip|switch)(?: the)? (?:dark mode|appearance)`, () => ({ mode: 'toggle' })),
   rule('dark', String.raw`(?:(?:turn|switch|set) off|disable)(?: the)? dark mode|(?:turn|switch|set) (?:the )?dark mode off|(?:(?:turn on|switch to|go to|enable|use|set) )?(?:the )?light mode|dark mode off`, () => ({ mode: 'off' })),
   rule('dark', String.raw`(?:(?:turn on|switch to|go to|enable|use|set) )?(?:the )?dark mode(?: on)?|(?:turn|switch|set) (?:the )?dark mode on`, () => ({ mode: 'on' })),
@@ -468,6 +483,13 @@ const DO = {
     if (i.app && !(await toFront(i.app, d))?.name) return { ...out(`${i.app} didn't come to the front, so I didn't press anything.`, 'New'), ok: false };
     await (d.appKey ?? d.key ?? key)(i.what === 'tab' ? 'cmd+t' : 'cmd+n');
     return out(`New ${i.what}.`, 'New');
+  },
+  async prefs(i, d) {
+    const id = PANES[i.pane];
+    if (!id) return out("I don't know that settings page.");
+    await d.exec('open', [`x-apple.systempreferences:${id}`]);
+    const name = i.pane.replace(/\b\w/g, (c) => c.toUpperCase());
+    return { ...out(`${name} settings.`, 'System Settings'), quiet: true };
   },
   async quit(i, d) {
     const name = String(i.app ?? '');

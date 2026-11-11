@@ -372,6 +372,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (!state.overlay?.isVisible()) overlayOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds);
     clearTimeout(state.hideTimer);   // an earlier card's "back to idle" never lands in the middle of this one
     state.shown = data.state;
+    state.lastShown = data;
     ui('ew:state', data.state === 'done' ? { undo: Date.now() - (state.fileChangeAt ?? 0) < 120000, ...data } : data);
     if (data.state === 'done' || data.state === 'error' || data.state === 'idle') {
       // Idle is the small mascot pill, always on screen (Nov 5): the window stays up, clicks pass through again.
@@ -1051,6 +1052,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const r = await planInto(q, t, signal, runId, false);
     if (signal.aborted) return { done: true };
     const steps = r.steps ?? [];
+    state.lastRoute = r.source === 'code' ? 'rule' : r.planner === 'fast' ? 'fast' : r.source === 'model' ? 'model' : null;
     const firstHard = steps.findIndex((x) => x.do === 'computer' || (x.do === 'answer' && !x.say) || x.do === 'web');
     if (!steps.length || firstHard === 0) return { done: false, rest: t };
     mark(runId, 'routed');
@@ -1060,7 +1062,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const ok = await runPlan(q, t, signal, { more: true });
     if (!ok || signal.aborted) return { done: true };
     const rest = steps.slice(firstHard).map((x) => x.clause).join(', then ');
-    return { done: false, rest: `${rest}\n(Already done just now, do not repeat: ${q.steps.map((x) => x.clause).join('; ')})` };
+    return { done: false, restText: rest, rest: `${rest}\n(Already done just now, do not repeat: ${q.steps.map((x) => x.clause).join('; ')})` };
   }
   const hush = () => {};
   const asOut = (r) => (r.ok ? { ok: true, out: r.out ?? r.say, said: r.said } : { ok: false, error: r.error, said: r.said });
@@ -1161,6 +1163,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     if (!forced && chatter(text)) { head?.ctrl.abort(); if (!busy()) show({ state: 'idle' }); return; }   // filler, not a request: nothing done, nothing stopped
     if (!forced && state.plan && state.ctrl) { head?.ctrl.abort(); mark(runId, 'routed'); planInto(state.plan, text, state.ctrl.signal, runId); return; }   // added to the running plan
     state.runId = runId;
+    state.lastRoute = null;
     state.ctrl?.abort();
     for (const done of approvals.values()) done(false);   // a late yes can't land on the old run
     for (const done of asks.values()) done(null);
@@ -1175,7 +1178,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       const mine = !forced && matchCommand(text, commands);
       if (mine?.action === 'task' || mine?.action === 'skill') text = mine.action === 'task' ? mine.target : `run my ${mine.target} skill`;
       else if (mine) return await runCommand(mine);
-      const t = text.trim();
+      let t = text.trim();   // (the checklist may leave only the rest of the command for the old router)
       if (MIC_OFF.test(t)) return setListening(false);
       if (CAREFUL_ON.test(t) || CAREFUL_OFF.test(t)) return setCareful(CAREFUL_ON.test(t));
       // Something you selected and then pressed ⌥⇧Space on (capture.js): this request is about it. "Rewrite it in my
@@ -1248,10 +1251,13 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       }
       if (UNDO.test(t)) { await input.key('cmd+z'); say('Undone.'); show({ state: 'done', title: 'Undone', text: '⌘Z', linger: 1500 }); return; }
       if (forced === 'type') return await typeOut(text, signal);
-      if (!forced && agentOn() && !tutorIntent(t) && !SCAM_CHECK.test(t) && !REMEMBER.test(t)) {
+      // Rules, then the fast planner, always first; the agent (when on) gets only what they couldn't do. With the
+      // agent off, what's left goes on down the old router below.
+      if (!forced && !tutorIntent(t) && !SCAM_CHECK.test(t) && !REMEMBER.test(t) && (agentOn() || fastPlanner)) {
         const c = await checklist(t, signal, runId);
         if (c.done) return;
-        return await agentDo(c.rest, signal, runId);
+        if (agentOn()) { state.lastRoute = state.lastRoute ? `${state.lastRoute}+agent` : 'agent'; return await agentDo(c.rest, signal, runId); }
+        if (c.restText) text = t = c.restText;
       }
       // Several things in one breath: planned once, then done in order (plan.js).
       if (!forced && split(t).length > 1 && !HERE.test(t) && !DO_IT.test(t) && !tutorIntent(t) && !SCAM_CHECK.test(t) && !CAL_ADD.test(t) && !REMEMBER.test(t) && modeOf(t) !== 'hive') {
@@ -1884,5 +1890,6 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const reconnecting = (on) => { if (ptt.open && !busy()) show({ state: 'listening', text: on ? 'Reconnecting…' : '' }); };
   // ponytail: hold-⌃ runs a 30 Hz osascript poll, so it's opt-in (DIXI_HOLD_CTRL=1 or prefs.holdCtrl); ⌥Space is the default.
   return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, run, ear, voicePath: () => env.DIXI_VOICE_PATH ?? prefs.voicePath ?? 'ear',
+    smoke: () => ({ shown: state.lastShown ?? null, route: state.lastRoute ?? null }),
     earArgs: () => ['--key', prefs.earKey ?? env.DIXI_EAR_KEY ?? 'fn', ...(prefs.warmMic || env.DIXI_WARM_MIC === '1' ? ['--warm-mic'] : [])], control: env.DIXI_HOLD_CTRL === '1' || prefs.holdCtrl ? control : null, toggle, set: (k, v) => dashApi.set(k, v), showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
 }
