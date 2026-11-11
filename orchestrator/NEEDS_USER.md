@@ -43,3 +43,17 @@ Branch `claude/epic-ritchie-k4kr9s` (built on fix/voice-speed). On the Mac:
    - Fn+Space, speak, Fn+Space → sent; Esc while talking → nothing runs;
    - Fn+Left Arrow → nothing happens (no island, no sound); with Dixi idle the orange mic dot is OFF.
    - Fn+Control, say "see you at five" in a text field → pasted, your clipboard unchanged.
+
+## Nov 11 (later): hands-free shopping in your own browser
+1. **Let Dixi run page scripts in your browser (once):**
+   - Chrome: menu bar → **View → Developer → Allow JavaScript from Apple Events** (Brave/Edge/Arc/Vivaldi: same place).
+   - Safari: Settings → Advanced → "Show features for web developers", then **Develop → Allow JavaScript from Apple Events**.
+   - The first command will also ask **"Dixi wants to control Google Chrome"** → Allow. If Dixi says it can't, the
+     island tells you which of these to turn on.
+2. **Shopping check, ~2 minutes, on a store you use (nothing is bought; checkout stops before paying):**
+   double-tap Fn once, then just talk, pausing between commands:
+   "search for oat milk" · "add the first one to my cart" · "go back" · point at another product: "add this to my
+   cart" · "go to my cart" · "remove the oat milk from my cart" · "make it two" · press Fn to finish.
+   Esc stops anything Dixi is doing. Holding Fn still works for one command at a time.
+3. Optional, offline, $0: `cd electron && npm run e2e:shop` replays the 13-store shopping trip (needs
+   `npx playwright install chromium` once on the Mac).

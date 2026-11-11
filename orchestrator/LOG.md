@@ -685,3 +685,17 @@ recorded Haiku calls 9 → 5, unplanned/MISS 6 → 0, plan p50 0 ms, p95 2071 ms
 NOT measured (no Mac, no keys, no Swift here): Fn→mic, release→final, WER, end-to-end ms, idle mic. Helper not compiled.
 ASSUMPTIONS: Foundation Models tier dropped (CLI rate limit; user chose Cerebras). Fn+key cancel is silent always.
 Push: first try 403 (no GitHub app access), retried after access came back: pushed to origin/claude/epic-ritchie-k4kr9s.
+
+## 2026-11-11 hands-free shopping in the user's own browser
+USER: complex tasks get stuck / ignore directions; wants "add this to my cart, remove that, go there…" hands-free,
+instant, not glitchy. ROOT CAUSE (read in code): with Chrome in front, page commands went to the screenshot agent
+(Sonnet clicking pixels, slow, paid) or to Dixi's separate built-in browser (not the user's sign-ins or cart). The
+tested shopping executor (renderer/core/execute.js, pagekit.js) only ever drove that built-in browser.
+FIX: realtabs.js (executor's tabs contract over Apple Events 'execute javascript', one JXA worker) + browse.js
+(interpret + executor + page agent in main), routed from run() when a browser is in front; "this" = under the pointer;
+named add/remove rules; hands-free auto-send at pauses + in-order queue + Esc-stops; exact remove check.
+MEASURED (offline, real Chromium + fixture store, store log as truth, no model): 182/182 commands on 13 stores,
+p50 249 ms, p95 1.94 s, max 1.99 s, $0. npm test 471 pass / 2 pre-existing fails.
+NOT VERIFIED: Apple Events latency/behavior in the user's real Chrome/Safari; real stores' bot walls and sign-ins;
+the Swift `next` segmenting (not compiled). Hedwig: no public source found; the design follows what local Mac
+browser agents publish (DOM/elements, not screenshots).
