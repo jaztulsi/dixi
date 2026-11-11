@@ -662,3 +662,26 @@ Raw output: orchestrator/cp-test.txt, orchestrator/cp-bench.txt. B1 WIP (adapter
 - USER (mid-run): "i want the ui with the guy like the Wispr Flow one". HEAD already has it: the bottom pill with the mascot + live waveform (564d3de; docs/ui/island-pill-*.png). The user was running the old branch in ~/dixi. Replaced it: quit the old Dixi (pid 46825), now running HEAD from ~/dixi-integration with the real userData (⌥Space registered, no warnings). ~/dixi's branch is untouched.
 - ASSUMPTION 29: swapping the running app is the "run it" the user meant (memory: run = Electron). ~/dixi stays on feat/where-dixi-is-going. To keep the new UI after a reboot, launch from ~/dixi-integration (NEEDS_USER).
 - NEXT (v2 order): P1 no-keys + EL-at-0 run tests → pop the B1 stash (25 failing tests to fix) → B3 hit rate → P4 20-command run → P5 dashboard real-state click test.
+
+## 2026-11-11 v4 RESUME — hold Fn, speak (session on branch claude/epic-ritchie-k4kr9s, restarted from fix/voice-speed)
+Read: LOG tail, BOARD, NEEDS_USER, docs/bench/BASELINE.md, docs/HEARING_PLAN.md, docs/agent-research/*.
+Found (file:line on fix/voice-speed): every command went to the Claude agent when an Anthropic key existed
+(everywhere.js run() → agentDo before any rule); rules only ran with the agent off. Commands acted on mid-speech
+(voice.js ewProgress specMS 250 / settleMS 550, eager EOT). No Fn (globalShortcut; hold-⌃ polled by osascript).
+agentOn() precedence bug (prefs.agent=false left it on).
+
+Done (commits on the branch, each with its test):
+- ptt.js fnGestures: hold / double-tap lock / Fn+Space / Esc / Fn+other key / tap<200 ms / Fn+Ctrl dictation (fn.test 10).
+- ear.js + native/dixi-ear (Swift): key tap, mic on key-down, SpeechAnalyzer+DictationTranscriber with vocabulary,
+  SFSpeechRecognizer fallback, paste, context. ONE final per utterance; partials only to the island (ear.test 10).
+- run(): rules → fast planner (Cerebras → Groq) → agent only for the rest. Per-site search table, "buy X from <store>",
+  System Settings panes, VS Code by initials, shell steps checked by an allowlist (shell.js), verified opens.
+- Island: digital eye (screenshots in the session); Dixi speaks only answers; learns misheard names from quick retries.
+- npm run smoke: capped paid check for the Mac.
+
+Measured here (Linux, offline): npm test 458 pass / 2 fail (both pre-existing: Electron binary gate; mac.test
+"ls ~/Downloads" because HOME=/root here), 20.2 s. Bench (same 21 commands as BASELINE): by code 6 → 16 (76%),
+recorded Haiku calls 9 → 5, unplanned/MISS 6 → 0, plan p50 0 ms, p95 2071 ms (the 5 model plans). Bagel/Safeway 1563 ms → 0 ms.
+NOT measured (no Mac, no keys, no Swift here): Fn→mic, release→final, WER, end-to-end ms, idle mic. Helper not compiled.
+ASSUMPTIONS: Foundation Models tier dropped (CLI rate limit; user chose Cerebras). Fn+key cancel is silent always.
+BLOCKED: git push 403 — the Claude GitHub App has no access to jaztulsi/dixi; commits are local to the session.

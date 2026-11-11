@@ -19,3 +19,27 @@
 - The new UI (bottom pill with Dixi's face + live waveform, ⌥Space to talk) lives on branch fix/voice-speed, checked out at ~/dixi-integration. ~/dixi is still on the older feat/where-dixi-is-going.
 - It's running now. To start it again after a restart: `cd ~/dixi-integration/electron && env -u ELECTRON_RUN_AS_NODE npx electron .`
 - Or merge fix/voice-speed into your main branch when you're happy (not done for you: no merges without your say).
+
+## Nov 11: hold Fn, speak (v4) — what only you can do
+Branch `claude/epic-ritchie-k4kr9s` (built on fix/voice-speed). On the Mac:
+1. **Get the branch:** `cd ~/dixi-integration && git fetch origin && git checkout claude/epic-ritchie-k4kr9s`
+   (if the push didn't reach GitHub, see LOG.md "v4 RESUME": the Claude GitHub App needs access to the repo).
+2. **Build the ear** (Xcode 26 / macOS 26): `cd electron && npm run build:ear`. It was written on Linux and never
+   compiled: if it fails, paste the errors back and they get fixed in one round.
+3. **Permissions** for the app that starts Dixi (Electron, or Terminal while developing):
+   - **Input Monitoring** (the Fn key; Accessibility alone isn't enough) and **Accessibility** (paste, context).
+   - **Microphone.** Speech Recognition only matters on macOS < 26 (the fallback recognizer).
+   - First run downloads Apple's on-device speech model once (the island log says "downloading").
+4. **System Settings → Keyboard → "Press 🌐 key to": Do Nothing**, and turn off Dictation's own shortcut, so macOS
+   doesn't open emoji/dictation when you press Fn.
+5. **One key in `.env`:** `CEREBRAS_API_KEY` (fastest planner; `GROQ_API_KEY` works as the second). Without one,
+   anything rules can't do goes to the Claude agent as before.
+6. **The paid check, capped:** quit Dixi, then `cd electron && npm run smoke`. 13 typed commands: 10 by rules
+   ($0), 3 by the fast planner (~$0.001 total). Anthropic and cloud speech are off for that run; cap +$0.01 per provider.
+7. **2-minute hardware check** (say exactly):
+   - hold Fn: "open Notes" → Notes in front, the eye squints, no voice reply;
+   - double-tap Fn: "search lo-fi beats on Apple Music", then press Fn → Music search;
+   - hold Fn, pause 2 s mid-sentence: "open Safari … and then go to youtube.com" → ONE command, two steps;
+   - Fn+Space, speak, Fn+Space → sent; Esc while talking → nothing runs;
+   - Fn+Left Arrow → nothing happens (no island, no sound); with Dixi idle the orange mic dot is OFF.
+   - Fn+Control, say "see you at five" in a text field → pasted, your clipboard unchanged.
