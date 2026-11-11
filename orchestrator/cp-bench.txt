@@ -1,0 +1,45 @@
+
+> dixi@1.0.0 bench
+> node --import ./test/no-network.js eval/bench.js
+
+(node:74048) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Bench 2026-11-06T18:39: 21 commands (21 everywhere, 0 browser), $0 spent, 0 cache misses
+
+| stage (ms) | n | p50 | p95 |
+|---|---|---|---|
+| everywhere: interpret→plan ready (all) | 21 | 1 | 2069 |
+|   of which provider (recorded Haiku) | 6 | 1560 | 2839 |
+|   of which Dixi code | 21 | 1 | 29 |
+| reply spoken: local `say` synth | 21 | 1365 | 1414 |
+| browser: speech end→first action | 0 | - | - |
+| browser: speech end→done | 0 | - | - |
+
+Everywhere planner: 6 via anthropic:claude-haiku-5-5, 15 by code; $0.0007 total as recorded (0.00011/call)
+Browser: not run: eval/.cache/llm is empty, and every browser command needs an LLM call (no code path). Needs one approved record run.
+
+| command | mode | provider | steps | plan ms | reply ms | $ | may ask |
+|---|---|---|---|---|---|---|---|
+| Open Apple Music, search lo-fi beats, and play it | everywhere | anthropic:claude-haiku-5-5 | instant+script+script | 2976 | 1654 | 0.00024 | 0 |
+| Go to my school calendar, add my test on Friday, then text my mom I'll be late | everywhere | anthropic:claude-haiku-5-5 | open+script+script | 2069 | 1365 | 0.00014 | 0 |
+| Turn the volume down, open my notes, and start a new note | everywhere | code | instant+instant+instant | 1 | 1391 | 0.00000 | 0 |
+| **A3** search lo-fi beats on Apple Music | everywhere | code | instant | 0 | 1359 | 0.00000 | 0 |
+| **A3** buy a bagel from Safeway | everywhere | anthropic:claude-haiku-5-5 | web | 1566 | 1370 | 0.00004 | 1 |
+| remind me to call the dentist tomorrow at 9 | everywhere | code | instant | 2 | 1371 | 0.00000 | 0 |
+| open Safari and go to the New York Times website | everywhere | anthropic:claude-haiku-5-5 | instant+open | 1270 | 1353 | 0.00005 | 0 |
+| make a new folder on my desktop called homework | everywhere | code | instant | 0 | 1358 | 0.00000 | 0 |
+| what's on my calendar tomorrow, then text Sam I'm running late | everywhere | anthropic:claude-haiku-5-5 | answer+script | 1331 | 1346 | 0.00009 | 0 |
+| turn on dark mode, open Messages and start a new message to Alex | everywhere | anthropic:claude-haiku-5-5 | instant+instant+script | 1709 | 1389 | 0.00012 | 0 |
+| open Notes | everywhere | code | instant | 0 | 1345 | 0.00000 | 0 |
+| open Calendar | everywhere | code | instant | 0 | 1414 | 0.00000 | 0 |
+| switch to Safari | everywhere | code | instant | 0 | 1362 | 0.00000 | 0 |
+| type hello world | everywhere | code | instant | 1 | 1391 | 0.00000 | 0 |
+| turn the volume down | everywhere | code | instant | 0 | 1355 | 0.00000 | 0 |
+| mute | everywhere | code | instant | 0 | 1339 | 0.00000 | 0 |
+| set a timer for 5 minutes | everywhere | code | instant | 1 | 1384 | 0.00000 | 0 |
+| find my resume | everywhere | code | instant | 4 | 1354 | 0.00000 | 0 |
+| what's on my screen | everywhere | code | instant | 0 | 1341 | 0.00000 | 0 |
+| open Notes and start a new note | everywhere | code | instant+instant | 0 | 1365 | 0.00000 | 0 |
+| **A3** couldn't find that on this page | everywhere | code | instant | 0 | 1368 | 0.00000 | 0 |
+
+raw: bench/out/2026-11-06T18-39-43-232Z.json
