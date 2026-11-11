@@ -21,6 +21,8 @@ import { unsafe } from './safesite.js';
 import { exec as macExec, openTarget, runScript, check as checkScript, installedApps } from './mac.js';
 import { mark } from './timing.js';
 import { plan, split } from './plan.js';
+import { runShell } from './shell.js';
+import { speakable } from './speakable.js';
 import { ENDPOINTS, chat, fastChat, fastModels, prewarm } from './providers.js';
 import { plainError } from './tools.js';
 import { makeAsk } from './ask.js';
@@ -922,6 +924,13 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       const a = (await quickAnswer(s.clause, { webAnswer }))?.say ?? (await webAnswer(s.clause));
       return a ? { ok: true, say: a, out: a } : { ok: false, error: "I couldn't find that out" };
     }
+    if (s.do === 'shell') {   // a terminal command instead of clicking (shell.js: the allowlist is checked again here)
+      const r = await runShell(s.cmd, { home: os.homedir() });
+      act.log({ kind: 'step', verb: 'shell', text: s.cmd, ms: r.ms });
+      if (r.refused || signal.aborted) return { ok: false, error: r.error };
+      if (!r.ok) return config.keys.anthropic ? doStep({ do: 'computer', clause: s.clause }, prior, signal) : { ok: false, error: r.error };   // the next rung, once
+      return { ok: true, out: r.out, ...(s.speak && r.out && { say: speakable(r.out.split('\n').slice(0, 3).join('. ')).slice(0, 300) }) };
+    }
     if (s.do === 'web') return browse(s.clause, signal);
     if (s.do === 'script') {
       if (KEYS_IN.test(s.code)) {   // keystrokes go to whatever is in front: never a terminal, a code editor or Dixi
@@ -994,7 +1003,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
             show({ state: 'error', title: text.slice(0, 80), text: why, linger: 12000 }); if (!r.said) say(why); return false;   // a refused screen step already said why
           }
           // Dixi speaks less: the island shows what was done; the voice is for answers (and for anything, with the "chatty" pref).
-          const answer = s.do === 'answer' || s.kind === 'quick' || s.kind === 'read' || (s.kind === 'desktop' && (/^(?:battery|timers)$/.test(s.intent?.verb) || s.intent?.op === 'now'));
+          const answer = s.do === 'answer' || (s.do === 'shell' && s.speak) || s.kind === 'quick' || s.kind === 'read' || (s.kind === 'desktop' && (/^(?:battery|timers)$/.test(s.intent?.verb) || s.intent?.op === 'now'));
           if (r.say && (answer || prefs.chatty)) say(r.say);
           if (r.say) q.last = r.say;
           spoke ||= Boolean(r.say || r.said);

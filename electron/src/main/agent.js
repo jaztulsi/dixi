@@ -4,6 +4,8 @@
 import os from 'node:os';
 import { query as sdkQuery, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { bashRefusal } from './shell.js';
+export { bashRefusal };
 
 export const HAIKU = 'claude-haiku-5-5';
 export const SONNET = 'claude-sonnet-5-5';
@@ -49,36 +51,7 @@ export function userMessage(said, ctx = {}, { unsure = [], clipboard = '', now =
 }
 
 // ---- Bash: an allowlist of commands and places. No sudo, no installs, no network, no deleting. ----
-const OK_CMDS = new Set(['open', 'mdfind', 'mdls', 'ls', 'cat', 'head', 'tail', 'wc', 'date', 'cal', 'pmset', 'sw_vers', 'system_profiler', 'df', 'du', 'uptime', 'whoami', 'pwd', 'echo', 'grep', 'find', 'file', 'stat', 'defaults', 'shortcuts', 'sips', 'mv', 'mkdir', 'cp', 'zip', 'bc', 'sort', 'uniq', 'basename', 'dirname', 'pbcopy', 'say', 'top', 'ps', 'vm_stat', 'sysctl', 'ioreg', 'scutil', 'ipconfig', 'ifconfig', 'pgrep', 'osascript']);
-const PLACES = ['/Applications', '/System/Applications', '/tmp', '/private/tmp', '/Volumes'];
-/** null when the command may run, else why not (said to the model). */
-export function bashRefusal(cmd, home = os.homedir(), { allowDelete = false } = {}) {
-  const c = String(cmd ?? '').trim();
-  if (!c) return 'Empty command.';
-  if (/[`]|\$\(|<\(|>\(/.test(c)) return 'No command substitution.';
-  if (/(^|\s)(?:sudo|su)\s/.test(c)) return 'No sudo.';
-  if (!allowDelete && /_to_delete/.test(c)) return 'Deleting is off in Dixi\'s settings (Allow deleting). Tell the user that, and do nothing else.';
-  if (/[<>]/.test(c.replace(/\d?>&\d|&?\d?>\s*\/dev\/null/g, ''))) return 'No redirection into files.';
-  for (const seg of c.split(/&&|\|\||;|\|/)) {
-    const words = seg.trim().split(/\s+/).filter((w) => !/^[A-Z_]+=/.test(w));
-    const w0 = words[0] ?? '';
-    if (!w0) continue;
-    if (!OK_CMDS.has(w0)) return w0 === 'rm' || w0 === 'rmdir' || w0 === 'trash' ? 'Deleting isn\'t allowed: move it into ~/_to_delete instead.' : `${w0} isn't on Dixi's allowed list.`;
-    if (w0 === 'defaults' && !/^(?:read|domains)$/.test(words[1] ?? '')) return 'defaults: read only.';
-    if (w0 === 'pmset' && words[1] !== '-g') return 'pmset: read only (-g).';
-    if (w0 === 'shortcuts' && !/^(?:run|list)$/.test(words[1] ?? '')) return 'shortcuts: run or list only.';
-    if (w0 === 'osascript') return 'Use the applescript tool instead.';
-    if (w0 === 'find' && words.some((x) => /^-(?:delete|exec|execdir|ok)$/.test(x))) return 'find: no -delete or -exec.';
-    if (w0 === 'find' && /^['"]?(?:~|\$HOME|\/)\/?['"]?$|^['"]?\/Users\/[^/]+\/?['"]?$/.test(words[1] ?? '')) return 'find over the whole home folder takes minutes: use mdfind, or find in one folder such as ~/Desktop.';
-    for (const x of words.slice(1)) {
-      const p = x.replace(/^['"]|['"]$/g, '').replace(/^~(?=\/|$)/, home);
-      if (p.includes('..')) return 'No ".." in paths.';
-      if (p.startsWith('/') && ![home, ...PLACES].some((d) => p === d || p.startsWith(`${d}/`))) return `${x} is outside the folders Dixi may touch.`;
-    }
-  }
-  return null;
-}
-
+// The Bash allowlist lives in shell.js (the planner's shell steps use it too).
 const text = (s) => ({ content: [{ type: 'text', text: String(s ?? '').slice(0, 4000) || 'Done.' }] });
 /** Tool definitions: each calls impl[name](args, signal) → { ok, out?, error?, said? }. */
 export function dixiTools(impl, run) {

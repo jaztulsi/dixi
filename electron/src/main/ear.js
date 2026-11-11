@@ -12,9 +12,8 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fnGestures } from './ptt.js';
-
-/** "Dixi, open Safari" / "hey Dixie open Safari" → "open Safari". No name is ever needed; a leading one is dropped. */
-export const stripName = (text) => String(text ?? '').trim().replace(/^(?:(?:hey|hi|ok(?:ay)?|yo)[,\s]+)?(?:dixi|dixie|dixy|dixey|dicksy|dixxy)\b[,.!:;\s]*/i, '').trim();
+import { stripName } from './plan.js';
+export { stripName };
 
 /** Where the built helper is (packaged resources first, then the dev build), or null. */
 export function findEar(root, { exists = fs.existsSync, resources = process.resourcesPath } = {}) {
