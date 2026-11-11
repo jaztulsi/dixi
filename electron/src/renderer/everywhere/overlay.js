@@ -65,6 +65,7 @@ let heard = [];
 window.ew.on('ew:level', (v) => {
   heard = [Math.min(1, 1.3 * Math.sqrt(Math.max(0, Number(v) - 0.02) || 0)), ...heard].slice(0, mid + 1);
   bars.forEach((b, i) => { const d = Math.abs(i - mid); b.style.setProperty('--l', Math.max(0.12, (heard[d] ?? 0) * (1 - d / (mid + 3))).toFixed(2)); });
+  pill.style.setProperty('--lv', (heard[0] ?? 0).toFixed(2));   // the eye's pupil
 });
 // Your words, under the pill, keep their newest end in view: "…and email it to Sam", never "open my resume and…".
 const tail = (t) => (t.length > 72 ? `…${t.slice(-71).replace(/^\S*\s+/, '')}` : t);
@@ -91,6 +92,7 @@ window.ew.on('ew:state', (s) => {
   const view = s.state === 'hive' ? 'acting' : s.state;
   pill.dataset.state = view;
   if (view === 'listening' && fresh) { heard = []; bars.forEach((b) => b.style.removeProperty('--l')); }
+  if (view !== 'listening') pill.style.removeProperty('--lv');
   const running = (s.steps ?? []).findLast((x) => x.state === 'running')?.label;
   const line = (view === 'acting' ? running || s.text || s.title : s.text || (view === 'done' || view === 'error' ? s.title : '')) ?? '';
   const words = String(line).replace(/\s+/g, ' ').trim();

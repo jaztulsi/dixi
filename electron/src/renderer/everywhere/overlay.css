@@ -51,11 +51,30 @@ html.top .island[data-state="idle"] .row { height: var(--idle-h); justify-conten
 .row:has(#undo:not([hidden])) { padding-right: 5px; }
 
 /* Dixi in the pill: one still pose per state (neutral, all ears while you talk, happy when done); no motion */
-.buddy { position: relative; flex: none; height: 30px; aspect-ratio: 0.86; transition: height var(--dur) var(--ease); }
-[data-state="idle"] .buddy { height: 22px; }
-.buddy img { position: absolute; left: 50%; bottom: 0; height: 100%; translate: -50% 0; opacity: 0; transition: opacity 120ms linear; }
-.buddy .m-neutral, [data-state="listening"] .m-curious, [data-state="done"] .m-happy { opacity: 1; }
-[data-state="listening"] .m-neutral, [data-state="done"] .m-neutral { opacity: 0; }
+/* ---- the eye: white on true black. The lids say the state; the pupil follows your voice (--lv, set only while
+   listening); it scans only while thinking. Nothing moves at idle. ---- */
+.buddy { position: relative; flex: none; height: 20px; aspect-ratio: 1.6; transition: height var(--dur) var(--ease); }
+[data-state="idle"] .buddy { height: 15px; }
+.eye svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.eye .white { fill: var(--black); }
+.eye .rim { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+.eye .pupil { fill: var(--ink); transform-box: fill-box; transform-origin: center; transform: scale(calc(0.78 + var(--lv, 0) * 0.5)); transition: transform 90ms linear; }
+.eye .glint { fill: var(--black); }
+.eye .look { transition: transform var(--dur) var(--ease); }
+.eye .lid { fill: var(--black); transition: transform var(--dur) var(--ease); }
+.eye .lid.top { transform: translateY(3px); }
+.eye .sad { fill: none; stroke: var(--red); stroke-width: 1.6; stroke-linecap: round; opacity: 0; transition: opacity var(--dur) linear; }
+[data-state="idle"] .eye .lid.top { transform: translateY(10px); }                                   /* half closed */
+[data-state="listening"] .eye .lid.top { transform: translateY(0); }                                 /* wide open */
+[data-state="thinking"] .eye .look { animation: scan 1.1s var(--ease) infinite alternate; }
+[data-state="acting"] .eye .lid.top, [data-state="hive"] .eye .lid.top { transform: translateY(6px); } /* narrowed, focused */
+[data-state="acting"] .eye .lid.bottom, [data-state="hive"] .eye .lid.bottom { transform: translateY(-5px); }
+[data-state="done"] .eye .lid.bottom { transform: translateY(-8px); }                                /* a happy squint */
+[data-state="done"] .eye .lid.top { transform: translateY(4px); }
+[data-state="error"] .eye .lid.top { transform: translateY(8px); }                                   /* the lid droops */
+[data-state="error"] .eye .look { transform: translateY(2px); }
+[data-state="error"] .eye .sad { opacity: 1; }
+@keyframes scan { from { transform: translateX(-5px); } to { transform: translateX(5px); } }
 
 #text { flex: 0 1 auto; max-width: 340px; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
 html.top #text { flex: 1; max-width: none; }
@@ -143,7 +162,9 @@ html.top .card[hidden] { transform: translateY(-6px); }
 
 @media (prefers-reduced-motion: reduce) {
   .island, .island:hover, .card, .card[hidden] { transform: none !important; }
-  .island, .buddy, .buddy img { transition: none; }
+  .island, .buddy, .eye .lid, .eye .look, .eye .pupil, .eye .sad { transition: none; }
+  .eye .look { animation: none !important; }
+  .eye .pupil { transform: none; }
   .wave i, .mark, .mark.point::after, .label { animation: none !important; }
   [data-state="thinking"] .wave i { transform: scaleY(0.35); opacity: 0.5; }   /* still reads as "working", without motion */
   .cursor.on { animation: fade 900ms linear forwards; }
