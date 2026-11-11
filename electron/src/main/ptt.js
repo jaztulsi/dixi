@@ -59,3 +59,72 @@ export function watchControl(onEvent, { spawn = nodeSpawn } = {}) {
 // Launchers that commonly take a key Dixi wants. Read-only `ps -axco comm=` output shows which one is running.
 const LAUNCHERS = ['Raycast', 'Alfred', 'ChatGPT', 'Claude'];
 export const hotkeyOwner = (ps) => LAUNCHERS.find((n) => String(ps).split('\n').some((l) => l.trim() === n)) ?? null;
+
+/**
+ * The Fn key, Wispr-style, as a pure machine over what the native helper reports:
+ * {type: 'fn_down' | 'fn_up' | 'space' | 'esc' | 'other_key' | 'ctrl' | 'reset', t: ms, ctrl?: bool}.
+ *   hold Fn                 → open on key-DOWN, send on release (one utterance, however long the pauses)
+ *   double-tap Fn (≤ 500ms) → hands-free: stays open with no key held; Fn again sends
+ *   Fn + Space              → hands-free toggle (start / send)
+ *   Esc                     → cancel
+ *   Fn + any other key      → you're using Fn normally: cancel silently
+ *   a lone tap under 200 ms → nothing
+ *   Fn + Control            → dictation: the words are pasted, not run
+ * onOpen(mode) opens the mic at once; onShow() is the island, `showMs` later, so Fn+arrow never flashes it;
+ * onSend(mode) and onCancel(why, {silent}) end it. Exactly one of onSend/onCancel follows every onOpen.
+ */
+export function fnGestures({ onOpen, onShow = () => {}, onSend, onCancel, onMode = () => {}, tapMs = 200, doubleMs = 500, showMs = 90, maxMs = 300000,
+  setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t) }) {
+  let st = 'idle';        // idle | held | tapped | locked
+  let mode = 'command', downAt = 0, fnDown = false, shown = false;
+  let skipUp = false;     // this press already did its job: its release (and a Space under it) means nothing
+  let tapTimer = null, showTimer = null, maxTimer = null;
+  const stopTimers = () => { for (const t of [tapTimer, showTimer, maxTimer]) clearTimer(t); tapTimer = showTimer = maxTimer = null; };
+  const show = () => { if (!shown && st !== 'idle') { shown = true; onShow(mode); } };
+  const open = (ev) => {
+    st = 'held'; mode = ev.ctrl ? 'dictate' : 'command'; downAt = ev.t; shown = false;
+    onOpen(mode);
+    showTimer = setTimer(() => { showTimer = null; show(); }, showMs);
+    maxTimer = setTimer(() => { maxTimer = null; send(); }, maxMs);
+  };
+  const send = () => { if (st === 'idle') return; stopTimers(); st = 'idle'; onSend(mode); };
+  const cancel = (why, silent = false) => { if (st === 'idle') return; stopTimers(); const quiet = silent || !shown; st = 'idle'; onCancel(why, { silent: quiet }); };
+  const lock = () => { clearTimer(tapTimer); tapTimer = null; st = 'locked'; show(); };
+
+  return (ev) => {
+    switch (ev.type) {
+      case 'fn_down':
+        if (fnDown) return;                       // key repeat / a re-seeded tap
+        fnDown = true; skipUp = false;
+        if (st === 'idle') open(ev);
+        else if (st === 'tapped') { lock(); skipUp = true; }          // second tap: hands-free
+        else if (st === 'locked') { send(); skipUp = true; }          // Fn again: send
+        return;
+      case 'fn_up':
+        if (!fnDown) return;
+        fnDown = false;
+        if (skipUp) { skipUp = false; return; }
+        if (st !== 'held') return;
+        if (ev.t - downAt >= tapMs) return send();
+        st = 'tapped';                            // maybe the first half of a double-tap: keep the mic, decide at doubleMs
+        tapTimer = setTimer(() => { tapTimer = null; cancel('tap', true); }, Math.max(0, doubleMs - (ev.t - downAt)));
+        return;
+      case 'space':
+        if (!fnDown || skipUp) return;
+        if (st === 'held') { lock(); skipUp = true; }                 // Fn+Space: hands-free on
+        return;
+      case 'ctrl':
+        if (st === 'held' && mode !== 'dictate') { mode = 'dictate'; onMode(mode); }
+        return;
+      case 'esc':
+        if (fnDown) skipUp = true;
+        return cancel('esc');
+      case 'other_key':
+        if (st === 'held' || st === 'tapped') { skipUp = fnDown; cancel('fn-combo', true); }
+        return;
+      case 'reset':                               // the helper died or lost the tap: never leave the mic stuck open
+        fnDown = false; skipUp = false;
+        return cancel('reset', true);
+    }
+  };
+}

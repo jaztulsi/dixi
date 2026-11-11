@@ -1,0 +1,2834 @@
+
+> dixi@1.0.0 test
+> node test/gate.js test/unit/*.test.js
+
+TAP version 13
+# Subtest: the regex matches the questions and not its neighbours
+ok 1 - the regex matches the questions and not its neighbours
+  ---
+  duration_ms: 2.16725
+  type: 'test'
+  ...
+# Subtest: intent: windows, app, risk, clear
+ok 2 - intent: windows, app, risk, clear
+  ---
+  duration_ms: 2.663583
+  type: 'test'
+  ...
+# Subtest: the file is 0600, one line per event, and never holds typed text
+ok 3 - the file is 0600, one line per event, and never holds typed text
+  ---
+  duration_ms: 5.055584
+  type: 'test'
+  ...
+# Subtest: nothing at all for password, card or code fields
+ok 4 - nothing at all for password, card or code fields
+  ---
+  duration_ms: 0.770334
+  type: 'test'
+  ...
+# Subtest: rotates at about 2 MB, keeping one old file
+ok 5 - rotates at about 2 MB, keeping one old file
+  ---
+  duration_ms: 13.008833
+  type: 'test'
+  ...
+# Subtest: answers for today: counts runs, steps and yes answers
+ok 6 - answers for today: counts runs, steps and yes answers
+  ---
+  duration_ms: 2.776916
+  type: 'test'
+  ...
+# Subtest: "did you send anything" lists only yes answers that match
+ok 7 - "did you send anything" lists only yes answers that match
+  ---
+  duration_ms: 2.526292
+  type: 'test'
+  ...
+# Subtest: time windows with an injected clock
+ok 8 - time windows with an injected clock
+  ---
+  duration_ms: 12.65675
+  type: 'test'
+  ...
+# Subtest: app filter keeps only that app
+ok 9 - app filter keeps only that app
+  ---
+  duration_ms: 3.490958
+  type: 'test'
+  ...
+# Subtest: when a time rule runs next
+ok 10 - when a time rule runs next
+  ---
+  duration_ms: 2.448917
+  type: 'test'
+  ...
+# Subtest: what the model makes of a request is checked in code
+ok 11 - what the model makes of a request is checked in code
+  ---
+  duration_ms: 1.5265
+  type: 'test'
+  ...
+# Subtest: a spoken rule: saved, said back, run when due (and once if the Mac slept through it), stopped by name
+ok 12 - a spoken rule: saved, said back, run when due (and once if the Mac slept through it), stopped by name
+  ---
+  duration_ms: 23.312166
+  type: 'test'
+  ...
+# Subtest: a file trigger: a new file in the folder runs the command once it has finished arriving
+ok 13 - a file trigger: a new file in the folder runs the command once it has finished arriving
+  ---
+  duration_ms: 5011.2885
+  type: 'test'
+  ...
+# Subtest: a page monitor tells you only when the watched thing changes
+ok 14 - a page monitor tells you only when the watched thing changes
+  ---
+  duration_ms: 2.357208
+  type: 'test'
+  ...
+# Subtest: workflows: record what you say, or save it; replay in order; a failed step stops it and says which
+ok 15 - workflows: record what you say, or save it; replay in order; a failed step stops it and says which
+  ---
+  duration_ms: 0.812375
+  type: 'test'
+  ...
+# Subtest: the socket and the token are owner-only; a wrong token is refused
+ok 16 - the socket and the token are owner-only; a wrong token is refused
+  ---
+  duration_ms: 18.409875
+  type: 'test'
+  ...
+# Subtest: say goes through, capped and without the wake word; then the rate limit kicks in
+ok 17 - say goes through, capped and without the wake word; then the rate limit kicks in
+  ---
+  duration_ms: 4.505375
+  type: 'test'
+  ...
+# Subtest: the limit: one line per 2 s and 10 a minute
+ok 18 - the limit: one line per 2 s and 10 a minute
+  ---
+  duration_ms: 0.397708
+  type: 'test'
+  ...
+# Subtest: nothing is spoken while Dixi is busy for the user (an approval card must not hear Claude Code)
+ok 19 - nothing is spoken while Dixi is busy for the user (an approval card must not hear Claude Code)
+  ---
+  duration_ms: 7.356416
+  type: 'test'
+  ...
+# Subtest: notify shows a card and says the title
+ok 20 - notify shows a card and says the title
+  ---
+  duration_ms: 6.364834
+  type: 'test'
+  ...
+# Subtest: ask returns the spoken answer, matched to a choice
+ok 21 - ask returns the spoken answer, matched to a choice
+  ---
+  duration_ms: 15.943166
+  type: 'test'
+  ...
+# Subtest: ask with the microphone off: only a yes/no (the card has buttons)
+ok 22 - ask with the microphone off: only a yes/no (the card has buttons)
+  ---
+  duration_ms: 2.92725
+  type: 'test'
+  ...
+# Subtest: ask: silence is null after the timeout
+ok 23 - ask: silence is null after the timeout
+  ---
+  duration_ms: 60.639333
+  type: 'test'
+  ...
+# Subtest: answers: yes/no is strict, a choice must be said as a word, anything else comes back as said
+ok 24 - answers: yes/no is strict, a choice must be said as a word, anything else comes back as said
+  ---
+  duration_ms: 3.123708
+  type: 'test'
+  ...
+# Subtest: dixi-mcp answers initialize and tools/list, and tools/call reaches the bridge
+ok 25 - dixi-mcp answers initialize and tools/list, and tools/call reaches the bridge
+  ---
+  duration_ms: 74.16425
+  type: 'test'
+  ...
+# Subtest: dixi-mcp: modern (2026-07-28) requests, and dixi_ask
+ok 26 - dixi-mcp: modern (2026-07-28) requests, and dixi_ask
+  ---
+  duration_ms: 95.499833
+  type: 'test'
+  ...
+# Subtest: dixi-mcp with no Dixi running: a tool error, not a crash
+ok 27 - dixi-mcp with no Dixi running: a tool error, not a crash
+  ---
+  duration_ms: 72.833667
+  type: 'test'
+  ...
+# Subtest: --notify (the Stop hook) shows a card and exits 0
+ok 28 - --notify (the Stop hook) shows a card and exits 0
+  ---
+  duration_ms: 137.586167
+  type: 'test'
+  ...
+# Subtest: Calendar: today in time order, all-day first, repeating series worked out
+ok 29 - Calendar: today in time order, all-day first, repeating series worked out
+  ---
+  duration_ms: 2.968625
+  type: 'test'
+  ...
+# Subtest: repeating rules: monthly by weekday or date, every other week, yearly
+ok 30 - repeating rules: monthly by weekday or date, every other week, yearly
+  ---
+  duration_ms: 0.845292
+  type: 'test'
+  ...
+# Subtest: Reminders: due today or overdue, overdue first
+ok 31 - Reminders: due today or overdue, overdue first
+  ---
+  duration_ms: 0.372042
+  type: 'test'
+  ...
+# Subtest: Mail: not open is null; sender names
+ok 32 - Mail: not open is null; sender names
+  ---
+  duration_ms: 0.4705
+  type: 'test'
+  ...
+# Subtest: gather: each app is optional; denied and slow ones are skipped, Mail is never launched
+ok 33 - gather: each app is optional; denied and slow ones are skipped, Mail is never launched
+  ---
+  duration_ms: 1.439333
+  type: 'test'
+  ...
+# Subtest: briefText: a busy day
+ok 34 - briefText: a busy day
+  ---
+  duration_ms: 0.411917
+  type: 'test'
+  ...
+# Subtest: briefText: a very busy day still fits in about 20 seconds
+ok 35 - briefText: a very busy day still fits in about 20 seconds
+  ---
+  duration_ms: 0.521625
+  type: 'test'
+  ...
+# Subtest: briefText: empty day, later in the day, Mail not open, skipped apps
+ok 36 - briefText: empty day, later in the day, Mail not open, skipped apps
+  ---
+  duration_ms: 0.234166
+  type: 'test'
+  ...
+# Subtest: nextText and tomorrowText
+ok 37 - nextText and tomorrowText
+  ---
+  duration_ms: 0.733875
+  type: 'test'
+  ...
+# Subtest: briefSteps: past done, current running, the rest queued
+ok 38 - briefSteps: past done, current running, the rest queued
+  ---
+  duration_ms: 27.427084
+  type: 'test'
+  ...
+# Subtest: spoken commands for the brief
+ok 39 - spoken commands for the brief
+  ---
+  duration_ms: 4.5455
+  type: 'test'
+  ...
+# Subtest: triggers match, near-misses do not
+ok 40 - triggers match, near-misses do not
+  ---
+  duration_ms: 2.74125
+  type: 'test'
+  ...
+# Subtest: read-back uses an absolute date, never "next Friday"
+ok 41 - read-back uses an absolute date, never "next Friday"
+  ---
+  duration_ms: 26.82525
+  type: 'test'
+  ...
+# Subtest: invalid, past and far dates are refused; no date asks
+ok 42 - invalid, past and far dates are refused; no date asks
+  ---
+  duration_ms: 2.016459
+  type: 'test'
+  ...
+# Subtest: times: end before start becomes start + 1 hour; title and notes capped
+ok 43 - times: end before start becomes start + 1 hour; title and notes capped
+  ---
+  duration_ms: 0.554459
+  type: 'test'
+  ...
+# Subtest: "tomorrow at 9" overrides the screen and makes a reminder
+ok 44 - "tomorrow at 9" overrides the screen and makes a reminder
+  ---
+  duration_ms: 0.665875
+  type: 'test'
+  ...
+# Subtest: yes: created, and the values travel as JSON args, not spliced
+ok 45 - yes: created, and the values travel as JSON args, not spliced
+  ---
+  duration_ms: 2.275167
+  type: 'test'
+  ...
+# Subtest: no: nothing is created
+ok 46 - no: nothing is created
+  ---
+  duration_ms: 0.949042
+  type: 'test'
+  ...
+# Subtest: invalid date: refused, nothing asked or created
+ok 47 - invalid date: refused, nothing asked or created
+  ---
+  duration_ms: 0.388917
+  type: 'test'
+  ...
+# Subtest: no date: asks the user, then reads back the answer
+ok 48 - no date: asks the user, then reads back the answer
+  ---
+  duration_ms: 5.823167
+  type: 'test'
+  ...
+# Subtest: errors in plain words
+ok 49 - errors in plain words
+  ---
+  duration_ms: 3.772875
+  type: 'test'
+  ...
+# Subtest: reminder goes to Reminders with the due time
+ok 50 - reminder goes to Reminders with the due time
+  ---
+  duration_ms: 2.583208
+  type: 'test'
+  ...
+# Subtest: normal mode never asks: added, said back in full, Undo offered; no day said = the next sensible one
+ok 51 - normal mode never asks: added, said back in full, Undo offered; no day said = the next sensible one
+  ---
+  duration_ms: 5.540375
+  type: 'test'
+  ...
+# (node:72031) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the selection: text, an image or files come back; your clipboard is put back (every format); nothing selected → null
+ok 52 - the selection: text, an image or files come back; your clipboard is put back (every format); nothing selected → null
+  ---
+  duration_ms: 219.476
+  type: 'test'
+  ...
+# Subtest: paste puts the new text where the selection was, then restores the clipboard; a copy made meanwhile is kept
+ok 53 - paste puts the new text where the selection was, then restores the clipboard; a copy made meanwhile is kept
+  ---
+  duration_ms: 5.280291
+  type: 'test'
+  ...
+# Subtest: clipboard history: today’s copies, newest first and searchable; passwords and password managers are never kept
+ok 54 - clipboard history: today’s copies, newest first and searchable; passwords and password managers are never kept
+  ---
+  duration_ms: 2.194417
+  type: 'test'
+  ...
+# Subtest: OCR reading order: rows top to bottom, pieces of one row left to right, unsure pieces dropped
+ok 55 - OCR reading order: rows top to bottom, pieces of one row left to right, unsure pieces dropped
+  ---
+  duration_ms: 0.546792
+  type: 'test'
+  ...
+# Subtest: acting on it: the model is told the selection is data; only text can be replaced; nothing there → no model call
+ok 56 - acting on it: the model is told the selection is data; only text can be replaced; nothing there → no model call
+  ---
+  duration_ms: 15.935333
+  type: 'test'
+  ...
+# Subtest: OCR on this Mac: a picture and a scanned PDF page are read; a PDF with text uses its text layer
+ok 57 - OCR on this Mac: a picture and a scanned PDF page are read; a PDF with text uses its text layer
+  ---
+  duration_ms: 4414.265333
+  type: 'test'
+  ...
+# [catalog] Apple catalog is 2502 days old; run npm run refresh-apple-catalog
+# Subtest: catalog: families match however they are spoken, including models not listed by name
+ok 58 - catalog: families match however they are spoken, including models not listed by name
+  ---
+  duration_ms: 1.540291
+  type: 'test'
+  ...
+# Subtest: catalog: generic words and look-alikes never trigger it
+ok 59 - catalog: generic words and look-alikes never trigger it
+  ---
+  duration_ms: 0.291625
+  type: 'test'
+  ...
+# Subtest: catalog: an accessory for a product, or one of Apple's own, is searched on Apple's store (Apple first)
+ok 60 - catalog: an accessory for a product, or one of Apple's own, is searched on Apple's store (Apple first)
+  ---
+  duration_ms: 0.424333
+  type: 'test'
+  ...
+# Subtest: catalog: a family with several current models and none named asks which; digits inside numbers never match
+ok 61 - catalog: a family with several current models and none named asks which; digits inside numbers never match
+  ---
+  duration_ms: 0.911375
+  type: 'test'
+  ...
+# Subtest: catalog: missing or old catalog
+ok 62 - catalog: missing or old catalog
+  ---
+  duration_ms: 0.820333
+  type: 'test'
+  ...
+# Subtest: the words that pick a command
+ok 63 - the words that pick a command
+  ---
+  duration_ms: 2.499042
+  type: 'test'
+  ...
+# Subtest: commands are checked: known action, phrase, target, no control characters
+ok 64 - commands are checked: known action, phrase, target, no control characters
+  ---
+  duration_ms: 0.834083
+  type: 'test'
+  ...
+# Subtest: a phrase used twice is refused
+ok 65 - a phrase used twice is refused
+  ---
+  duration_ms: 0.426583
+  type: 'test'
+  ...
+# Subtest: saved to a file only you can read, and read back
+ok 66 - saved to a file only you can read, and read back
+  ---
+  duration_ms: 2.68675
+  type: 'test'
+  ...
+# Subtest: files and folders stay inside your home folder
+ok 67 - files and folders stay inside your home folder
+  ---
+  duration_ms: 0.270583
+  type: 'test'
+  ...
+# Subtest: only complete, non-repeated commands are saved, trimmed
+ok 68 - only complete, non-repeated commands are saved, trimmed
+  ---
+  duration_ms: 2.536542
+  type: 'test'
+  ...
+# Subtest: typing a repeat above a saved command never knocks the saved one out
+ok 69 - typing a repeat above a saved command never knocks the saved one out
+  ---
+  duration_ms: 0.308209
+  type: 'test'
+  ...
+# Subtest: activity is grouped by day, newest first, with 12-hour times
+ok 70 - activity is grouped by day, newest first, with 12-hour times
+  ---
+  duration_ms: 26.822875
+  type: 'test'
+  ...
+# Subtest: permission words and the status pill
+ok 71 - permission words and the status pill
+  ---
+  duration_ms: 0.311625
+  type: 'test'
+  ...
+# Subtest: demo: every DEMO.md line and follow-up needs no AI
+ok 72 - demo: every DEMO.md line and follow-up needs no AI
+  ---
+  duration_ms: 17.427459
+  type: 'test'
+  ...
+# Subtest: demo: a similar sentence is the same line
+ok 73 - demo: a similar sentence is the same line
+  ---
+  duration_ms: 0.607625
+  type: 'test'
+  ...
+# Subtest: demo: another product, colour, number or site is never the demo
+ok 74 - demo: another product, colour, number or site is never the demo
+  ---
+  duration_ms: 0.370959
+  type: 'test'
+  ...
+# Subtest: demo: "iPhone 18" is the iPhone 18 Pro, with what was said about it, and AirPods
+ok 75 - demo: "iPhone 18" is the iPhone 18 Pro, with what was said about it, and AirPods
+  ---
+  duration_ms: 0.683708
+  type: 'test'
+  ...
+# Subtest: demo: the start of a line waits for the rest; whole commands do not
+ok 76 - demo: the start of a line waits for the rest; whole commands do not
+  ---
+  duration_ms: 1.314208
+  type: 'test'
+  ...
+# Subtest: demo: products open on their exact configuration page
+ok 77 - demo: products open on their exact configuration page
+  ---
+  duration_ms: 0.246208
+  type: 'test'
+  ...
+# Subtest: your three scenarios need no AI to understand
+ok 78 - your three scenarios need no AI to understand
+  ---
+  duration_ms: 0.573833
+  type: 'test'
+  ...
+# Subtest: back is a direction, never a site
+ok 79 - back is a direction, never a site
+  ---
+  duration_ms: 0.495
+  type: 'test'
+  ...
+# Subtest: phrasings match the right verb
+ok 80 - phrasings match the right verb
+  ---
+  duration_ms: 116.758875
+  type: 'test'
+  ...
+# Subtest: screen questions, general requests and things left out do not match
+ok 81 - screen questions, general requests and things left out do not match
+  ---
+  duration_ms: 237.292416
+  type: 'test'
+  ...
+# Subtest: the voice regex catches the same lines
+ok 82 - the voice regex catches the same lines
+  ---
+  duration_ms: 1.026333
+  type: 'test'
+  ...
+# Subtest: durations and sites
+ok 83 - durations and sites
+  ---
+  duration_ms: 0.31625
+  type: 'test'
+  ...
+# Subtest: volume: reads the level first, clamps, and puts only a number in the script
+ok 84 - volume: reads the level first, clamps, and puts only a number in the script
+  ---
+  duration_ms: 1.202625
+  type: 'test'
+  ...
+# Subtest: media: asks whether the app is running first, and does nothing if it is not
+ok 85 - media: asks whether the app is running first, and does nothing if it is not
+  ---
+  duration_ms: 0.539084
+  type: 'test'
+  ...
+# Subtest: open a website: only https and a valid host reach `open`
+ok 86 - open a website: only https and a valid host reach `open`
+  ---
+  duration_ms: 16.371375
+  type: 'test'
+  ...
+# Subtest: window layout: halves, maximize, centre and the other screen, from the screens it is given
+ok 87 - window layout: halves, maximize, centre and the other screen, from the screens it is given
+  ---
+  duration_ms: 0.283084
+  type: 'test'
+  ...
+# Subtest: window verb: reads the front window, then sets it; the numbers go in as JSON
+ok 88 - window verb: reads the front window, then sets it; the numbers go in as JSON
+  ---
+  duration_ms: 1.788584
+  type: 'test'
+  ...
+# Subtest: timers: in memory, fire through say, list and cancel
+ok 89 - timers: in memory, fire through say, list and cancel
+  ---
+  duration_ms: 3.622167
+  type: 'test'
+  ...
+# Subtest: dark mode, lock, battery, screenshot
+ok 90 - dark mode, lock, battery, screenshot
+  ---
+  duration_ms: 1.199125
+  type: 'test'
+  ...
+# Subtest: wifi: off and on, no question first (no-confirmation rule)
+ok 91 - wifi: off and on, no question first (no-confirmation rule)
+  ---
+  duration_ms: 0.521333
+  type: 'test'
+  ...
+# Subtest: quit: only a running app, no question first, and the name is an argument
+ok 92 - quit: only a running app, no question first, and the name is an argument
+  ---
+  duration_ms: 0.894084
+  type: 'test'
+  ...
+# Subtest: a missing Automation permission is explained, not thrown
+ok 93 - a missing Automation permission is explained, not thrown
+  ---
+  duration_ms: 0.561667
+  type: 'test'
+  ...
+# Subtest: a song on Apple Music: your library first, no subscription said plainly, else open it and press Play by its name
+ok 94 - a song on Apple Music: your library first, no subscription said plainly, else open it and press Play by its name
+  ---
+  duration_ms: 1.65875
+  type: 'test'
+  ...
+# Subtest: "open a new Finder window": the app comes to the front, then ⌘N; never pressed into another app
+ok 95 - "open a new Finder window": the app comes to the front, then ⌘N; never pressed into another app
+  ---
+  duration_ms: 5.424417
+  type: 'test'
+  ...
+# Subtest: "start a new note": the front app's New key; after "open Notes", only once Notes is in front
+ok 96 - "start a new note": the front app's New key; after "open Notes", only once Notes is in front
+  ---
+  duration_ms: 1.007625
+  type: 'test'
+  ...
+# Subtest: "play some music": Music carries on, else shuffles your library; an empty library with no subscription is said plainly
+ok 97 - "play some music": Music carries on, else shuffles your library; an empty library with no subscription is said plainly
+  ---
+  duration_ms: 0.754083
+  type: 'test'
+  ...
+# Subtest: search on Apple Music: opens its search page, and says so only once results for the words show
+ok 98 - search on Apple Music: opens its search page, and says so only once results for the words show
+  ---
+  duration_ms: 23.891916
+  type: 'test'
+  ...
+# Subtest: everyday keys, web searches and folders are code, never the model
+ok 99 - everyday keys, web searches and folders are code, never the model
+  ---
+  duration_ms: 1.597083
+  type: 'test'
+  ...
+# Subtest: reminders with a day or time go straight into Reminders, said back in full, undo-able
+ok 100 - reminders with a day or time go straight into Reminders, said back in full, undo-able
+  ---
+  duration_ms: 7.810959
+  type: 'test'
+  ...
+# Subtest: "ask Gemini …" and "paste this into ChatGPT" go to that site, never a quick answer
+ok 101 - "ask Gemini …" and "paste this into ChatGPT" go to that site, never a quick answer
+  ---
+  duration_ms: 7.97175
+  type: 'test'
+  ...
+# Subtest: phrasings match the right topic
+ok 102 - phrasings match the right topic
+  ---
+  duration_ms: 114.660959
+  type: 'test'
+  ...
+# Subtest: must not match
+ok 103 - must not match
+  ---
+  duration_ms: 59.905625
+  type: 'test'
+  ...
+# Subtest: parsers read real output
+ok 104 - parsers read real output
+  ---
+  duration_ms: 1.682459
+  type: 'test'
+  ...
+# Subtest: memory names the biggest app and offers to quit it
+ok 105 - memory names the biggest app and offers to quit it
+  ---
+  duration_ms: 2.026125
+  type: 'test'
+  ...
+# Subtest: slow: a busy app, otherwise reassurance; never offers to quit macOS parts
+ok 106 - slow: a busy app, otherwise reassurance; never offers to quit macOS parts
+  ---
+  duration_ms: 0.774958
+  type: 'test'
+  ...
+# Subtest: space: rounded numbers, and where the space went
+ok 107 - space: rounded numbers, and where the space went
+  ---
+  duration_ms: 3.228292
+  type: 'test'
+  ...
+# Subtest: battery health
+ok 108 - battery health
+  ---
+  duration_ms: 1.109292
+  type: 'test'
+  ...
+# Subtest: fan, model, uptime
+ok 109 - fan, model, uptime
+  ---
+  duration_ms: 1.078959
+  type: 'test'
+  ...
+# Subtest: network says where it breaks
+ok 110 - network says where it breaks
+  ---
+  duration_ms: 2.690041
+  type: 'test'
+  ...
+# Subtest: read-only, never throws, no shell
+ok 111 - read-only, never throws, no shell
+  ---
+  duration_ms: 2.068834
+  type: 'test'
+  ...
+# Subtest: its own words heard after it stopped talking do nothing (wake word off, Everywhere)
+ok 112 - its own words heard after it stopped talking do nothing (wake word off, Everywhere)
+  ---
+  duration_ms: 1472.447458
+  type: 'test'
+  ...
+# Subtest: its own words heard after it stopped talking do nothing (wake word off, browser)
+ok 113 - its own words heard after it stopped talking do nothing (wake word off, browser)
+  ---
+  duration_ms: 1455.784708
+  type: 'test'
+  ...
+# Subtest: its own words heard after it stopped talking do nothing (wake word on, follow-up window open, Everywhere)
+ok 114 - its own words heard after it stopped talking do nothing (wake word on, follow-up window open, Everywhere)
+  ---
+  duration_ms: 1453.473333
+  type: 'test'
+  ...
+# Subtest: its own words heard after it stopped talking do nothing (wake word on, follow-up window open, browser)
+ok 115 - its own words heard after it stopped talking do nothing (wake word on, follow-up window open, browser)
+  ---
+  duration_ms: 1452.645959
+  type: 'test'
+  ...
+# Subtest: a line of its own that names Dixi is still an echo, not "Dixi, …"
+ok 116 - a line of its own that names Dixi is still an echo, not "Dixi, …"
+  ---
+  duration_ms: 1453.777416
+  type: 'test'
+  ...
+# Subtest: you still get through right after Dixi talked: a new request, "Dixi, stop", plain "stop"
+ok 117 - you still get through right after Dixi talked: a new request, "Dixi, stop", plain "stop"
+  ---
+  duration_ms: 2084.479458
+  type: 'test'
+  ...
+# Subtest: a question's own echo doesn't answer it, but a short reply that uses its words does
+ok 118 - a question's own echo doesn't answer it, but a short reply that uses its words does
+  ---
+  duration_ms: 3814.899875
+  type: 'test'
+  ...
+# Subtest: not deaf after Dixi talks: one word 300 ms after it stops runs; its own last word arriving late does not
+ok 119 - not deaf after Dixi talks: one word 300 ms after it stops runs; its own last word arriving late does not
+  ---
+  duration_ms: 456.033792
+  type: 'test'
+  ...
+# Subtest: your words joined to its echo in one turn are kept; only the echo is cut (and "Dixi" after it still wakes)
+ok 120 - your words joined to its echo in one turn are kept; only the echo is cut (and "Dixi" after it still wakes)
+  ---
+  duration_ms: 1607.388084
+  type: 'test'
+  ...
+# Subtest: the short echo tail is only for audio played through the page; speechSynthesis (outside Chrome) keeps 1.2 s
+ok 121 - the short echo tail is only for audio played through the page; speechSynthesis (outside Chrome) keeps 1.2 s
+  ---
+  duration_ms: 1322.918834
+  type: 'test'
+  ...
+# Subtest: barge-in: a turn starting over Dixi hushes it at once; its own echo or silence resumes it; your words stop it
+ok 122 - barge-in: a turn starting over Dixi hushes it at once; its own echo or silence resumes it; your words stop it
+  ---
+  duration_ms: 821.889333
+  type: 'test'
+  ...
+# (node:72039) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: endpointing: ⌥Space again commits the words heard so far at once (no waiting for a final that may never come)
+ok 123 - endpointing: ⌥Space again commits the words heard so far at once (no waiting for a final that may never come)
+  ---
+  duration_ms: 22.211959
+  type: 'test'
+  ...
+# Subtest: endpointing: an end of turn 300 ms into a pause waits for 700 ms of stillness; more words in a new turn join it
+ok 124 - endpointing: an end of turn 300 ms into a pause waits for 700 ms of stillness; more words in a new turn join it
+  ---
+  duration_ms: 4.257583
+  type: 'test'
+  ...
+# Subtest: endpointing: new words in the same turn cancel the wait; Esc during it runs nothing
+ok 125 - endpointing: new words in the same turn cancel the wait; Esc during it runs nothing
+  ---
+  duration_ms: 1.7015
+  type: 'test'
+  ...
+# (node:72040) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: clicks on send, pay, buy, delete wait for a yes; ordinary ones do not
+ok 126 - clicks on send, pay, buy, delete wait for a yes; ordinary ones do not
+  ---
+  duration_ms: 7.655542
+  type: 'test'
+  ...
+# Subtest: the click gate fails closed
+ok 127 - the click gate fails closed
+  ---
+  duration_ms: 0.295916
+  type: 'test'
+  ...
+# Subtest: Enter asks unless it is a search box; ⌘Enter, ⌘Q, ⌘⌫ always ask
+ok 128 - Enter asks unless it is a search box; ⌘Enter, ⌘Q, ⌘⌫ always ask
+  ---
+  duration_ms: 1.88675
+  type: 'test'
+  ...
+# Subtest: red team (S8): the holes found in the gate stay closed
+ok 129 - red team (S8): the holes found in the gate stay closed
+  ---
+  duration_ms: 0.729458
+  type: 'test'
+  ...
+# Subtest: "click Send" is pressed by name with no model; vague targets go to the agent
+ok 130 - "click Send" is pressed by name with no model; vague targets go to the agent
+  ---
+  duration_ms: 1.494417
+  type: 'test'
+  ...
+# Subtest: unnamed controls ask only where it matters; unreadable and risky names always ask
+ok 131 - unnamed controls ask only where it matters; unreadable and risky names always ask
+  ---
+  duration_ms: 0.143208
+  type: 'test'
+  ...
+# Subtest: the controls list the agent presses by number
+ok 132 - the controls list the agent presses by number
+  ---
+  duration_ms: 0.259166
+  type: 'test'
+  ...
+# Subtest: messaging and money apps are sensitive
+ok 133 - messaging and money apps are sensitive
+  ---
+  duration_ms: 0.608333
+  type: 'test'
+  ...
+# Subtest: what was said picks the mode
+ok 134 - what was said picks the mode
+  ---
+  duration_ms: 4.880041
+  type: 'test'
+  ...
+# Subtest: screen questions are recognised; browser commands are not
+ok 135 - screen questions are recognised; browser commands are not
+  ---
+  duration_ms: 2.625042
+  type: 'test'
+  ...
+# Subtest: context line is written in code
+ok 136 - context line is written in code
+  ---
+  duration_ms: 1.138292
+  type: 'test'
+  ...
+# Subtest: screenshot pixels map back to the screen (second display, Retina)
+ok 137 - screenshot pixels map back to the screen (second display, Retina)
+  ---
+  duration_ms: 2.397875
+  type: 'test'
+  ...
+# Subtest: key names parse to macOS key codes and modifiers
+ok 138 - key names parse to macOS key codes and modifiers
+  ---
+  duration_ms: 0.45125
+  type: 'test'
+  ...
+# Subtest: spoken settings and memory commands reach Everywhere from anywhere; ordinary commands do not
+ok 139 - spoken settings and memory commands reach Everywhere from anywhere; ordinary commands do not
+  ---
+  duration_ms: 23.932166
+  type: 'test'
+  ...
+# Subtest: keys never go to a terminal, a code editor or Dixi itself (by bundle id or app category, not by name)
+ok 140 - keys never go to a terminal, a code editor or Dixi itself (by bundle id or app category, not by name)
+  ---
+  duration_ms: 0.978459
+  type: 'test'
+  ...
+# Subtest: a streamed reply reads the same as a whole one, even when events split across chunks
+ok 141 - a streamed reply reads the same as a whole one, even when events split across chunks
+  ---
+  duration_ms: 1.37375
+  type: 'test'
+  ...
+# Subtest: no questions: a risky step goes ahead only when the user asked for it, else it is refused
+ok 142 - no questions: a risky step goes ahead only when the user asked for it, else it is refused
+  ---
+  duration_ms: 9.302375
+  type: 'test'
+  ...
+# Subtest: sign-ups, trials, upgrades and app downloads count as risky; look-alikes do not; the user saying it lets it through
+ok 143 - sign-ups, trials, upgrades and app downloads count as risky; look-alikes do not; the user saying it lets it through
+  ---
+  duration_ms: 0.320667
+  type: 'test'
+  ...
+# Subtest: QA amazon-then-apple: an opened link waits until the browser tab is on that site, so the next open cannot overtake it
+ok 144 - QA amazon-then-apple: an opened link waits until the browser tab is on that site, so the next open cannot overtake it
+  ---
+  duration_ms: 33.17675
+  type: 'test'
+  ...
+# Subtest: pageStarted: a tab read that hangs (a permission prompt) counts as unreadable at once, never a 4 s block
+ok 145 - pageStarted: a tab read that hangs (a permission prompt) counts as unreadable at once, never a 4 s block
+  ---
+  duration_ms: 31.751791
+  type: 'test'
+  ...
+# Subtest: "couldn't find that on this page" is the user saying Dixi missed: a stop, not a request for help
+ok 146 - "couldn't find that on this page" is the user saying Dixi missed: a stop, not a request for help
+  ---
+  duration_ms: 1.052208
+  type: 'test'
+  ...
+# Subtest: cartCount: a badge going up counts; a page caught mid-load or prices never do
+ok 147 - cartCount: a badge going up counts; a page caught mid-load or prices never do
+  ---
+  duration_ms: 1.038667
+  type: 'test'
+  ...
+# Subtest: what you say becomes a file intent
+ok 148 - what you say becomes a file intent
+  ---
+  duration_ms: 22.154416
+  type: 'test'
+  ...
+# Subtest: follow-ups point at the list
+ok 149 - follow-ups point at the list
+  ---
+  duration_ms: 0.826584
+  type: 'test'
+  ...
+# Subtest: screen questions and plain app or button asks do not match
+ok 150 - screen questions and plain app or button asks do not match
+  ---
+  duration_ms: 1.616
+  type: 'test'
+  ...
+# Subtest: compound and app commands are not file searches; home folders open themselves
+ok 151 - compound and app commands are not file searches; home folders open themselves
+  ---
+  duration_ms: 14.237375
+  type: 'test'
+  ...
+# Subtest: the Spotlight query is escaped and typed
+ok 152 - the Spotlight query is escaped and typed
+  ---
+  duration_ms: 0.840791
+  type: 'test'
+  ...
+# Subtest: when ranges
+ok 153 - when ranges
+  ---
+  duration_ms: 0.700166
+  type: 'test'
+  ...
+# Subtest: paths: home only, no Library, hidden or node_modules
+ok 154 - paths: home only, no Library, hidden or node_modules
+  ---
+  duration_ms: 0.377667
+  type: 'test'
+  ...
+# Subtest: findFiles: argv only, filtered, newest first, max 5
+ok 155 - findFiles: argv only, filtered, newest first, max 5
+  ---
+  duration_ms: 1.712459
+  type: 'test'
+  ...
+# Subtest: find speaks a short result; open and reveal need no approval
+ok 156 - find speaks a short result; open and reveal need no approval
+  ---
+  duration_ms: 27.720125
+  type: 'test'
+  ...
+# Subtest: move and rename ask first, never overwrite, stay inside home
+ok 157 - move and rename ask first, never overwrite, stay inside home
+  ---
+  duration_ms: 2.953917
+  type: 'test'
+  ...
+# Subtest: with the undo log, move and rename happen without a question and can be undone
+ok 158 - with the undo log, move and rename happen without a question and can be undone
+  ---
+  duration_ms: 1.640125
+  type: 'test'
+  ...
+# Subtest: a one-file chain: find, rename it (no name: its title, else first line, else old name + date added), move it, all on the undo log
+ok 159 - a one-file chain: find, rename it (no name: its title, else first line, else old name + date added), move it, all on the undo log
+  ---
+  duration_ms: 3.909625
+  type: 'test'
+  ...
+# Subtest: hostile names are cleaned and capped; there is no delete
+ok 160 - hostile names are cleaned and capped; there is no delete
+  ---
+  duration_ms: 0.687125
+  type: 'test'
+  ...
+# Subtest: a known folder is read directly (no Spotlight wait): kind by extension, words in the name, arrived or saved in the range
+ok 161 - a known folder is read directly (no Spotlight wait): kind by extension, words in the name, arrived or saved in the range
+  ---
+  duration_ms: 1.134625
+  type: 'test'
+  ...
+# Subtest: flush: the last word arrives 200 ms after the press and is kept; the early start on the old words is dropped
+ok 162 - flush: the last word arrives 200 ms after the press and is kept; the early start on the old words is dropped
+  ---
+  duration_ms: 398.290792
+  type: 'test'
+  ...
+# Subtest: flush: the same words back (or the socket closing) send at once and keep the early start; silence sends at 250 ms
+ok 163 - flush: the same words back (or the socket closing) send at once and keep the early start; silence sends at 250 ms
+  ---
+  duration_ms: 861.5655
+  type: 'test'
+  ...
+# Subtest: flush: Esc (cancel) sends no CloseStream and runs nothing
+ok 164 - flush: Esc (cancel) sends no CloseStream and runs nothing
+  ---
+  duration_ms: 3.656875
+  type: 'test'
+  ...
+# Subtest: real sites pass
+ok 165 - real sites pass
+  ---
+  duration_ms: 9.733625
+  type: 'test'
+  ...
+# Subtest: look-alike addresses are stopped
+ok 166 - look-alike addresses are stopped
+  ---
+  duration_ms: 2.133333
+  type: 'test'
+  ...
+# Subtest: other look-alike letters warn
+ok 167 - other look-alike letters warn
+  ---
+  duration_ms: 0.392333
+  type: 'test'
+  ...
+# Subtest: remote-access apps and their download pages warn
+ok 168 - remote-access apps and their download pages warn
+  ---
+  duration_ms: 0.526583
+  type: 'test'
+  ...
+# Subtest: scam text is caught
+ok 169 - scam text is caught
+  ---
+  duration_ms: 10.509458
+  type: 'test'
+  ...
+# Subtest: ordinary text is not
+ok 170 - ordinary text is not
+  ---
+  duration_ms: 0.791792
+  type: 'test'
+  ...
+# Subtest: stops come first, one finding per rule
+ok 171 - stops come first, one finding per rule
+  ---
+  duration_ms: 0.18925
+  type: 'test'
+  ...
+# Subtest: cooling-off: a stop holds that site for 15 minutes, then lets go
+ok 172 - cooling-off: a stop holds that site for 15 minutes, then lets go
+  ---
+  duration_ms: 0.508417
+  type: 'test'
+  ...
+# Subtest: no approval while a finding is open or a cooling-off runs
+ok 173 - no approval while a finding is open or a cooling-off runs
+  ---
+  duration_ms: 0.929042
+  type: 'test'
+  ...
+# Subtest: policy: narrowing is free, widening needs approval
+ok 174 - policy: narrowing is free, widening needs approval
+  ---
+  duration_ms: 1.122625
+  type: 'test'
+  ...
+# Subtest: runs every task in its own folder, a few at a time, with only the safe tools
+ok 175 - runs every task in its own folder, a few at a time, with only the safe tools
+  ---
+  duration_ms: 579.210208
+  type: 'test'
+  ...
+# Subtest: stopping ends every agent, including ones not started yet
+ok 176 - stopping ends every agent, including ones not started yet
+  ---
+  duration_ms: 301.973625
+  type: 'test'
+  ...
+# Subtest: a missing Claude Code says so
+ok 177 - a missing Claude Code says so
+  ---
+  duration_ms: 3.348417
+  type: 'test'
+  ...
+# (node:72056) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+#   retrieval: hit@3 100%, MRR 1.00
+#   synonyms: hit@3 83%, missed: how often do I get my teeth cleaned
+# Subtest: retrieval check: each question finds its source in the top 3 (on-device meaning + words)
+ok 178 - retrieval check: each question finds its source in the top 3 (on-device meaning + words)
+  ---
+  duration_ms: 12208.443958
+  type: 'test'
+  ...
+# Subtest: an answer cites its passages; weak evidence → "I don't know" with what was searched, and no model call
+ok 179 - an answer cites its passages; weak evidence → "I don't know" with what was searched, and no model call
+  ---
+  duration_ms: 19.222209
+  type: 'test'
+  ...
+# Subtest: a changed file replaces its old passages; the same version is skipped; removed means gone
+ok 180 - a changed file replaces its old passages; the same version is skipped; removed means gone
+  ---
+  duration_ms: 10.524125
+  type: 'test'
+  ...
+# Subtest: long text is cut into passages on paragraph and sentence lines
+ok 181 - long text is cut into passages on paragraph and sentence lines
+  ---
+  duration_ms: 0.48825
+  type: 'test'
+  ...
+# Subtest: secrets in a note never reach the model
+ok 182 - secrets in a note never reach the model
+  ---
+  duration_ms: 7.764708
+  type: 'test'
+  ...
+# (node:72110) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a folder: text, Word and PDF are read; hidden folders and node_modules are not; gone files are forgotten
+ok 183 - a folder: text, Word and PDF are read; hidden folders and node_modules are not; gone files are forgotten
+  ---
+  duration_ms: 994.880875
+  type: 'test'
+  ...
+# Subtest: the watch: a new or changed file is in the index a moment later; a deleted one leaves it
+ok 184 - the watch: a new or changed file is in the index a moment later; a deleted one leaves it
+  ---
+  duration_ms: 19.884625
+  type: 'test'
+  ...
+# Subtest: the watch on real macOS file events (waits for the result, up to 5 s)
+ok 185 - the watch on real macOS file events (waits for the result, up to 5 s)
+  ---
+  duration_ms: 320.2005
+  type: 'test'
+  ...
+# Subtest: Notes, Mail, past requests and conversations become sources with their kind
+ok 186 - Notes, Mail, past requests and conversations become sources with their kind
+  ---
+  duration_ms: 14.829833
+  type: 'test'
+  ...
+# Subtest: C3: the kill switch stops a held key mid-press and lets go of it
+ok 187 - C3: the kill switch stops a held key mid-press and lets go of it
+  ---
+  duration_ms: 588.701875
+  type: 'test'
+  ...
+# Subtest: C3: a mouse button held down is let go by stopAll; a finished press leaves nothing held
+ok 188 - C3: a mouse button held down is let go by stopAll; a finished press leaves nothing held
+  ---
+  duration_ms: 34.737
+  type: 'test'
+  ...
+# Subtest: A2: already in a text box → no press, no search, nothing clicked
+ok 189 - A2: already in a text box → no press, no search, nothing clicked
+  ---
+  duration_ms: 1.956292
+  type: 'test'
+  ...
+# Subtest: A2: not focused → the box found by role and name, focused by AX (the address bar is never it)
+ok 190 - A2: not focused → the box found by role and name, focused by AX (the address bar is never it)
+  ---
+  duration_ms: 1.573291
+  type: 'test'
+  ...
+# Subtest: A2: no AX tree (Chrome/Electron) → switched on, read again, then found
+ok 191 - A2: no AX tree (Chrome/Electron) → switched on, read again, then found
+  ---
+  duration_ms: 0.526125
+  type: 'test'
+  ...
+# Subtest: A2: a field in a web view with no AX name → the site key, learned for next time; at most 2 tries, then one line
+ok 192 - A2: a field in a web view with no AX name → the site key, learned for next time; at most 2 tries, then one line
+  ---
+  duration_ms: 0.854208
+  type: 'test'
+  ...
+# Subtest: A2: a paste is checked; nothing landed → one more way to the box, then a clear failure
+ok 193 - A2: a paste is checked; nothing landed → one more way to the box, then a clear failure
+  ---
+  duration_ms: 0.754125
+  type: 'test'
+  ...
+# Subtest: A2: focus moves off a readable box during the paste → not pasted twice, and not claimed as checked
+ok 194 - A2: focus moves off a readable box during the paste → not pasted twice, and not claimed as checked
+  ---
+  duration_ms: 0.284625
+  type: 'test'
+  ...
+# Subtest: validate: a query that swallowed a particle or the name is rejected (the "up classroom" class)
+ok 195 - validate: a query that swallowed a particle or the name is rejected (the "up classroom" class)
+  ---
+  duration_ms: 4.014917
+  type: 'test'
+  ...
+# Subtest: validate: names and queries must be copied from what was said (no snapping to another name)
+ok 196 - validate: names and queries must be copied from what was said (no snapping to another name)
+  ---
+  duration_ms: 1.090958
+  type: 'test'
+  ...
+# Subtest: validate: required fields per act
+ok 197 - validate: required fields per act
+  ---
+  duration_ms: 0.620625
+  type: 'test'
+  ...
+# Subtest: findSpan: spacing and joined forms are the same words
+ok 198 - findSpan: spacing and joined forms are the same words
+  ---
+  duration_ms: 0.375334
+  type: 'test'
+  ...
+# Subtest: fastPath: generic controls and ordinals need no AI; unknown names do
+ok 199 - fastPath: generic controls and ordinals need no AI; unknown names do
+  ---
+  duration_ms: 15.930375
+  type: 'test'
+  ...
+# Subtest: interpret: fast path first, then the fast tier, escalates to strong when validation fails
+ok 200 - interpret: fast path first, then the fast tier, escalates to strong when validation fails
+  ---
+  duration_ms: 5.53125
+  type: 'test'
+  ...
+# Subtest: a part of a site squeezed into "open" becomes open + click
+ok 201 - a part of a site squeezed into "open" becomes open + click
+  ---
+  duration_ms: 2.294125
+  type: 'test'
+  ...
+# Subtest: remove from the cart is its own act ("remove it", or a named item kept as said)
+ok 202 - remove from the cart is its own act ("remove it", or a named item kept as said)
+  ---
+  duration_ms: 0.667208
+  type: 'test'
+  ...
+# Subtest: a job runs in the background: steps with why and timing, short spoken updates, a notification at the end
+ok 203 - a job runs in the background: steps with why and timing, short spoken updates, a notification at the end
+  ---
+  duration_ms: 5.066875
+  type: 'test'
+  ...
+# Subtest: a failed job says why in plain words and can be retried in one click
+ok 204 - a failed job says why in plain words and can be retried in one click
+  ---
+  duration_ms: 1.712458
+  type: 'test'
+  ...
+# Subtest: stopping ends the job quietly: no failure notice
+ok 205 - stopping ends the job quietly: no failure notice
+  ---
+  duration_ms: 15.764042
+  type: 'test'
+  ...
+# [llm] a 429 undefined
+# Subtest: hedged request: a slow first model is overtaken by the second; the loser is aborted
+ok 206 - hedged request: a slow first model is overtaken by the second; the loser is aborted
+  ---
+  duration_ms: 76.462916
+  type: 'test'
+  ...
+# Subtest: rate-limited models cool down and are skipped
+ok 207 - rate-limited models cool down and are skipped
+  ---
+  duration_ms: 4.201
+  type: 'test'
+  ...
+# [spend] ledger not saved: EEXIST: file already exists, mkdir '/dev/null'
+# [spend] ledger not saved: EEXIST: file already exists, mkdir '/dev/null'
+# Subtest: agent chat: a model past its spend cap (402) falls through to the next (Cerebras out → Groq free tier)
+ok 208 - agent chat: a model past its spend cap (402) falls through to the next (Cerebras out → Groq free tier)
+  ---
+  duration_ms: 3.696375
+  type: 'test'
+  ...
+# Subtest: reasoning effort per provider/model family
+ok 209 - reasoning effort per provider/model family
+  ---
+  duration_ms: 0.217
+  type: 'test'
+  ...
+# Subtest: per-provider cap: one provider past its cap is skipped, the others still run
+ok 210 - per-provider cap: one provider past its cap is skipped, the others still run
+  ---
+  duration_ms: 0.775875
+  type: 'test'
+  ...
+# Subtest: providers: spend cap stops calls; keys never needed in the renderer
+ok 211 - providers: spend cap stops calls; keys never needed in the renderer
+  ---
+  duration_ms: 0.522292
+  type: 'test'
+  ...
+# Subtest: providers: Anthropic replies come back in the same shape as the others
+ok 212 - providers: Anthropic replies come back in the same shape as the others
+  ---
+  duration_ms: 27.614
+  type: 'test'
+  ...
+# Subtest: cooldowns
+ok 213 - cooldowns
+  ---
+  duration_ms: 0.185333
+  type: 'test'
+  ...
+# Subtest: the text goes after "--", the bytes come back, the temp file is gone
+ok 214 - the text goes after "--", the bytes come back, the temp file is gone
+  ---
+  duration_ms: 6.564958
+  type: 'test'
+  ...
+# Subtest: a failed or timed-out voice rejects and leaves no file
+ok 215 - a failed or timed-out voice rejects and leaves no file
+  ---
+  duration_ms: 4.106083
+  type: 'test'
+  ...
+# Subtest: the real Mac voice makes a WAV
+ok 216 - the real Mac voice makes a WAV
+  ---
+  duration_ms: 2669.321875
+  type: 'test'
+  ...
+# Subtest: apps come from their bundles: every name, "Apple X" for Apple’s own, found by any of them
+ok 217 - apps come from their bundles: every name, "Apple X" for Apple’s own, found by any of them
+  ---
+  duration_ms: 4.849416
+  type: 'test'
+  ...
+# Subtest: open: the app (or the app a link belongs to) must really come up, else a clear error
+ok 218 - open: the app (or the app a link belongs to) must really come up, else a clear error
+  ---
+  duration_ms: 4.586
+  type: 'test'
+  ...
+# Subtest: osascript errors come back in words the planner can act on, with the number
+ok 219 - osascript errors come back in words the planner can act on, with the number
+  ---
+  duration_ms: 1.588709
+  type: 'test'
+  ...
+# Subtest: scripts that delete, need admin rights, erase disks, power off, or reach outside home never run
+ok 220 - scripts that delete, need admin rights, erase disks, power off, or reach outside home never run
+  ---
+  duration_ms: 3.105041
+  type: 'test'
+  ...
+# Subtest: runScript and check on this Mac (osascript, nothing opened)
+ok 221 - runScript and check on this Mac (osascript, nothing opened)
+  ---
+  duration_ms: 1917.291375
+  type: 'test'
+  ...
+# (node:72355) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: what you said becomes a fact
+ok 222 - what you said becomes a fact
+  ---
+  duration_ms: 12.602042
+  type: 'test'
+  ...
+# Subtest: secrets, profile details and screen-like text are never facts
+ok 223 - secrets, profile details and screen-like text are never facts
+  ---
+  duration_ms: 22.481333
+  type: 'test'
+  ...
+# Subtest: remember → recall → supersede → forget, kept on disk
+ok 224 - remember → recall → supersede → forget, kept on disk
+  ---
+  duration_ms: 19.092
+  type: 'test'
+  ...
+# Subtest: health facts reach a prompt only for food or medicine
+ok 225 - health facts reach a prompt only for food or medicine
+  ---
+  duration_ms: 18.996917
+  type: 'test'
+  ...
+# Subtest: the profile: saved as typed, read back masked, given to the agent in full
+ok 226 - the profile: saved as typed, read back masked, given to the agent in full
+  ---
+  duration_ms: 29.773375
+  type: 'test'
+  ...
+# Subtest: spoken memory commands, and how they sit beside the screen ones
+ok 227 - spoken memory commands, and how they sit beside the screen ones
+  ---
+  duration_ms: 1.937292
+  type: 'test'
+  ...
+# Subtest: memoryTurn: what Dixi says
+ok 228 - memoryTurn: what Dixi says
+  ---
+  duration_ms: 17.164458
+  type: 'test'
+  ...
+# Subtest: "forget everything" without a question (normal mode) comes with an Undo that puts every fact back, history too
+ok 229 - "forget everything" without a question (normal mode) comes with an Undo that puts every fact back, history too
+  ---
+  duration_ms: 14.142125
+  type: 'test'
+  ...
+# Subtest: the mic device goes away mid-session (AirPods off): it reopens the default input instead of going deaf
+ok 230 - the mic device goes away mid-session (AirPods off): it reopens the default input instead of going deaf
+  ---
+  duration_ms: 24.281916
+  type: 'test'
+  ...
+# Subtest: normal mode asks nothing: each approve()/askUser() call is behind careful mode
+ok 231 - normal mode asks nothing: each approve()/askUser() call is behind careful mode
+  ---
+  duration_ms: 4.22825
+  type: 'test'
+  ...
+# Subtest: approve/askUser handed to another module go over gated: careful, a no-ask stand-in, or with undo (moves just happen)
+ok 232 - approve/askUser handed to another module go over gated: careful, a no-ask stand-in, or with undo (moves just happen)
+  ---
+  duration_ms: 4.325
+  type: 'test'
+  ...
+# [no-network] blocked api.anthropic.com in /Users/jaz/dixi-integration/electron/test/unit/no-network.test.js
+# Subtest: gate: unit tests are offline: a real API host is refused by the guard at once, even with keys in .env
+ok 233 - gate: unit tests are offline: a real API host is refused by the guard at once, even with keys in .env
+  ---
+  duration_ms: 84.9045
+  type: 'test'
+  ...
+# Subtest: gate: loopback still works (local ws/http fixtures)
+ok 234 - gate: loopback still works (local ws/http fixtures)
+  ---
+  duration_ms: 10.014958
+  type: 'test'
+  ...
+# Subtest: gate: NODE_OPTIONS=--import no-network.js is live in Electron's main process: a dummy-key ElevenLabs STT and TTS are refused
+ok 235 - gate: NODE_OPTIONS=--import no-network.js is live in Electron's main process: a dummy-key ElevenLabs STT and TTS are refused
+  ---
+  duration_ms: 827.456834
+  type: 'test'
+  ...
+# Subtest: notch: NSScreen safe area decides; the island takes the notch's own size; an external display is a pill
+ok 236 - notch: NSScreen safe area decides; the island takes the notch's own size; an external display is a pill
+  ---
+  duration_ms: 1.822959
+  type: 'test'
+  ...
+# Subtest: notch: without NSScreen, a menu bar taller than 30 pt means a notch
+ok 237 - notch: without NSScreen, a menu bar taller than 30 pt means a notch
+  ---
+  duration_ms: 0.229875
+  type: 'test'
+  ...
+# Subtest: notch: a burst of display changes runs one read at a time, and a stale read never wins
+ok 238 - notch: a burst of display changes runs one read at a time, and a stale read never wins
+  ---
+  duration_ms: 6.410292
+  type: 'test'
+  ...
+# Subtest: page toolkit parses
+ok 239 - page toolkit parses
+  ---
+  duration_ms: 7.4485
+  type: 'test'
+  ...
+# (node:72562) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the splitter: strong breaks always, "and" or a comma only before a verb
+ok 240 - the splitter: strong breaks always, "and" or a comma only before a verb
+  ---
+  duration_ms: 10.213292
+  type: 'test'
+  ...
+# Subtest: the code path: 34 commands (13 compound) with no AI
+ok 241 - the code path: 34 commands (13 compound) with no AI
+  ---
+  duration_ms: 255.551875
+  type: 'test'
+  ...
+# Subtest: a misheard app name opens the one app it sounds like, by code; a site or a near-miss short word does not
+ok 242 - a misheard app name opens the one app it sounds like, by code; a site or a near-miss short word does not
+  ---
+  duration_ms: 5.654875
+  type: 'test'
+  ...
+# Subtest: a command code cannot do alone goes to ONE planner call, with a short prompt
+ok 243 - a command code cannot do alone goes to ONE planner call, with a short prompt
+  ---
+  duration_ms: 45.109458
+  type: 'test'
+  ...
+# Subtest: instant clauses stay instant inside a planned command, and are re-checked
+ok 244 - instant clauses stay instant inside a planned command, and are re-checked
+  ---
+  duration_ms: 12.217
+  type: 'test'
+  ...
+# Subtest: order and words: steps must follow what was said, in that order
+ok 245 - order and words: steps must follow what was said, in that order
+  ---
+  duration_ms: 5.706708
+  type: 'test'
+  ...
+# Subtest: names a script looks up must be words you said; dates and message text it builds are fine
+ok 246 - names a script looks up must be words you said; dates and message text it builds are fine
+  ---
+  duration_ms: 21.225709
+  type: 'test'
+  ...
+# Subtest: safety in code: no destructive shell, nothing outside your home folder
+ok 247 - safety in code: no destructive shell, nothing outside your home folder
+  ---
+  duration_ms: 0.893208
+  type: 'test'
+  ...
+# Subtest: sites: a word you said is in the host, an installed app owns the scheme, or a search of your own words
+ok 248 - sites: a word you said is in the host, an installed app owns the scheme, or a search of your own words
+  ---
+  duration_ms: 150.978708
+  type: 'test'
+  ...
+# Subtest: an unsafe link is refused in words, never opened another way, in an open step or inside a script
+ok 249 - an unsafe link is refused in words, never opened another way, in an open step or inside a script
+  ---
+  duration_ms: 28.003125
+  type: 'test'
+  ...
+# Subtest: if the planner fails, each clause is still done: instantly where it can be, else on screen
+ok 250 - if the planner fails, each clause is still done: instantly where it can be, else on screen
+  ---
+  duration_ms: 3.298583
+  type: 'test'
+  ...
+# Subtest: a reply cut off mid-JSON keeps its finished steps; anything the model skipped is still done on screen
+ok 251 - a reply cut off mid-JSON keeps its finished steps; anything the model skipped is still done on screen
+  ---
+  duration_ms: 8.86375
+  type: 'test'
+  ...
+# Subtest: streamed: each step starts as soon as it and everything said before it is settled
+ok 252 - streamed: each step starts as soon as it and everything said before it is settled
+  ---
+  duration_ms: 9.282792
+  type: 'test'
+  ...
+# Subtest: page or screen text never reaches the planner; only your words, the front app and app names
+ok 253 - page or screen text never reaches the planner; only your words, the front app and app names
+  ---
+  duration_ms: 0.514208
+  type: 'test'
+  ...
+# Subtest: recorded planner replies pass the checks and keep their meaning
+ok 254 - recorded planner replies pass the checks and keep their meaning
+  ---
+  duration_ms: 55.385083
+  type: 'test'
+  ...
+# Subtest: a file search with clauses that point back at it stays one file job, never planned
+ok 255 - a file search with clauses that point back at it stays one file job, never planned
+  ---
+  duration_ms: 5.419042
+  type: 'test'
+  ...
+# Subtest: QA youtube-search-play: one planned step over two clauses leaves the second planned too, never dropped
+ok 256 - QA youtube-search-play: one planned step over two clauses leaves the second planned too, never dropped
+  ---
+  duration_ms: 3.978625
+  type: 'test'
+  ...
+# Subtest: never asks: the planner has no "ask" step, its prompt forbids questions back, and an "ask" from the model is not a question
+ok 257 - never asks: the planner has no "ask" step, its prompt forbids questions back, and an "ask" from the model is not a question
+  ---
+  duration_ms: 0.411791
+  type: 'test'
+  ...
+# Subtest: fast planner: a sure plan is used as is and Haiku is never called; an unsure, failed or screen-agent plan goes to Haiku
+ok 258 - fast planner: a sure plan is used as is and Haiku is never called; an unsure, failed or screen-agent plan goes to Haiku
+  ---
+  duration_ms: 6.130458
+  type: 'test'
+  ...
+# Subtest: "Open Claude, please." and "can you open chrome?" open the app instantly (the way people really ask)
+ok 259 - "Open Claude, please." and "can you open chrome?" open the app instantly (the way people really ask)
+  ---
+  duration_ms: 1.029166
+  type: 'test'
+  ...
+# [dead] elevenlabs until 12:46:40 AM: TTS 401
+# Subtest: prewarm(): a keyless GET to the Anthropic API, at most once per 20 s, never throws
+ok 260 - prewarm(): a keyless GET to the Anthropic API, at most once per 20 s, never throws
+  ---
+  duration_ms: 11.792708
+  type: 'test'
+  ...
+# Subtest: dead services: 401/402/quota are dead, 429/5xx are not; a mark persists across instances and expires after 6 h
+ok 261 - dead services: 401/402/quota are dead, 429/5xx are not; a mark persists across instances and expires after 6 h
+  ---
+  duration_ms: 31.676208
+  type: 'test'
+  ...
+# Subtest: fastChat: the OpenAI reply on a 200; a throw on a refusal; and a hung provider is cut off at its budget (then Haiku plans)
+ok 262 - fastChat: the OpenAI reply on a 200; a throw on a refusal; and a hung provider is cut off at its budget (then Haiku plans)
+  ---
+  duration_ms: 84.735709
+  type: 'test'
+  ...
+# (node:72619) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: A1: idle 60 s with fake audio: 0 bytes sent, no socket, no capture device (even the boot-time start is refused)
+ok 263 - A1: idle 60 s with fake audio: 0 bytes sent, no socket, no capture device (even the boot-time start is refused)
+  ---
+  duration_ms: 6.216042
+  type: 'test'
+  ...
+# Subtest: A1: the mic opens on the key press; words before the socket is open are held and sent first (no clipped first word)
+ok 264 - A1: the mic opens on the key press; words before the socket is open are held and sent first (no clipped first word)
+  ---
+  duration_ms: 302.333708
+  type: 'test'
+  ...
+# Subtest: A1: ⌥Space again sends the words still being transcribed; Esc cancels; a leading "Dixie," is dropped
+ok 265 - A1: ⌥Space again sends the words still being transcribed; Esc cancels; a leading "Dixie," is dropped
+  ---
+  duration_ms: 23.941625
+  type: 'test'
+  ...
+# Subtest: A1: 60 s without words ends the session; talking keeps it open; the hard cap ends it anyway
+ok 266 - A1: 60 s without words ends the session; talking keeps it open; the hard cap ends it anyway
+  ---
+  duration_ms: 13.858833
+  type: 'test'
+  ...
+# Subtest: A1: Esc is a global key only during a session, released on every way out (send, cancel, silence, cap)
+ok 267 - A1: Esc is a global key only during a session, released on every way out (send, cancel, silence, cap)
+  ---
+  duration_ms: 19.717916
+  type: 'test'
+  ...
+# Subtest: A1: the mic denied while the socket is still connecting: 0 sockets and no fallback left open at idle
+ok 268 - A1: the mic denied while the socket is still connecting: 0 sockets and no fallback left open at idle
+  ---
+  duration_ms: 703.403917
+  type: 'test'
+  ...
+# Subtest: hold Control to talk: a hold talks and letting go sends; a tap, or a ⌃-shortcut, never opens the mic
+ok 269 - hold Control to talk: a hold talks and letting go sends; a tap, or a ⌃-shortcut, never opens the mic
+  ---
+  duration_ms: 196.181583
+  type: 'test'
+  ...
+# Subtest: time and date
+ok 270 - time and date
+  ---
+  duration_ms: 44.189458
+  type: 'test'
+  ...
+# Subtest: math
+ok 271 - math
+  ---
+  duration_ms: 24.120042
+  type: 'test'
+  ...
+# Subtest: conversions
+ok 272 - conversions
+  ---
+  duration_ms: 3.528208
+  type: 'test'
+  ...
+# Subtest: days until
+ok 273 - days until
+  ---
+  duration_ms: 3.907792
+  type: 'test'
+  ...
+# Subtest: spelling
+ok 274 - spelling
+  ---
+  duration_ms: 0.565209
+  type: 'test'
+  ...
+# Subtest: web questions use the injected answerer
+ok 275 - web questions use the injected answerer
+  ---
+  duration_ms: 3.079209
+  type: 'test'
+  ...
+# Subtest: never matches the screen or an app
+ok 276 - never matches the screen or an app
+  ---
+  duration_ms: 0.766166
+  type: 'test'
+  ...
+# Subtest: QUICK prefilter catches the real ones
+ok 277 - QUICK prefilter catches the real ones
+  ---
+  duration_ms: 2.1995
+  type: 'test'
+  ...
+# (node:72695) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: intents match, and the neighbours do not
+ok 278 - intents match, and the neighbours do not
+  ---
+  duration_ms: 9.1325
+  type: 'test'
+  ...
+# Subtest: chunks split at sentence ends, stay short, lose nothing
+ok 279 - chunks split at sentence ends, stay short, lose nothing
+  ---
+  duration_ms: 1.86275
+  type: 'test'
+  ...
+# Subtest: private text: Luhn card, code, password; ordinary numbers pass
+ok 280 - private text: Luhn card, code, password; ordinary numbers pass
+  ---
+  duration_ms: 2.837125
+  type: 'test'
+  ...
+# Subtest: selection comes first: Haiku is never called when AX had text
+ok 281 - selection comes first: Haiku is never called when AX had text
+  ---
+  duration_ms: 1.599792
+  type: 'test'
+  ...
+# Subtest: page: falls back to window text; long text says how long
+ok 282 - page: falls back to window text; long text says how long
+  ---
+  duration_ms: 1.033667
+  type: 'test'
+  ...
+# Subtest: secure field is never read, and nothing goes to the model
+ok 283 - secure field is never read, and nothing goes to the model
+  ---
+  duration_ms: 0.972166
+  type: 'test'
+  ...
+# Subtest: nothing in AX: one Haiku call; image intent copies to the clipboard
+ok 284 - nothing in AX: one Haiku call; image intent copies to the clipboard
+  ---
+  duration_ms: 0.49025
+  type: 'test'
+  ...
+# Subtest: image text that looks private is refused and not copied
+ok 285 - image text that looks private is refused and not copied
+  ---
+  duration_ms: 0.278375
+  type: 'test'
+  ...
+# Subtest: "what's on my screen": AX first, then on-device OCR, the picture last, and it says which answered
+ok 286 - "what's on my screen": AX first, then on-device OCR, the picture last, and it says which answered
+  ---
+  duration_ms: 1.780166
+  type: 'test'
+  ...
+# Subtest: reconnect: a drop mid-sentence: the mic keeps going, the new socket gets every frame in order, the turn goes on
+ok 287 - reconnect: a drop mid-sentence: the mic keeps going, the new socket gets every frame in order, the turn goes on
+  ---
+  duration_ms: 351.819542
+  type: 'test'
+  ...
+# Subtest: reconnect: a finished turn is not replayed, and a turn Dixi already ran is not run again
+ok 288 - reconnect: a finished turn is not replayed, and a turn Dixi already ran is not run again
+  ---
+  duration_ms: 79.239375
+  type: 'test'
+  ...
+# Subtest: reconnect: the replay buffer is capped (6 s), and the close after CloseStream is the end, not a drop
+ok 289 - reconnect: the replay buffer is capped (6 s), and the close after CloseStream is the end, not a drop
+  ---
+  duration_ms: 112.295042
+  type: 'test'
+  ...
+# Subtest: reconnect: a black-holed network gives up after 3 tries and the renderer is told (no "Reconnecting…" forever)
+ok 290 - reconnect: a black-holed network gives up after 3 tries and the renderer is told (no "Reconnecting…" forever)
+  ---
+  duration_ms: 1785.075291
+  type: 'test'
+  ...
+# Subtest: reconnect: a turn Dixi ended before Flux did (Eager + the hold) is not replayed: the next words are a new turn, and run
+ok 291 - reconnect: a turn Dixi ended before Flux did (Eager + the hold) is not replayed: the next words are a new turn, and run
+  ---
+  duration_ms: 157.948834
+  type: 'test'
+  ...
+# (node:72747) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [everywhere] welcome: win.once is not a function
+# [everywhere] dashboard: win.once is not a function
+# [timing] {"run":"rmw5bilwi","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bilwi","stage":"routed","ms":113,"step":113}
+# [timing] {"run":"rmw5bilwi","stage":"done","ms":733,"step":620}
+# [timing] {"run":"rmw5bimgx","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bimgx","stage":"routed","ms":113,"step":113}
+# [timing] {"run":"rmw5bimgx","stage":"done","ms":1059,"step":945}
+# [timing] {"run":"rmw5binac","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binac","stage":"routed","ms":0,"step":0}
+# Subtest: P1: when pressing by number falls back to a click, something covering the control is never clicked
+ok 292 - P1: when pressing by number falls back to a click, something covering the control is never clicked
+  ---
+  duration_ms: 1925.299166
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5binac","stage":"done","ms":304,"step":303}
+# [timing] {"run":"rmw5binit","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binit","stage":"routed","ms":0,"step":0}
+# [timing] {"run":"rmw5binit","stage":"done","ms":303,"step":303}
+# Subtest: P2: Dixi never presses, clicks or types in its own window (its safety switches live there)
+ok 293 - P2: Dixi never presses, clicks or types in its own window (its safety switches live there)
+  ---
+  duration_ms: 607.519541
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5binr8","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binr8","stage":"planned","ms":190,"step":190}
+# [timing] {"run":"rmw5binr8","stage":"routed","ms":205,"step":15}
+# [timing] {"run":"rmw5binr8","stage":"done","ms":209,"step":4}
+# [timing] {"run":"rmw5binx2","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binx2","stage":"done","ms":1,"step":1}
+# [timing] {"run":"rmw5binx3","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binx3","stage":"done","ms":1,"step":1}
+# [timing] {"run":"rmw5binx5","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binx5","stage":"done","ms":2,"step":2}
+# [timing] {"run":"rmw5binx8","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binx8","stage":"done","ms":0,"step":0}
+# [timing] {"run":"rmw5binx9","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binx9","stage":"routed","ms":0,"step":0}
+# [timing] {"run":"rmw5binx9","stage":"done","ms":5,"step":5}
+# [timing] {"run":"rmw5binxf","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binxf","stage":"planned","ms":2,"step":2}
+# [timing] {"run":"rmw5binxf","stage":"routed","ms":2,"step":0}
+# [timing] {"run":"rmw5binxf","stage":"done","ms":3,"step":1}
+# [timing] {"run":"rmw5binxi","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5binxi","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5binxi","stage":"routed","ms":1,"step":0}
+# Subtest: P4: a control nobody can read is refused, even in an ordinary app, without a question; an unnamed one there is not
+ok 294 - P4: a control nobody can read is refused, even in an ordinary app, without a question; an unnamed one there is not
+  ---
+  duration_ms: 209.588375
+  type: 'test'
+  ...
+# Subtest: "type hello world" types those words as said: no model call, the field checks still apply
+ok 295 - "type hello world" types those words as said: no model call, the field checks still apply
+  ---
+  duration_ms: 1.013208
+  type: 'test'
+  ...
+# Subtest: "click X" by name: pressed when the words name it, skipped with one line when they do not, never asked
+ok 296 - "click X" by name: pressed when the words name it, skipped with one line when they do not, never asked
+  ---
+  duration_ms: 6.041875
+  type: 'test'
+  ...
+# Subtest: a form uses your profile without asking: said on the card, logged without its values
+ok 297 - a form uses your profile without asking: said on the card, logged without its values
+  ---
+  duration_ms: 5.785917
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5binxi","stage":"done","ms":656,"step":655}
+# [timing] {"run":"rmw5biofq","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biofq","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5biofq","stage":"routed","ms":1,"step":0}
+# [timing] {"run":"rmw5biofq","stage":"done","ms":2,"step":1}
+# [timing] {"run":"rmw5bioft","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bioft","stage":"routed","ms":0,"step":0}
+# [timing] {"run":"rmw5bioft","stage":"done","ms":1,"step":1}
+# [timing] {"run":"rmw5biofu","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biofu","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5biofu","stage":"routed","ms":1,"step":0}
+# Subtest: the screen agent never asks in normal mode: told to pick the likeliest option, at most twice, then it stops
+ok 298 - the screen agent never asks in normal mode: told to pick the likeliest option, at most twice, then it stops
+  ---
+  duration_ms: 662.0445
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5biofu","stage":"done","ms":1296,"step":1295}
+# [timing] {"run":"rmw5bipgf","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bipgf","stage":"routed","ms":6,"step":6}
+# [timing] {"run":"rmw5bipgf","stage":"first_action","ms":11,"step":5}
+# [timing] {"run":"rmw5bipgf","stage":"planned","ms":11,"step":1}
+# Subtest: a risky named control is never asked about: refused unless the user said it, pressed when they did
+ok 299 - a risky named control is never asked about: refused unless the user said it, pressed when they did
+  ---
+  duration_ms: 1315.898917
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5bipgf","stage":"done","ms":121,"step":110}
+# [timing] {"run":"rmw5bipke","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bipke","stage":"planned","ms":35,"step":35}
+# [timing] {"run":"rmw5bipke","stage":"routed","ms":35,"step":0}
+# [timing] {"run":"rmw5bipke","stage":"first_action","ms":35,"step":0}
+# Subtest: A3: a many-part command with Dixi's own window in front: each part goes to Dixi's browser, in order, the next only after the last is done
+ok 300 - A3: a many-part command with Dixi's own window in front: each part goes to Dixi's browser, in order, the next only after the last is done
+  ---
+  duration_ms: 134.934125
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5bipke","stage":"done","ms":66,"step":31}
+# [timing] {"run":"rmw5bipm9","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bipm9","stage":"routed","ms":1,"step":1}
+# [timing] {"run":"rmw5bipm9","stage":"planned","ms":44,"step":43}
+# [timing] {"run":"rmw5bipm9","stage":"first_action","ms":44,"step":0}
+# Subtest: QA open-nytimes / misheard-you-tube: a single "open …" that names no app goes to the planner, not the screen agent
+ok 301 - QA open-nytimes / misheard-you-tube: a single "open …" that names no app goes to the planner, not the screen agent
+  ---
+  duration_ms: 74.087542
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5bipm9","stage":"done","ms":106,"step":62}
+# [timing] {"run":"rmw5bipp9","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bipp9","stage":"routed","ms":0,"step":0}
+# [timing] {"run":"rmw5bipp9","stage":"first_action","ms":3,"step":3}
+# [timing] {"run":"rmw5bipp9","stage":"planned","ms":4,"step":1}
+# [timing] {"run":"rmw5bipp9","stage":"done","ms":998,"step":994}
+# Subtest: QA item 3: a link opened before a step Dixi's browser does opens there too (one browser per chain)
+ok 302 - QA item 3: a link opened before a step Dixi's browser does opens there too (one browser per chain)
+  ---
+  duration_ms: 106.831291
+  type: 'test'
+  ...
+# Subtest: QA item 3: a screen step that runs out of turns is not "Done.": the plan stops there and says so
+ok 303 - QA item 3: a screen step that runs out of turns is not "Done.": the plan stops there and says so
+  ---
+  duration_ms: 1019.127542
+  type: 'test'
+  ...
+# Subtest: W1: while Dixi waits for an answer, the TV can answer nothing and command nothing
+ok 304 - W1: while Dixi waits for an answer, the TV can answer nothing and command nothing
+  ---
+  duration_ms: 3649.632667
+  type: 'test'
+  ...
+# Subtest: W2: a bare "yes" counts only just after the question; later it takes "Dixi, yes"
+ok 305 - W2: a bare "yes" counts only just after the question; later it takes "Dixi, yes"
+  ---
+  duration_ms: 4006.206291
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5biwgl","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biwgl","stage":"routed","ms":1,"step":1}
+# [timing] {"run":"rmw5biwgl","stage":"done","ms":403,"step":402}
+# [timing] {"run":"rmw5biwrs","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biwrs","stage":"routed","ms":0,"step":0}
+# Subtest: ⌥Space opens the mic, ⌥Space again sends, Esc cancels; hold-⌃ is off by default; a press while working never kills the work
+ok 306 - ⌥Space opens the mic, ⌥Space again sends, Esc cancels; hold-⌃ is off by default; a press while working never kills the work
+  ---
+  duration_ms: 489.2515
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5biwrs","stage":"done","ms":304,"step":303}
+# [timing] {"run":"rmw5bix08","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bix08","stage":"routed","ms":0,"step":0}
+# [timing] {"run":"rmw5bix08","stage":"done","ms":304,"step":303}
+# [timing] {"run":"rmw5bix8o","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bix8o","stage":"routed","ms":0,"step":0}
+# [timing] {"run":"rmw5bix8o","stage":"done","ms":304,"step":303}
+# [timing] {"run":"rmw5bixh5","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5bixh5","stage":"planned","ms":3,"step":3}
+# [timing] {"run":"rmw5bixh5","stage":"routed","ms":4,"step":0}
+# Subtest: A2: the agent types only into a box it found, and its result says whether the text is really there
+ok 307 - A2: the agent types only into a box it found, and its result says whether the text is really there
+  ---
+  duration_ms: 912.316417
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5bixh5","stage":"done","ms":941,"step":937}
+# [timing] {"run":"rmw5biy7a","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biy7a","stage":"planned","ms":2,"step":2}
+# [timing] {"run":"rmw5biy7a","stage":"routed","ms":2,"step":0}
+# [timing] {"run":"rmw5biy7a","stage":"done","ms":305,"step":303}
+# [timing] {"run":"rmw5biyfr","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyfr","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5biyfr","stage":"routed","ms":1,"step":0}
+# [timing] {"run":"rmw5biyfr","stage":"done","ms":2,"step":1}
+# [timing] {"run":"rmw5biyft","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyft","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5biyft","stage":"routed","ms":1,"step":0}
+# [timing] {"run":"rmw5biyft","stage":"done","ms":2,"step":1}
+# [timing] {"run":"rmw5biyfv","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyfv","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5biyfv","stage":"routed","ms":1,"step":0}
+# [timing] {"run":"rmw5biyfv","stage":"done","ms":304,"step":303}
+# [timing] {"run":"rmw5biyob","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyob","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5biyob","stage":"routed","ms":1,"step":0}
+# [timing] {"run":"rmw5biyob","stage":"done","ms":305,"step":304}
+# Subtest: clicks: the front app and menu extras yes; another window or a system prompt no, each refusal logged
+ok 308 - clicks: the front app and menu extras yes; another window or a system prompt no, each refusal logged
+  ---
+  duration_ms: 1860.616375
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5biyy1","stage":"stt_final","ms":0,"step":0}
+# Subtest: A1: a crashed Dixi window never leaves Esc held
+ok 309 - A1: a crashed Dixi window never leaves Esc held
+  ---
+  duration_ms: 42.778416
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5biyy1","stage":"done","ms":3,"step":3}
+# [timing] {"run":"rmw5biyy3","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyy3","stage":"done","ms":1,"step":1}
+# Subtest: "clear my activity" just clears it (no question) and "undo that" brings it back
+ok 310 - "clear my activity" just clears it (no question) and "undo that" brings it back
+  ---
+  duration_ms: 5.337083
+  type: 'test'
+  ...
+# [everywhere] welcome: win.once is not a function
+# [everywhere] dashboard: win.once is not a function
+# (node:72747) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# Subtest: A1: the overlay is made hidden at launch, so ⌥Space sends "listening" before any await (no cold window on the first press)
+ok 311 - A1: the overlay is made hidden at launch, so ⌥Space sends "listening" before any await (no cold window on the first press)
+  ---
+  duration_ms: 10.48425
+  type: 'test'
+  ...
+# [everywhere] welcome: win.once is not a function
+# [everywhere] dashboard: win.once is not a function
+# Subtest: the speech connection drops mid-session: the island says "Reconnecting…", then goes back to just the waveform
+ok 312 - the speech connection drops mid-session: the island says "Reconnecting…", then goes back to just the waveform
+  ---
+  duration_ms: 31.901875
+  type: 'test'
+  ...
+# [everywhere] welcome: win.once is not a function
+# [everywhere] dashboard: win.once is not a function
+# [timing] {"run":"rmw5biyzi","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyzi","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5biyzi","stage":"routed","ms":1,"step":0}
+# [timing] {"run":"rmw5biyzi","stage":"first_action","ms":1,"step":0}
+# [timing] {"run":"rmw5biyzi","stage":"done","ms":1,"step":0}
+# [timing] {"run":"rmw5biyzj","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyzj","stage":"routed","ms":0,"step":0}
+# [timing] {"run":"rmw5biyzj","stage":"done","ms":1,"step":1}
+# [timing] {"run":"rmw5biyzk","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyzk","stage":"routed","ms":0,"step":0}
+# [everywhere] fetch failed
+# [timing] {"run":"rmw5biyzk","stage":"done","ms":1,"step":1}
+# Subtest: the overlay lets clicks through again on every show and every idle: the pointer on the island never leaves the Mac blocked
+ok 313 - the overlay lets clicks through again on every show and every idle: the pointer on the island never leaves the Mac blocked
+  ---
+  duration_ms: 7.133292
+  type: 'test'
+  ...
+# Subtest: "[everywhere] fetch failed": a dropped socket is retried once on a fresh one; twice dropped = one plain line, no raw error
+ok 314 - "[everywhere] fetch failed": a dropped socket is retried once on a fresh one; twice dropped = one plain line, no raw error
+  ---
+  duration_ms: 1.732583
+  type: 'test'
+  ...
+# [timing] {"run":"rmw5biyzm","stage":"stt_final","ms":0,"step":0}
+# [timing] {"run":"rmw5biyzm","stage":"planned","ms":1,"step":1}
+# [timing] {"run":"rmw5biyzm","stage":"routed","ms":1,"step":0}
+# [timing] {"run":"rmw5biyzm","stage":"done","ms":2,"step":1}
+# Subtest: Phase 4: send, pay and delete-for-good stop one step before, unless that kind is allowed in Settings; everything else just happens
+ok 315 - Phase 4: send, pay and delete-for-good stop one step before, unless that kind is allowed in Settings; everything else just happens
+  ---
+  duration_ms: 0.956917
+  type: 'test'
+  ...
+# Subtest: Phase 4: "send it" said out loud still stops before Send when sending is off
+ok 316 - Phase 4: "send it" said out loud still stops before Send when sending is off
+  ---
+  duration_ms: 1.876833
+  type: 'test'
+  ...
+# Subtest: evidence: every word of the name must be on the page; a shorter page name never counts for a longer one
+ok 317 - evidence: every word of the name must be on the page; a shorter page name never counts for a longer one
+  ---
+  duration_ms: 8.332875
+  type: 'test'
+  ...
+# Subtest: registry: a product page on a known site never takes over the site's own name
+ok 318 - registry: a product page on a known site never takes over the site's own name
+  ---
+  duration_ms: 0.888542
+  type: 'test'
+  ...
+# Subtest: resolve: the model's guess is checked, the real site is found by search when the guess is wrong
+ok 319 - resolve: the model's guess is checked, the real site is found by search when the guess is wrong
+  ---
+  duration_ms: 3.286833
+  type: 'test'
+  ...
+# Subtest: resolve: exact name beats a longer one that contains it (no shadowing either way)
+ok 320 - resolve: exact name beats a longer one that contains it (no shadowing either way)
+  ---
+  duration_ms: 3.21525
+  type: 'test'
+  ...
+# Subtest: resolve: an invented name that exists nowhere is "not found", never the nearest known one
+ok 321 - resolve: an invented name that exists nowhere is "not found", never the nearest known one
+  ---
+  duration_ms: 1.182583
+  type: 'test'
+  ...
+# Subtest: resolve: two different sites that fit a bare word equally → ambiguous (ask), not a guess
+ok 322 - resolve: two different sites that fit a bare word equally → ambiguous (ask), not a guess
+  ---
+  duration_ms: 3.541333
+  type: 'test'
+  ...
+# Subtest: registry: two failed landings invalidate an entry; registry removal degrades to lookup
+ok 323 - registry: two failed landings invalidate an entry; registry removal degrades to lookup
+  ---
+  duration_ms: 1.325833
+  type: 'test'
+  ...
+# Subtest: modes: hybrid splits the work, cerebras-only and claude-only use one provider each
+ok 324 - modes: hybrid splits the work, cerebras-only and claude-only use one provider each
+  ---
+  duration_ms: 2.243875
+  type: 'test'
+  ...
+# Subtest: a missing or refused key is reported in words, and that provider is not used
+ok 325 - a missing or refused key is reported in words, and that provider is not used
+  ---
+  duration_ms: 0.790541
+  type: 'test'
+  ...
+# Subtest: model discovery: the benchmark ranking first (if still listed), then the provider order
+ok 326 - model discovery: the benchmark ranking first (if still listed), then the provider order
+  ---
+  duration_ms: 29.228708
+  type: 'test'
+  ...
+# Subtest: Claude requests: thinking off in the form each model takes, never a forced tool on Sonnet/Opus 5.5
+ok 327 - Claude requests: thinking off in the form each model takes, never a forced tool on Sonnet/Opus 5.5
+  ---
+  duration_ms: 0.972375
+  type: 'test'
+  ...
+# Subtest: Claude agent history: tool calls and results become blocks; same-role turns merge
+ok 328 - Claude agent history: tool calls and results become blocks; same-role turns merge
+  ---
+  duration_ms: 0.587708
+  type: 'test'
+  ...
+# Subtest: retries: 5xx and dropped connections back off and retry; a long 429 is returned at once
+ok 329 - retries: 5xx and dropped connections back off and retry; a long 429 is returned at once
+  ---
+  duration_ms: 16.630458
+  type: 'test'
+  ...
+# Subtest: schema check catches what a provider let through
+ok 330 - schema check catches what a provider let through
+  ---
+  duration_ms: 1.008833
+  type: 'test'
+  ...
+# Subtest: router: a fast answer that fails a check goes to Claude; the reason is recorded
+ok 331 - router: a fast answer that fails a check goes to Claude; the reason is recorded
+  ---
+  duration_ms: 1.557416
+  type: 'test'
+  ...
+# Subtest: agent: a reply that is no call, a bad call, or a missing element is not acted on
+ok 332 - agent: a reply that is no call, a bad call, or a missing element is not acted on
+  ---
+  duration_ms: 1.121584
+  type: 'test'
+  ...
+# Subtest: a question the page cannot answer goes to Claude with a web search, told which page you are on
+ok 333 - a question the page cannot answer goes to Claude with a web search, told which page you are on
+  ---
+  duration_ms: 9.081416
+  type: 'test'
+  ...
+# Subtest: unsafe(): the generated malware/phishing list, IPs, look-alikes, hidden addresses and code links are refused
+ok 334 - unsafe(): the generated malware/phishing list, IPs, look-alikes, hidden addresses and code links are refused
+  ---
+  duration_ms: 7.370416
+  type: 'test'
+  ...
+# Subtest: unsafe() costs well under 1 ms a call
+ok 335 - unsafe() costs well under 1 ms a call
+  ---
+  duration_ms: 223.451958
+  type: 'test'
+  ...
+# Subtest: every entry point refuses the bad host: mac.js open, desktop "go to", the tabs, downloads
+ok 336 - every entry point refuses the bad host: mac.js open, desktop "go to", the tabs, downloads
+  ---
+  duration_ms: 5.3035
+  type: 'test'
+  ...
+# Subtest: link text naming one site while the URL goes to another is flagged
+ok 337 - link text naming one site while the URL goes to another is flagged
+  ---
+  duration_ms: 8.957958
+  type: 'test'
+  ...
+# Subtest: look-alike hosts, raw IPs, shorteners and punycode are caught; the real site is not
+ok 338 - look-alike hosts, raw IPs, shorteners and punycode are caught; the real site is not
+  ---
+  duration_ms: 2.929625
+  type: 'test'
+  ...
+# Subtest: sender from a look-alike address: the reason names the company and the address
+ok 339 - sender from a look-alike address: the reason names the company and the address
+  ---
+  duration_ms: 0.676917
+  type: 'test'
+  ...
+# Subtest: a gift-card demand is a scam and says to call the number on the card
+ok 340 - a gift-card demand is a scam and says to call the number on the card
+  ---
+  duration_ms: 0.427166
+  type: 'test'
+  ...
+# Subtest: "this is your bank calling, read me the code" is a scam
+ok 341 - "this is your bank calling, read me the code" is a scam
+  ---
+  duration_ms: 0.209459
+  type: 'test'
+  ...
+# Subtest: a clean page gets the hedged wording, never "safe"
+ok 342 - a clean page gets the hedged wording, never "safe"
+  ---
+  duration_ms: 0.190542
+  type: 'test'
+  ...
+# Subtest: at most 3 reasons; Guardian findings count
+ok 343 - at most 3 reasons; Guardian findings count
+  ---
+  duration_ms: 0.616583
+  type: 'test'
+  ...
+# Subtest: trigger phrases match; ordinary questions do not
+ok 344 - trigger phrases match; ordinary questions do not
+  ---
+  duration_ms: 3.936875
+  type: 'test'
+  ...
+# Subtest: gatherLinks reads through an injected runner and survives failure
+ok 345 - gatherLinks reads through an injected runner and survives failure
+  ---
+  duration_ms: 0.859167
+  type: 'test'
+  ...
+# Subtest: scamCheck: fake model, marks in display points, model failure still gives a verdict
+ok 346 - scamCheck: fake model, marks in display points, model failure still gives a verdict
+  ---
+  duration_ms: 11.22075
+  type: 'test'
+  ...
+# (node:72933) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: record → save → list → match with slots → delete
+ok 347 - record → save → list → match with slots → delete
+  ---
+  duration_ms: 18.909292
+  type: 'test'
+  ...
+# Subtest: only skills this Mac made load: a file from a link, another Mac or an edit is ignored
+ok 348 - only skills this Mac made load: a file from a link, another Mac or an edit is ignored
+  ---
+  duration_ms: 4.3755
+  type: 'test'
+  ...
+# Subtest: nothing typed into a password, card or code box is recorded or saved
+ok 349 - nothing typed into a password, card or code box is recorded or saved
+  ---
+  duration_ms: 1.197792
+  type: 'test'
+  ...
+# Subtest: slots: only what was said; never a trigger made only of slots
+ok 350 - slots: only what was said; never a trigger made only of slots
+  ---
+  duration_ms: 3.799167
+  type: 'test'
+  ...
+# Subtest: best match: a skill named exactly beats a trigger
+ok 351 - best match: a skill named exactly beats a trigger
+  ---
+  duration_ms: 3.028333
+  type: 'test'
+  ...
+# Subtest: replay: labels match → each step goes through perform; slots typed; Enter asks
+ok 352 - replay: labels match → each step goes through perform; slots typed; Enter asks
+  ---
+  duration_ms: 5.539958
+  type: 'test'
+  ...
+# Subtest: replay: the label changed → stops with ok:false, nothing clicked there
+ok 353 - replay: the label changed → stops with ok:false, nothing clicked there
+  ---
+  duration_ms: 0.583375
+  type: 'test'
+  ...
+# Subtest: replay: the button moved → found by its label, checked, then clicked
+ok 354 - replay: the button moved → found by its label, checked, then clicked
+  ---
+  duration_ms: 1.229125
+  type: 'test'
+  ...
+# Subtest: replay: one click heals onto a control of the same role; the second failure stops
+ok 355 - replay: one click heals onto a control of the same role; the second failure stops
+  ---
+  duration_ms: 1.25025
+  type: 'test'
+  ...
+# Subtest: replay: a healed click on a risky label still asks
+ok 356 - replay: a healed click on a risky label still asks
+  ---
+  duration_ms: 1.293416
+  type: 'test'
+  ...
+# Subtest: replay: a risky label asks; a no stops the run and is never healed
+ok 357 - replay: a risky label asks; a no stops the run and is never healed
+  ---
+  duration_ms: 1.142208
+  type: 'test'
+  ...
+# Subtest: replay: the label is read again just before the press (expect)
+ok 358 - replay: the label is read again just before the press (expect)
+  ---
+  duration_ms: 0.440458
+  type: 'test'
+  ...
+# Subtest: replay: stops in another app or on another site
+ok 359 - replay: stops in another app or on another site
+  ---
+  duration_ms: 0.633917
+  type: 'test'
+  ...
+# Subtest: replay: password boxes, codes and stop are respected
+ok 360 - replay: password boxes, codes and stop are respected
+  ---
+  duration_ms: 0.61875
+  type: 'test'
+  ...
+# Subtest: a click with nothing recorded to check is never made blind
+ok 361 - a click with nothing recorded to check is never made blind
+  ---
+  duration_ms: 0.246834
+  type: 'test'
+  ...
+# Subtest: spoken commands
+ok 362 - spoken commands
+  ---
+  duration_ms: 6.120291
+  type: 'test'
+  ...
+# Subtest: at most 6 runs of one skill an hour, 20 in all
+ok 363 - at most 6 runs of one skill an hour, 20 in all
+  ---
+  duration_ms: 0.457292
+  type: 'test'
+  ...
+# Subtest: speakable: numbers are said as words (what Dixi actually says in the demo)
+ok 364 - speakable: numbers are said as words (what Dixi actually says in the demo)
+  ---
+  duration_ms: 2.583084
+  type: 'test'
+  ...
+# [stt] ElevenLabs unavailable (ElevenLabs refused the connection (HTTP 402)); using the fallback
+# Subtest: stt: ElevenLabs refusing the key (out of credit) hands the mic to Deepgram
+ok 365 - stt: ElevenLabs refusing the key (out of credit) hands the mic to Deepgram
+  ---
+  duration_ms: 18.345041
+  type: 'test'
+  ...
+# [stt] ElevenLabs: quota_exceeded; switching to the fallback
+# [stt] ElevenLabs unavailable (quota_exceeded); using the fallback
+# Subtest: stt: quota_exceeded mid-session closes ElevenLabs; the reconnect goes to Deepgram
+ok 366 - stt: quota_exceeded mid-session closes ElevenLabs; the reconnect goes to Deepgram
+  ---
+  duration_ms: 18.0045
+  type: 'test'
+  ...
+# Subtest: stt: insufficient_audio_activity is not a credit problem (stays on ElevenLabs)
+ok 367 - stt: insufficient_audio_activity is not a credit problem (stays on ElevenLabs)
+  ---
+  duration_ms: 53.97325
+  type: 'test'
+  ...
+# Subtest: stt: a close while ElevenLabs is still connecting (Esc, mic denied) never opens the fallback
+ok 368 - stt: a close while ElevenLabs is still connecting (Esc, mic denied) never opens the fallback
+  ---
+  duration_ms: 53.905708
+  type: 'test'
+  ...
+# [dead] elevenlabs until 4:38:40 PM: STT ElevenLabs refused the connection (HTTP 402)
+# [stt] ElevenLabs unavailable (ElevenLabs refused the connection (HTTP 402)); using the fallback
+# Subtest: stt: a 402 marks ElevenLabs dead in the registry file; after a relaunch the mic goes straight to Deepgram (0 EL round trips)
+ok 369 - stt: a 402 marks ElevenLabs dead in the registry file; after a relaunch the mic goes straight to Deepgram (0 EL round trips)
+  ---
+  duration_ms: 24.052958
+  type: 'test'
+  ...
+# [stt] ElevenLabs unavailable (ElevenLabs refused the connection (HTTP 503)); using the fallback
+# [stt] ElevenLabs unavailable (ElevenLabs refused the connection (HTTP 503)); using the fallback
+# Subtest: stt: a network error or 5xx is not dead: Deepgram until retryMs, then ElevenLabs is dialed again (fallen no longer sticks)
+ok 370 - stt: a network error or 5xx is not dead: Deepgram until retryMs, then ElevenLabs is dialed again (fallen no longer sticks)
+  ---
+  duration_ms: 125.400292
+  type: 'test'
+  ...
+# [stt] ElevenLabs unavailable (ElevenLabs refused the connection (HTTP 402)); using the fallback
+# Subtest: stt: a close during the fallback's own connect (Esc after EL refused) cancels Deepgram too: no socket, no reconnect
+ok 371 - stt: a close during the fallback's own connect (Esc after EL refused) cancels Deepgram too: no socket, no reconnect
+  ---
+  duration_ms: 359.084958
+  type: 'test'
+  ...
+# Subtest: mark(): one line per stage, ms since heard and since the last stage; repeats ignored
+ok 372 - mark(): one line per stage, ms since heard and since the last stage; repeats ignored
+  ---
+  duration_ms: 3.132042
+  type: 'test'
+  ...
+# Subtest: mark(): a sink that throws never breaks the request
+ok 373 - mark(): a sink that throws never breaks the request
+  ---
+  duration_ms: 0.587416
+  type: 'test'
+  ...
+# (node:72962) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a tool is checked when it is added
+ok 374 - a tool is checked when it is added
+  ---
+  duration_ms: 3.394083
+  type: 'test'
+  ...
+# Subtest: what was said goes to the highest-priority tool that takes it; a broken matcher is skipped
+ok 375 - what was said goes to the highest-priority tool that takes it; a broken matcher is skipped
+  ---
+  duration_ms: 0.388542
+  type: 'test'
+  ...
+# Subtest: a tool runs directly, with no question, and every call is timed
+ok 376 - a tool runs directly, with no question, and every call is timed
+  ---
+  duration_ms: 1.574833
+  type: 'test'
+  ...
+# Subtest: a repeated lookup within cacheMs is answered from the cache
+ok 377 - a repeated lookup within cacheMs is answered from the cache
+  ---
+  duration_ms: 0.543958
+  type: 'test'
+  ...
+# Subtest: failures come back in plain words; a slow tool times out; stopping stops it
+ok 378 - failures come back in plain words; a slow tool times out; stopping stops it
+  ---
+  duration_ms: 43.057792
+  type: 'test'
+  ...
+# Subtest: the agent sees only tools that have a schema, as Claude tool definitions
+ok 379 - the agent sees only tools that have a schema, as Claude tool definitions
+  ---
+  duration_ms: 0.352209
+  type: 'test'
+  ...
+# Subtest: Dixi's own capabilities route by what was said, with no AI
+ok 380 - Dixi's own capabilities route by what was said, with no AI
+  ---
+  duration_ms: 182.847667
+  type: 'test'
+  ...
+# Subtest: an MCP server: its tools join the registry and run, and it never sees Dixi’s keys
+ok 381 - an MCP server: its tools join the registry and run, and it never sees Dixi’s keys
+  ---
+  duration_ms: 58.213
+  type: 'test'
+  ...
+# Subtest: mcp.json lists the servers; a missing or broken file means none
+ok 382 - mcp.json lists the servers; a missing or broken file means none
+  ---
+  duration_ms: 1.939709
+  type: 'test'
+  ...
+# Subtest: personal memory: an answer with its sources; nothing found passes to the next path unless you named your files
+ok 383 - personal memory: an answer with its sources; nothing found passes to the next path unless you named your files
+  ---
+  duration_ms: 9.008625
+  type: 'test'
+  ...
+# Subtest: the fast model: Groq first, the next one when it fails, each try timed
+ok 384 - the fast model: Groq first, the next one when it fails, each try timed
+  ---
+  duration_ms: 0.882875
+  type: 'test'
+  ...
+# Subtest: turns: 3 ⌥Space sessions in a row, each Flux turn 0, are all heard
+ok 385 - turns: 3 ⌥Space sessions in a row, each Flux turn 0, are all heard
+  ---
+  duration_ms: 56.164125
+  type: 'test'
+  ...
+# [stt] ElevenLabs unavailable (ElevenLabs refused the connection (HTTP 402)); using the fallback
+# Subtest: turns: the Scribe → Flux switch (and back) never reuses a turn number
+ok 386 - turns: the Scribe → Flux switch (and back) never reuses a turn number
+  ---
+  duration_ms: 19.472083
+  type: 'test'
+  ...
+# Subtest: a whole lesson: it points, waits for you, and never acts on its own
+ok 387 - a whole lesson: it points, waits for you, and never acts on its own
+  ---
+  duration_ms: 85.219458
+  type: 'test'
+  ...
+# Subtest: the screen moving without your step: pointed at again, not said again
+ok 388 - the screen moving without your step: pointed at again, not said again
+  ---
+  duration_ms: 159.486875
+  type: 'test'
+  ...
+# Subtest: "repeat" says it again with no new look; "I'm stuck" asks for a simpler way; "do it for me" hands one step to the agent
+ok 389 - "repeat" says it again with no new look; "I'm stuck" asks for a simpler way; "do it for me" hands one step to the agent
+  ---
+  duration_ms: 134.808375
+  type: 'test'
+  ...
+# Subtest: a scam on screen ends the lesson; stopping (the kill key) ends it at once
+ok 390 - a scam on screen ends the lesson; stopping (the kill key) ends it at once
+  ---
+  duration_ms: 22.51425
+  type: 'test'
+  ...
+# Subtest: nothing happening: one gentle nudge, then it stops for now
+ok 391 - nothing happening: one gentle nudge, then it stops for now
+  ---
+  duration_ms: 404.169542
+  type: 'test'
+  ...
+# Subtest: what starts a lesson, and what steers it
+ok 392 - what starts a lesson, and what steers it
+  ---
+  duration_ms: 2.59575
+  type: 'test'
+  ...
+# Subtest: where the ring goes: on a listed control, at a point in the picture, or nowhere
+ok 393 - where the ring goes: on a listed control, at a point in the picture, or nowhere
+  ---
+  duration_ms: 0.249208
+  type: 'test'
+  ...
+# Subtest: the planner asks for one step, with the controls as information and the history so far
+ok 394 - the planner asks for one step, with the controls as information and the history so far
+  ---
+  duration_ms: 0.428167
+  type: 'test'
+  ...
+# Subtest: a clean-up is one group: undo puts every file back and removes the folders it made
+ok 395 - a clean-up is one group: undo puts every file back and removes the folders it made
+  ---
+  duration_ms: 11.809333
+  type: 'test'
+  ...
+# Subtest: never overwrites, never deletes: a taken name gets a number; the Trash can be undone
+ok 396 - never overwrites, never deletes: a taken name gets a number; the Trash can be undone
+  ---
+  duration_ms: 6.86625
+  type: 'test'
+  ...
+# Subtest: undo leaves alone what changed since, and bad names or paths are refused
+ok 397 - undo leaves alone what changed since, and bad names or paths are refused
+  ---
+  duration_ms: 3.784458
+  type: 'test'
+  ...
+# Subtest: one turn → one execution, however many end-of-turn signals arrive
+ok 398 - one turn → one execution, however many end-of-turn signals arrive
+  ---
+  duration_ms: 166.986958
+  type: 'test'
+  ...
+# Subtest: TurnResumed aborts the early understanding; the final words are used
+ok 399 - TurnResumed aborts the early understanding; the final words are used
+  ---
+  duration_ms: 153.967625
+  type: 'test'
+  ...
+# Subtest: nothing acts before the end of the turn (partial words never trigger an action)
+ok 400 - nothing acts before the end of the turn (partial words never trigger an action)
+  ---
+  duration_ms: 101.984416
+  type: 'test'
+  ...
+# Subtest: wake word: only at the start of what was said
+ok 401 - wake word: only at the start of what was said
+  ---
+  duration_ms: 0.876792
+  type: 'test'
+  ...
+# Subtest: casual mention of the wake word mid-sentence does nothing
+ok 402 - casual mention of the wake word mid-sentence does nothing
+  ---
+  duration_ms: 81.442542
+  type: 'test'
+  ...
+# Subtest: "stop" cancels queued steps at once (barge-in mid-task)
+ok 403 - "stop" cancels queued steps at once (barge-in mid-task)
+  ---
+  duration_ms: 293.276083
+  type: 'test'
+  ...
+# Subtest: a clarifying question captures the next answer (by ordinal or name)
+ok 404 - a clarifying question captures the next answer (by ordinal or name)
+  ---
+  duration_ms: 0.856042
+  type: 'test'
+  ...
+# Subtest: a question asked mid-sentence is answered by what is said next, not by the end of that sentence
+ok 405 - a question asked mid-sentence is answered by what is said next, not by the end of that sentence
+  ---
+  duration_ms: 0.658959
+  type: 'test'
+  ...
+# Subtest: half-heard buying words are never bought; the final words are
+ok 406 - half-heard buying words are never bought; the final words are
+  ---
+  duration_ms: 954.552875
+  type: 'test'
+  ...
+# Subtest: the final words, written differently, never repeat what was already done
+ok 407 - the final words, written differently, never repeat what was already done
+  ---
+  duration_ms: 603.395166
+  type: 'test'
+  ...
+# Subtest: a failed step stops the rest quietly (no spoken error); failed parses are not cached
+ok 408 - a failed step stops the rest quietly (no spoken error); failed parses are not cached
+  ---
+  duration_ms: 31.379209
+  type: 'test'
+  ...
+# Subtest: acts while you speak: a finished clause runs before the sentence ends
+ok 409 - acts while you speak: a finished clause runs before the sentence ends
+  ---
+  duration_ms: 794.229375
+  type: 'test'
+  ...
+# Subtest: clauses split only where a new command starts
+ok 410 - clauses split only where a new command starts
+  ---
+  duration_ms: 1.492334
+  type: 'test'
+  ...
+# Subtest: wake word by sound, at the start or after a sentence break; alone it opens a listening window
+ok 411 - wake word by sound, at the start or after a sentence break; alone it opens a listening window
+  ---
+  duration_ms: 178.794666
+  type: 'test'
+  ...
+# Subtest: after a command, the next words without "Dixi" are not a command
+ok 412 - after a command, the next words without "Dixi" are not a command
+  ---
+  duration_ms: 1014.737875
+  type: 'test'
+  ...
+# Subtest: understanding starts at a short pause and is reused when the turn ends (one model call)
+ok 413 - understanding starts at a short pause and is reused when the turn ends (one model call)
+  ---
+  duration_ms: 552.778417
+  type: 'test'
+  ...
+# Subtest: talking over Dixi: its own words are an echo, a new command is not
+ok 414 - talking over Dixi: its own words are an echo, a new command is not
+  ---
+  duration_ms: 6.669375
+  type: 'test'
+  ...
+# Subtest: a turn cut off mid-sentence is finished by the next one; a whole question ending on "about" is answered
+ok 415 - a turn cut off mid-sentence is finished by the next one; a whole question ending on "about" is answered
+  ---
+  duration_ms: 1130.782541
+  type: 'test'
+  ...
+# Subtest: a site never used before waits for its whole name ("Maya" is not "Maya Indian Kitchen")
+ok 416 - a site never used before waits for its whole name ("Maya" is not "Maya Indian Kitchen")
+  ---
+  duration_ms: 1313.18225
+  type: 'test'
+  ...
+# Subtest: mic paused while it is still connecting stays paused (no live mic after stop)
+ok 417 - mic paused while it is still connecting stays paused (no live mic after stop)
+  ---
+  duration_ms: 34.124917
+  type: 'test'
+  ...
+# Subtest: a new command while "which one?" is open is not read as an answer ("make the iPhone two" ≠ the second one)
+ok 418 - a new command while "which one?" is open is not read as an answer ("make the iPhone two" ≠ the second one)
+  ---
+  duration_ms: 110.184292
+  type: 'test'
+  ...
+# Subtest: "stop and listen": nothing runs until "go", then it all goes as one request (to Everywhere when it wants it)
+ok 419 - "stop and listen": nothing runs until "go", then it all goes as one request (to Everywhere when it wants it)
+  ---
+  duration_ms: 241.89325
+  type: 'test'
+  ...
+# Subtest: talking about Dixi is not talking to Dixi; a protest stops it
+ok 420 - talking about Dixi is not talking to Dixi; a protest stops it
+  ---
+  duration_ms: 1.514541
+  type: 'test'
+  ...
+# Subtest: chatter is not for Dixi (a real log: each of these went to the screen agent): nothing runs, nothing stops
+ok 421 - chatter is not for Dixi (a real log: each of these went to the screen agent): nothing runs, nothing stops
+  ---
+  duration_ms: 53.511334
+  type: 'test'
+  ...
+# Subtest: never asks (Nov 5): a parse that comes back as a question with no steps is never said as a question
+ok 422 - never asks (Nov 5): a parse that comes back as a question with no steps is never said as a question
+  ---
+  duration_ms: 1004.441666
+  type: 'test'
+  ...
+# Subtest: never asks "which one?" (Nov 5): the first result is taken and said in one line; "the other one" switches
+ok 423 - never asks "which one?" (Nov 5): the first result is taken and said in one line; "the other one" switches
+  ---
+  duration_ms: 1.5365
+  type: 'test'
+  ...
+# Subtest: Mac-wide (⌥Space) on the browser clock: planned at a short pause, sent at a pause before the turn ends, never twice
+ok 424 - Mac-wide (⌥Space) on the browser clock: planned at a short pause, sent at a pause before the turn ends, never twice
+  ---
+  duration_ms: 610.444209
+  type: 'test'
+  ...
+# Subtest: watchIntent parses
+ok 425 - watchIntent parses
+  ---
+  duration_ms: 2.062
+  type: 'test'
+  ...
+# Subtest: prompt and schema
+ok 426 - prompt and schema
+  ---
+  duration_ms: 0.275167
+  type: 'test'
+  ...
+# Subtest: unchanged screen: one baseline check, then only the 60 s recheck
+ok 427 - unchanged screen: one baseline check, then only the 60 s recheck
+  ---
+  duration_ms: 3.123416
+  type: 'test'
+  ...
+# Subtest: unchanged screen is rechecked after 60 s
+ok 428 - unchanged screen is rechecked after 60 s
+  ---
+  duration_ms: 0.656084
+  type: 'test'
+  ...
+# Subtest: a change calls check; stops when met; why is cleaned
+ok 429 - a change calls check; stops when met; why is cleaned
+  ---
+  duration_ms: 0.595625
+  type: 'test'
+  ...
+# Subtest: why is capped at 80 characters
+ok 430 - why is capped at 80 characters
+  ---
+  duration_ms: 0.357333
+  type: 'test'
+  ...
+# Subtest: times out at maxMs
+ok 431 - times out at maxMs
+  ---
+  duration_ms: 0.221333
+  type: 'test'
+  ...
+# Subtest: stop and abort end it once
+ok 432 - stop and abort end it once
+  ---
+  duration_ms: 0.412333
+  type: 'test'
+  ...
+# Subtest: a second watch replaces the first
+ok 433 - a second watch replaces the first
+  ---
+  duration_ms: 0.480667
+  type: 'test'
+  ...
+# Subtest: the welcome walks the steps in order: microphone, screen, accessibility, then the optional one
+ok 434 - the welcome walks the steps in order: microphone, screen, accessibility, then the optional one
+  ---
+  duration_ms: 1.687542
+  type: 'test'
+  ...
+# Subtest: a step out of order is still checked off; skipping moves on; denied is not done
+ok 435 - a step out of order is still checked off; skipping moves on; denied is not done
+  ---
+  duration_ms: 0.315375
+  type: 'test'
+  ...
+# Subtest: the try-it card uses the real shortcuts, and Dixi says them in words
+ok 436 - the try-it card uses the real shortcuts, and Dixi says them in words
+  ---
+  duration_ms: 0.347167
+  type: 'test'
+  ...
+# Subtest: every earcon is short (200 ms at most), and the card and done ones are two notes
+ok 437 - every earcon is short (200 ms at most), and the card and done ones are two notes
+  ---
+  duration_ms: 1.647125
+  type: 'test'
+  ...
+# Subtest: earcons play on a change of state only, and never over Dixi or its echo window
+ok 438 - earcons play on a change of state only, and never over Dixi or its echo window
+  ---
+  duration_ms: 0.233166
+  type: 'test'
+  ...
+# Subtest: card keys: Y or Enter is yes, N or Esc is no; a yes right after typing does not count
+ok 439 - card keys: Y or Enter is yes, N or Esc is no; a yes right after typing does not count
+  ---
+  duration_ms: 0.303167
+  type: 'test'
+  ...
+# Subtest: the ⌥Return yes is ignored right after the agent types or a card opens
+ok 440 - the ⌥Return yes is ignored right after the agent types or a card opens
+  ---
+  duration_ms: 0.161583
+  type: 'test'
+  ...
+# Subtest: permStatus normalizes what macOS says
+ok 441 - permStatus normalizes what macOS says
+  ---
+  duration_ms: 0.319125
+  type: 'test'
+  ...
+1..441
+# tests 441
+# suites 0
+# pass 441
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 20481.133708
+gate: 20526 ms wall (limit 30000)
+npm test  16.46s user 4.63s system 101% cpu 20.698 total
