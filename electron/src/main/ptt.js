@@ -107,6 +107,7 @@ export function fnGestures({ onOpen, onShow = () => {}, onSend, onCancel, onMode
         if (st !== 'held') return;
         if (ev.t - downAt >= tapMs) return send();
         st = 'tapped';                            // maybe the first half of a double-tap: keep the mic, decide at doubleMs
+        clearTimer(showTimer); showTimer = null;  // a tap never shows the island
         tapTimer = setTimer(() => { tapTimer = null; cancel('tap', true); }, Math.max(0, doubleMs - (ev.t - downAt)));
         return;
       case 'space':
