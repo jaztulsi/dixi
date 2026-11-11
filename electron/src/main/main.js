@@ -228,7 +228,7 @@ app.whenReady().then(() => {
   // The Fn key + on-device hearing (ear.js): the default voice path when the helper is built (npm run build:ear).
   // DIXI_VOICE_PATH=cloud (or the voicePath pref) keeps the old ⌥Space + cloud speech path only.
   const earBin = everywhere?.ear && everywhere.voicePath() !== 'cloud' ? findEar(path.join(here, '../..')) : null;
-  if (earBin) { const ear = startEar({ bin: earBin, api: everywhere.ear, log: (l) => console.error(l) }); app.on('will-quit', () => ear.stop()); }
+  if (earBin) { const ear = startEar({ bin: earBin, args: everywhere.earArgs(), api: everywhere.ear, log: (l) => console.error(l) }); app.on('will-quit', () => ear.stop()); }
   else if (everywhere?.ear && everywhere.voicePath() !== 'cloud') console.error('[ear] helper not built: run `npm run build:ear` (⌥Space still works)');
 });
 

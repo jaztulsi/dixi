@@ -17,7 +17,9 @@
     "refresh-apple-catalog": "node scripts/refresh-apple-catalog.js",
     "refresh-blocklist": "node scripts/refresh-blocklist.js",
     "refresh-unsafe": "node scripts/refresh-unsafe.js",
-    "bench": "node --import ./test/no-network.js eval/bench.js"
+    "bench": "node --import ./test/no-network.js eval/bench.js",
+    "build:ear": "cd native/dixi-ear && swift build -c release",
+    "smoke": "node eval/smoke.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.316",

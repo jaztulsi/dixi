@@ -887,6 +887,15 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     return head;
   }
   /** One step → { ok, say?, out?, error? }. `prior`: what earlier steps found, for steps that need it. */
+  // A link opened by a rule is done when the front browser tab is on that site (pageStarted), not when `open`
+  // returned. Not there: open it once more (the next rung), then say so. Unreadable tabs count as fine.
+  const frontTab = async () => input.browserTab((await input.frontApp())?.name ?? '');
+  async function siteOpened(url) {
+    if (await pageStarted(url, { tab: frontTab })) return { ok: true };
+    const again = await openTarget({ url }).catch(() => ({ ok: false }));
+    if (again.ok && (await pageStarted(url, { tab: frontTab }))) return { ok: true };
+    return { ok: false, error: `the page didn't open (${new URL(url).hostname})` };
+  }
   async function doStep(s, prior, signal) {
     if (s.do === 'instant') {
       if (s.kind === 'command') { await runCommand(s.command); return { ok: true, said: true }; }   // it says what it did
@@ -906,7 +915,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         if (s.app && !(await toFront(s.app, { open: input.openApp, front: input.frontApp }))?.name) return { ok: false, error: `${s.app} didn't come to the front, so I didn't type` };
         const r = await typeText(s.text); return r.ok ? { ok: true } : { ok: false, error: r.why };
       }
-      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, appKey, open: input.openApp, front: input.frontApp, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); if (r.undo) state.undoLast = calUndo(r.undo); return r.ok === false ? { ok: false, error: r.say } : { ok: true, say: r.say, said: r.quiet }; }   // quiet: a key press needs no "Done."
+      if (s.kind === 'desktop') { const r = await runDesktop(s.intent, { exec: desktopExec, say: () => {}, approve: async () => true, key: input.key, appKey, open: input.openApp, front: input.frontApp, screens: () => screen.getAllDisplays().map((d) => d.workArea) }); if (r.undo) state.undoLast = calUndo(r.undo); if (r.ok !== false && s.intent.verb === 'site') { const v = await siteOpened(s.intent.url); if (!v.ok) return v; } return r.ok === false ? { ok: false, error: r.say } : { ok: true, say: r.say, said: r.quiet }; }   // quiet: a key press needs no "Done."
       if (s.kind === 'file') {
         const r = await fileAction(s.intent, null, { approve, say, undo });
         if (r?.results) state.filesAt = Date.now();
@@ -1624,18 +1633,21 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       mark((state.heardId = `r${state.heardAt.toString(36)}`), 'heard');
     },
     show(mode) {
-      state.earOpen = true;
-      ptt.start();   // Esc as a global key too, for a helper without key access
+      state.earOpen = true;   // (Esc comes from the helper's own key tap, so no global shortcut is taken)
       show({ state: 'listening', text: '', ...(mode === 'dictate' && { title: 'Dictating' }) });
     },
     mode(mode) { if (state.earOpen) show({ state: 'listening', text: state.earText ?? '', ...(mode === 'dictate' && { title: 'Dictating' }) }); },
     partial(text) { state.earText = String(text ?? '').slice(0, 300); if (state.earOpen) show({ state: 'listening', text: state.earText }); },
     level(v) { if (state.shown === 'listening') ui('ew:level', Math.max(0, Math.min(1, Number(v) || 0))); },
-    context(c) { state.heardCtx = { ...c, at: Date.now() }; },
-    cancel() { state.earOpen = false; state.earText = ''; ptt.end(); if (state.shown === 'listening') show({ state: 'idle' }); },
+    context(c) {   // + the page, for a browser in front (input.browserTab, ≤ 400 ms; never blocks the command)
+      const ctx = state.heardCtx = { ...c, at: Date.now() };
+      if (!/safari|chrome|chromium|brave|edge|arc|vivaldi|opera/i.test(`${c.bundle} ${c.app}`)) return;
+      Promise.race([input.browserTab(c.app).catch(() => null), new Promise((r) => setTimeout(r, 400, null))]).then((t) => { if (t?.url && state.heardCtx === ctx) ctx.url = t.url; });
+    },
+    cancel() { state.earOpen = false; state.earText = ''; if (state.shown === 'listening') show({ state: 'idle' }); },
     /** The whole utterance, once. Dictation is pasted by the helper (ear.js); a command runs. */
     async final(text, mode) {
-      state.earOpen = false; state.earText = ''; ptt.end();
+      state.earOpen = false; state.earText = '';
       const t = String(text ?? '').trim().slice(0, 4000);
       if (!t) { if (state.shown === 'listening') show({ state: 'idle' }); return; }
       if (mode === 'dictate') { show({ state: 'done', text: t.slice(0, 120), linger: 1200 }); return; }
@@ -1857,5 +1869,6 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // The speech connection dropped mid-session (deepgram.js retries and replays the audio): say so, not a frozen "Listening…".
   const reconnecting = (on) => { if (ptt.open && !busy()) show({ state: 'listening', text: on ? 'Reconnecting…' : '' }); };
   // ponytail: hold-⌃ runs a 30 Hz osascript poll, so it's opt-in (DIXI_HOLD_CTRL=1 or prefs.holdCtrl); ⌥Space is the default.
-  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, run, ear, voicePath: () => env.DIXI_VOICE_PATH ?? prefs.voicePath ?? 'ear', control: env.DIXI_HOLD_CTRL === '1' || prefs.holdCtrl ? control : null, toggle, set: (k, v) => dashApi.set(k, v), showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
+  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, run, ear, voicePath: () => env.DIXI_VOICE_PATH ?? prefs.voicePath ?? 'ear',
+    earArgs: () => ['--key', prefs.earKey ?? env.DIXI_EAR_KEY ?? 'fn', ...(prefs.warmMic || env.DIXI_WARM_MIC === '1' ? ['--warm-mic'] : [])], control: env.DIXI_HOLD_CTRL === '1' || prefs.holdCtrl ? control : null, toggle, set: (k, v) => dashApi.set(k, v), showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
 }

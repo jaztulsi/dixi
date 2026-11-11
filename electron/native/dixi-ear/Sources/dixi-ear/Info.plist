@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>app.dixi.ear</string>
+  <key>CFBundleName</key><string>Dixi Ear</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>NSMicrophoneUsageDescription</key><string>Dixi listens only while you hold Fn (or after a double-tap), to hear your command.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Dixi turns what you say into text on this Mac. Nothing is sent anywhere.</string>
+</dict>
+</plist>

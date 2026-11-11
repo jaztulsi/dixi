@@ -25,7 +25,7 @@ export function findEar(root, { exists = fs.existsSync, resources = process.reso
  * startEar({ bin, api }) → { stop(), send(msg), state() }
  * api (everywhere.js `ear`): open(mode) show(mode) mode(m) partial(t) level(v) context(c) cancel(why) final(text, mode) stop() unavailable(why) vocab()
  */
-export function startEar({ bin, api, spawn = nodeSpawn, log = () => {}, finalMs = 1000, restartMs = 2000, maxCrashes = 5,
+export function startEar({ bin, args = [], api, spawn = nodeSpawn, log = () => {}, finalMs = 1000, restartMs = 2000, maxCrashes = 5,
   setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t), now = () => Date.now(), gestureOpts = {} }) {
   let child = null, stopped = false, crashes = 0, lastStart = 0, ready = null;
   let partial = '', waiting = null;   // waiting: { mode, timer, at } between the release and the helper's final
@@ -75,7 +75,7 @@ export function startEar({ bin, api, spawn = nodeSpawn, log = () => {}, finalMs 
   const go = () => {
     if (stopped) return;
     lastStart = now();
-    child = spawn(bin, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+    child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let buf = '';
     child.stdout.on('data', (d) => { buf += d; const lines = buf.split('\n'); buf = lines.pop(); for (const l of lines) if (l.trim()) onLine(l); });
     child.stderr?.on('data', (d) => log(`[ear:stderr] ${String(d).trim().slice(0, 400)}`));
