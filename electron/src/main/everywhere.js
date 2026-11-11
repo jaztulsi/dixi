@@ -22,6 +22,7 @@ import { exec as macExec, openTarget, runScript, check as checkScript, installed
 import { mark } from './timing.js';
 import { plan, split } from './plan.js';
 import { runShell } from './shell.js';
+import { learnedWords } from './ear.js';
 import { speakable } from './speakable.js';
 import { ENDPOINTS, chat, fastChat, fastModels, prewarm } from './providers.js';
 import { plainError } from './tools.js';
@@ -1009,6 +1010,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
           if (signal.aborted) return;
           if (!r.ok) {
             const why = `Step ${i}, “${label(s)}”, didn't work${r.error ? `: ${String(r.error).replace(/[.\s]+$/, '')}` : ''}.`;
+            if (state.earLast) state.earLast.failed = true;
             show({ state: 'error', title: text.slice(0, 80), text: why, linger: 12000 }); if (!r.said) say(why); return false;   // a refused screen step already said why
           }
           // Dixi speaks less: the island shows what was done; the voice is for answers (and for anything, with the "chatty" pref).
@@ -1145,6 +1147,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     const text = r.text || (r.ok ? 'Done.' : "I couldn't do that.");
     act.log({ kind: 'done', text: text.slice(0, 200), app: ctx.name, ms: r.ms, usd: Number(r.cost.toFixed(5)), tools: r.tools });
     if (!r.said) say(text);
+    if (!r.ok && state.earLast) state.earLast.failed = true;
     show({ state: r.ok ? 'done' : 'error', title: r.ok ? 'Done' : 'Not done', text: text.slice(0, 260), linger: 6000 });
   }
   async function run(text, forced) {
@@ -1625,6 +1628,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // ---- The Fn key and on-device hearing (ear.js + native/dixi-ear): the helper owns the key, the mic and the
   // speech model. Nothing here touches the renderer's mic or a speech socket, and nothing runs until the whole
   // utterance is final: one hold (or one hands-free lock) is one command. ----
+  // Your own words for the ear (learned from corrections), kept in userData/ear-words.json.
+  const wordsFile = path.join(userData, 'ear-words.json');
+  let myWords = (() => { try { const w = JSON.parse(fs.readFileSync(wordsFile, 'utf8')); return Array.isArray(w) ? w.filter((x) => typeof x === 'string').slice(-200) : []; } catch { return []; } })();
+  const saveWords = () => { try { fs.writeFileSync(wordsFile, JSON.stringify(myWords)); } catch {} };
   const ear = {
     open() {   // Fn went down: the helper is already recording. Stop Dixi talking; warm the planner's connection.
       if (state.talking) toMain('everywhere:kill');
@@ -1644,20 +1651,27 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       if (!/safari|chrome|chromium|brave|edge|arc|vivaldi|opera/i.test(`${c.bundle} ${c.app}`)) return;
       Promise.race([input.browserTab(c.app).catch(() => null), new Promise((r) => setTimeout(r, 400, null))]).then((t) => { if (t?.url && state.heardCtx === ctx) ctx.url = t.url; });
     },
-    cancel() { state.earOpen = false; state.earText = ''; if (state.shown === 'listening') show({ state: 'idle' }); },
+    cancel(why) { if (why === 'esc' && state.earLast && Date.now() - state.earLast.at < 20000) state.earLast.cancelled = true; state.earOpen = false; state.earText = ''; if (state.shown === 'listening') show({ state: 'idle' }); },
     /** The whole utterance, once. Dictation is pasted by the helper (ear.js); a command runs. */
     async final(text, mode) {
       state.earOpen = false; state.earText = '';
       const t = String(text ?? '').trim().slice(0, 4000);
       if (!t) { if (state.shown === 'listening') show({ state: 'idle' }); return; }
       if (mode === 'dictate') { show({ state: 'done', text: t.slice(0, 120), linger: 1200 }); return; }
+      // A retry of something that just went wrong teaches the ear the words it missed (ear.js learnedWords).
+      const prev = state.earLast;
+      state.earLast = { text: t, at: Date.now() };
+      if (prev && Date.now() - prev.at < 20000 && (prev.failed || prev.cancelled)) {
+        const fresh = learnedWords(prev.text, t, myWords);
+        if (fresh.length) { myWords = [...myWords, ...fresh].slice(-200); saveWords(); ear.refresh?.(); act.log({ kind: 'step', verb: `learned: ${fresh.join(', ')}` }); }
+      }
       show({ state: 'thinking', title: t.slice(0, 80) });
       setTimeout(() => { if (state.shown === 'thinking' && state.runId === state.heardId) show({ state: 'thinking', title: t.slice(0, 80), text: 'Working on it…' }); }, 200);
       await run(t);
     },
     stop: () => stopAll(),
     unavailable(why) { act.log({ kind: 'error', text: `ear: ${why}` }); },
-    vocab: async () => [...new Set([...(await installedApps().catch(() => [])), ...commands.map((c) => c.phrase ?? c.name).filter(Boolean), 'Dixi'])].slice(0, 100),
+    vocab: async () => [...new Set(['Dixi', ...myWords.slice().reverse(), ...commands.map((c) => c.phrase ?? c.name).filter(Boolean), ...(await installedApps().catch(() => []))])].slice(0, 100),
   };
   // ⌥⇧Space: take what's selected (text, a picture, files), then listen for what to do with it.
   async function selectionKey() {

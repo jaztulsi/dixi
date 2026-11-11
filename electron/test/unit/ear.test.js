@@ -100,3 +100,12 @@ test('findEar: the packaged helper first, then the release build, else null', ()
   assert.equal(findEar('/app', { exists: () => true, resources: '/res' }), '/res/dixi-ear');
   assert.equal(findEar('/app', { exists: () => false, resources: '/res' }), null);
 });
+
+import { learnedWords } from '../../src/main/ear.js';
+test('learning from corrections: the new names in a quick retry, not a whole new sentence', () => {
+  assert.deepEqual(learnedWords('open discored', 'open Discord'), ['Discord']);
+  assert.deepEqual(learnedWords('text john about lunch', 'text Jon Smyth about lunch'), ['Jon', 'Smyth']);
+  assert.deepEqual(learnedWords('open discored', 'open Discord', ['discord']), [], 'already known');
+  assert.deepEqual(learnedWords('open Safari', 'what is the weather like in Tokyo tomorrow morning'), [], 'a different command');
+  assert.deepEqual(learnedWords('open notes', 'open the notes'), [], 'only common words changed');
+});

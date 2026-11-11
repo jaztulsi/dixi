@@ -15,6 +15,19 @@ import { fnGestures } from './ptt.js';
 import { stripName } from './plan.js';
 export { stripName };
 
+/**
+ * Learning from corrections: you say a command, it goes wrong (or you cancel it), and within 20 s you say it again
+ * differently. The words of the retry that weren't in the first try (names, mostly) are the ones the ear misheard,
+ * so they go into your own word list, which biases recognition from then on. Returns the new words (≤ 3).
+ */
+const COMMON = new Set('a an the and or then to on in at for of my me it this that please open search find go play quit switch close new make set turn up down with from is are be can you i'.split(' '));
+export function learnedWords(first, retry, known = []) {
+  const words = (s) => String(s ?? '').match(/[\p{L}\p{N}][\p{L}\p{N}'’.-]*/gu) ?? [];
+  const had = new Set(words(first).map((w) => w.toLowerCase())), have = new Set(known.map((w) => w.toLowerCase()));
+  const fresh = words(retry).filter((w) => w.length >= 3 && !COMMON.has(w.toLowerCase()) && !had.has(w.toLowerCase()) && !have.has(w.toLowerCase()));
+  return fresh.length && fresh.length <= 3 ? [...new Set(fresh)] : [];   // a whole new sentence isn't a correction
+}
+
 /** Where the built helper is (packaged resources first, then the dev build), or null. */
 export function findEar(root, { exists = fs.existsSync, resources = process.resourcesPath } = {}) {
   const at = [resources && path.join(resources, 'dixi-ear'), path.join(root, 'native/dixi-ear/.build/release/dixi-ear'), path.join(root, 'native/dixi-ear/.build/debug/dixi-ear')].filter(Boolean);
@@ -95,5 +108,6 @@ export function startEar({ bin, args = [], api, spawn = nodeSpawn, log = () => {
     stop() { stopped = true; send({ cmd: 'quit' }); child?.kill(); },
     send, state: () => ({ running: Boolean(child), ready, stats }),
     key: gesture,   // for a keyboard without Fn handled elsewhere, and for tests
+    refreshVocab: () => Promise.resolve(api.vocab?.()).then((words) => words?.length && send({ cmd: 'vocab', words })).catch(() => {}),
   };
 }
