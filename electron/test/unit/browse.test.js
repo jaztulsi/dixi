@@ -1,0 +1,32 @@
+// Which spoken commands go to the page in your browser, and that "this" never guesses.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { forPage, underPointer, jsOffHelp } from '../../src/main/browse.js';
+
+test('page commands go to the browser in front: rules for the common ones, the model only for the rest', () => {
+  for (const said of ['add this to my cart', 'add the first one to my cart', 'remove it', 'remove the milk from my cart', 'take the bagels out of my cart',
+    'add two oat milks to my cart', 'make it two', 'open the second one', 'go back', 'scroll down', 'go to my cart',
+    'what does this page say about returns' /* recognized by rule; only the answer needs a model */]) assert.equal(forPage(said), 'rule', said);
+  for (const said of ['go there', 'search for running shoes', 'click sign in', 'sort by lowest price']) assert.equal(forPage(said), 'model', said);
+  for (const said of ['open Notes', 'turn the volume down', 'quit Spotify']) assert.equal(forPage(said), null, said);
+});
+
+test('"this" under the pointer: a card or link the pointer is on; between products is nothing, never the first link', () => {
+  const page = (els) => vm.runInNewContext(underPointer({ x: 50, y: 60 }), {
+    screenX: 0, screenY: 0, outerWidth: 800, innerWidth: 800, outerHeight: 600, innerHeight: 600, String,
+    getComputedStyle: (e) => ({ position: e.pos ?? 'static' }),
+    document: { elementsFromPoint: () => els },
+  });
+  const card = { innerText: 'Oat milk  $4', querySelector: () => ({ href: 'https://s.example/p/oat' }) };
+  const inCard = { nodeType: 1, parentElement: null, closest: (sel) => (sel === 'a[href]' ? null : card) };
+  const banner = { nodeType: 1, pos: 'fixed', parentElement: null, closest: () => null };
+  const gap = { nodeType: 1, parentElement: null, closest: () => null };
+  assert.equal(JSON.stringify(page([banner, inCard])), JSON.stringify({ href: 'https://s.example/p/oat', text: 'Oat milk $4' }), 'a cookie banner on top is looked through');
+  assert.equal(page([gap]), null);
+});
+
+test('when the browser refuses page scripts, Dixi says exactly where to turn them on', () => {
+  assert.match(jsOffHelp({ app: 'Google Chrome', kind: 'chromium' }), /View → Developer → "Allow JavaScript from Apple Events"/);
+  assert.match(jsOffHelp({ app: 'Safari', kind: 'safari' }), /Develop → "Allow JavaScript from Apple Events"/);
+});

@@ -43,6 +43,10 @@ export function startServer({ seed = 1, port = 0, world = makeWorld(seed) } = {}
   const log = (req, type, data = {}) => events.push({ t: Date.now(), case: req.headers['x-dixi-case'] ?? '', type, host: hostOf(req), ...data });
   const hostOf = (req) => (req.headers.host ?? '').replace(/:\d+$/, '').toLowerCase().replace(/^www\./, '');
 
+  const carts = {};   // brand id → [{sku, qty}]
+  const cartLines = (b) => (carts[b.id] ?? []).map((l) => { const it = b.items.find((x) => x.sku === l.sku); const n = esc(it?.name ?? l.sku);
+    return `<div class="line" data-sku="${l.sku}"><a href="/item/${l.sku}">${n}</a> <label>Qty <select aria-label="Quantity for ${n}" onchange="fetch('/api/cart/qty',{method:'POST',body:JSON.stringify({sku:'${l.sku}',qty:this.value})}).then(()=>window.cartRefresh&&cartRefresh())">${[1, 2, 3, 4, 5].map((q) => `<option${q === l.qty ? ' selected' : ''}>${q}</option>`).join('')}</select></label>
+      <button aria-label="Remove ${n}" onclick="fetch('/api/cart/remove',{method:'POST',body:JSON.stringify({sku:'${l.sku}'})}).then(()=>{this.closest('.line').remove();window.cartRefresh&&cartRefresh();document.getElementById('cart-lines').insertAdjacentHTML('beforebegin','<p role=status>${n} was removed from your cart.</p>')})">Remove</button></div>`; }).join('') || '<p>Your cart is empty.</p>';
   function handle(req, res) {
     const host = hostOf(req);
     const url = new URL(req.url, `https://${host}`);
@@ -67,7 +71,7 @@ export function startServer({ seed = 1, port = 0, world = makeWorld(seed) } = {}
       const c = url.searchParams.get('case');
       return send(res, 200, JSON.stringify(c ? events.filter((e) => e.case === c) : events), 'application/json');
     }
-    if (url.pathname === '/__reset') { events.length = 0; return send(res, 200, 'ok'); }
+    if (url.pathname === '/__reset') { events.length = 0; for (const k of Object.keys(carts)) delete carts[k]; return send(res, 200, 'ok'); }
     if (url.pathname === '/__world') return send(res, 200, JSON.stringify(world), 'application/json');
     return send(res, 404, 'no');
   }
@@ -103,7 +107,11 @@ export function startServer({ seed = 1, port = 0, world = makeWorld(seed) } = {}
     }
     if (p === '/manifest.json') return send(res, 200, JSON.stringify({ name: b.name, short_name: b.name }), 'application/json');
     if (p === '/__event' && req.method === 'POST') return body(req).then((d) => { try { const e = JSON.parse(d); log(req, e.type, { brand: b.id, ...e.data }); } catch {} send(res, 204, ''); });
-    if (p === '/api/cart' && req.method === 'POST') return body(req).then((d) => { const e = JSON.parse(d || '{}'); log(req, 'cart_add', { brand: b.id, sku: e.sku, qty: e.qty ?? 1, options: e.options ?? null }); send(res, 200, '{"ok":true}', 'application/json'); });
+    // The cart, kept here per store (so remove and quantity can be checked too): lines with a quantity and Remove.
+    if (p === '/api/cart/count') return send(res, 200, String((carts[b.id] ?? []).reduce((n, l) => n + l.qty, 0)), 'text/plain');
+    if (p === '/api/cart/remove' && req.method === 'POST') return body(req).then((d) => { const e = JSON.parse(d || '{}'); carts[b.id] = (carts[b.id] ?? []).filter((x) => x.sku !== e.sku); log(req, 'cart_remove', { brand: b.id, sku: e.sku }); send(res, 200, '{"ok":true}', 'application/json'); });
+    if (p === '/api/cart/qty' && req.method === 'POST') return body(req).then((d) => { const e = JSON.parse(d || '{}'); const l = (carts[b.id] ?? []).find((x) => x.sku === e.sku); if (l) l.qty = Number(e.qty) || 1; log(req, 'cart_qty', { brand: b.id, sku: e.sku, qty: Number(e.qty) || 1 }); send(res, 200, '{"ok":true}', 'application/json'); });
+    if (p === '/api/cart' && req.method === 'POST') return body(req).then((d) => { const e = JSON.parse(d || '{}'); const c = (carts[b.id] ??= []); const l = c.find((x) => x.sku === e.sku); if (l) l.qty += e.qty ?? 1; else c.push({ sku: e.sku, qty: e.qty ?? 1 }); log(req, 'cart_add', { brand: b.id, sku: e.sku, qty: e.qty ?? 1, options: e.options ?? null }); send(res, 200, '{"ok":true}', 'application/json'); });
     if (p === '/api/order' && req.method === 'POST') { log(req, 'order_placed', { brand: b.id }); return send(res, 200, '{"ok":true}', 'application/json'); }
     if (p === '/frame/search') return send(res, 200, `<!doctype html><body style="margin:0">${searchForm(b, 'form', '_top')}</body>`);
 
@@ -127,7 +135,7 @@ export function startServer({ seed = 1, port = 0, world = makeWorld(seed) } = {}
       if (isDoc) log(req, item[1] === 'watch' ? 'watch' : 'item', { brand: b.id, sku: it.sku });
       return send(res, 200, layout(b, item[1] === 'watch' ? watch(b, it) : itemPage(b, it)));
     }
-    if (p === '/cart') return send(res, 200, layout(b, `<main><h1>${t(b, 'Cart')}</h1><div id="cart-lines"></div><a class="btn" href="/checkout">${t(b, 'Check out')}</a></main>`));
+    if (p === '/cart') return send(res, 200, layout(b, `<main><h1>${t(b, 'Cart')}</h1><div id="cart-lines">${cartLines(b)}</div><a class="btn" href="/checkout">${t(b, 'Check out')}</a></main>`));
     if (p === '/checkout' || p === '/review') {
       if (isDoc) log(req, 'checkout', { brand: b.id });
       return send(res, 200, layout(b, `<main><h1>Review your order</h1><p>Deliver to: 1 Fixture Way</p><div id="cart-lines"></div>
@@ -260,6 +268,8 @@ ${b.quirks.ad && tag === 'video' ? '<div id="ad" class="ad-showing">Ad · <butto
 // Page-side behavior of the quirks, plus media/cart events reported to the log.
 const CLIENT = (b) => `(() => {
 const ev = (type, data) => fetch('/__event', {method: 'POST', body: JSON.stringify({type, data})});
+window.cartRefresh = () => fetch('/api/cart/count').then((r) => r.text()).then((n) => { const e = document.getElementById('cartn'); if (e) e.textContent = n; });
+if (document.getElementById('cartn')) cartRefresh();
 ${b.quirks.title === 'spa' ? `setTimeout(() => { document.title = ${JSON.stringify(b.name)}; }, 300);` : ''}
 const ck = document.getElementById('cookie'); if (ck) { if (document.cookie.includes('ck=1')) ck.remove(); else document.getElementById('cookie-ok').onclick = () => { document.cookie = 'ck=1;path=/'; ck.remove(); ev('cookie_accept', {}); }; }
 const stog = document.getElementById('stog'); if (stog) stog.onclick = () => { document.getElementById('sbox').hidden = false; document.querySelector('#sbox input').focus(); };
@@ -288,7 +298,7 @@ const add = document.getElementById('add'); if (add) { const sku = location.path
   const opts = () => Object.fromEntries([...document.querySelectorAll('fieldset')].map((f) => [f.querySelector('legend').textContent, (f.querySelector('input:checked') || {}).value || null]));
   document.querySelectorAll('fieldset input').forEach((i) => i.addEventListener('change', () => { add.disabled = Object.values(opts()).some((v) => !v); }));
   const put = () => fetch('/api/cart', {method: 'POST', body: JSON.stringify({sku, qty: Number(document.getElementById('qty').value) || 1, options: document.querySelector('fieldset') ? opts() : null})});
-  add.onclick = () => put().then(() => { const n = document.getElementById('cartn'); if (n) n.textContent = Number(n.textContent) + 1; add.textContent = 'Added'; });
+  add.onclick = () => put().then(() => { const n = document.getElementById('cartn'); if (n) n.textContent = Number(n.textContent) + 1; add.textContent = 'Added'; window.cartRefresh && cartRefresh(); });
   document.getElementById('buy').onclick = () => put().then(() => { location.href = '/checkout'; }); }
 // Media: report what the player does.
 const pl = document.getElementById('player'); if (pl) {

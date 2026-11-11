@@ -59,6 +59,9 @@ export class Executor {
    *              catalog (Apple shortcut) | null, searchURL template for web questions, trace}
    */
   constructor(deps) { Object.assign(this, deps); }
+  /** The app's helpers (preconnect, search discovery): window.dixi in Dixi's own browser, injected when the
+   *  executor drives your own browser from the main process. */
+  get host() { return this.dixi ?? globalThis.window?.dixi; }
 
   async run(step, said, signal) {
     const fn = this[`do_${step.act}`];
@@ -86,10 +89,10 @@ export class Executor {
    */
   prefetch(intent) {
     for (const st of intent?.steps ?? []) {
-      if (st.url) { window.dixi?.preconnect?.(st.url); continue; }
+      if (st.url) { this.host?.preconnect?.(st.url); continue; }
       if (st.act === 'order' && !st.said && this.catalog) {
         const fam = this.catalog.match(st.item);
-        if (fam?.url) window.dixi?.preconnect?.(productPage(st.item) ?? fam.url);
+        if (fam?.url) this.host?.preconnect?.(productPage(st.item) ?? fam.url);
         if (fam) continue;
       }
       if (!['open', 'search', 'find_item', 'order'].includes(st.act)) continue;
@@ -97,8 +100,8 @@ export class Executor {
       if (!said) continue;
       this.resolve({ said, guess: st.guess ?? '', urls: st.urls ?? [], fast: !st.noFast }).then((r) => {
         if (r?.status !== 'ok') return;
-        window.dixi?.preconnect?.(r.url);
-        if (st.act !== 'open' && !r.searchTemplate) window.dixi?.discoverSearch?.(r.url);
+        this.host?.preconnect?.(r.url);
+        if (st.act !== 'open' && !r.searchTemplate) this.host?.discoverSearch?.(r.url);
       }).catch(() => {});
     }
   }
@@ -268,8 +271,8 @@ export class Executor {
     // First visit: read the site's own search URL from its home page HTML (a few hundred ms) instead of
     // loading the whole home page and typing. Only a template on the site's own domain is trusted.
     const domain = (h) => String(h ?? '').split('.').slice(-2).join('.');
-    if (!tpl && !site.here && site.url && window.dixi?.discoverSearch) {
-      const found = await Promise.race([window.dixi.discoverSearch(site.url).catch(() => null), sleep(900).then(() => null)]);
+    if (!tpl && !site.here && site.url && this.host?.discoverSearch) {
+      const found = await Promise.race([this.host.discoverSearch(site.url).catch(() => null), sleep(900).then(() => null)]);
       if (found && domain(hostOf(found.replace('{q}', 'x'))) === domain(site.host)) tpl = found;
     }
     if (tpl) {
@@ -288,7 +291,7 @@ export class Executor {
     // Shop sites build their header with JavaScript after the page arrives: look for a few seconds.
     let f = await this.waitFor(() => this.tabs.dx('findSearch'), (x) => x && typeof x === 'object' && (x.how !== 'none' || x.opensearch), 3000);
     if (f?.opensearch) {
-      const t = await window.dixi.openSearchTemplate(f.opensearch).catch(() => null);
+      const t = await (this.host?.openSearchTemplate?.(f.opensearch) ?? Promise.resolve(null)).catch(() => null);
       if (t) {
         await this.tabs.navigate(t.replace('{q}', encodeURIComponent(query)));
         if (await this.searchLanded(query)) { this.learnTemplate(site, query); return ok(`${site.name}: “${query}”`); }
@@ -791,8 +794,11 @@ export class Executor {
     // You named this line and asked for it out: the gate's "delete" confirmation is for the agent, not you.
     const r = line.remove ? await this.tabs.dx('clickRef', line.remove, true) : await this.tabs.dx('setLineQty', line.qty, 0);
     if (r !== 'ok' && !String(r).startsWith('ok')) return fail(`I couldn't press remove for ${name}`);
-    const words = tokens(name);
-    const still = (l) => l.some((x) => words.every((w) => tokens(`${x.removeName} ${x.text}`).includes(w)));
+    // Gone = fewer lines with exactly this name than before (another line sharing its words, "Premium laptop"
+    // next to "laptop", is not this one still being there).
+    const same = (l) => l.filter((x) => normName(lineName(x)) === normName(name)).length;
+    const before = same(lines);
+    const still = (l) => same(l) >= before;
     return await this.lineGone(was, still) ? ok(`Removed ${name} from your cart`) : fail(`I pressed remove for ${name}, but it's still in the cart`);
   }
 

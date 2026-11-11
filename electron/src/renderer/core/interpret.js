@@ -229,6 +229,7 @@ const NAV_WORDS = { back: 'back', 'previous page': 'back', 'last page': 'back', 
  * @param ctx {names: learned site names (normalized) → true}
  * @returns intent or null
  */
+const THIS_ONE = /^(?:it|this|that|these|those|this one|that one|them)$/;
 export function fastPath(text, ctx = {}) {
   const t = String(text).toLowerCase().replace(LEAD, '').replace(TAIL, '').replace(/[“”"]/g, '').trim();
   if (!t) return null;
@@ -243,6 +244,16 @@ export function fastPath(text, ctx = {}) {
   // "add the first one to my cart": that result, then into the cart.
   const addNth = t.match(/^(?:add|put) (?:the )?(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last)(?: one| result| item| product| listing)?(?: (?:to|in|into) (?:my |the )?(?:cart|bag|basket))?$/);
   if (addNth) return { steps: [step('add_to_cart', { n: ORDINAL[addNth[1]] })], clarify: '' };
+  // "remove the Premium sunglasses from my cart", "take the milk out of my bag": that line, by its words.
+  const rm = t.match(/^(?:can you |please )?(?:remove|delete|take out|take|get rid of) (?:the |my |all the |all my )?(.+?) (?:from|out of|off|off of) (?:my |the )?(?:shopping )?(?:cart|bag|basket|trolley)$/);
+  if (rm && !THIS_ONE.test(rm[1])) return { steps: [step('remove', { item: rm[1] })], clarify: '' };
+  // "add a bagel to my cart", "put two oat milks in my basket": that thing from the store you're on
+  // (its own search, the best match, its add button). "add it / this" is above; a store named is the model's.
+  const add = t.match(/^(?:can you |please )?(?:add|put|throw) (?:(a|an|some|one|two|three|four|five|six|\d+) )?(?:of )?(?:the )?(.+?) (?:to|in|into|in to) (?:my |the )?(?:shopping )?(?:cart|bag|basket|trolley)$/);
+  if (add && !THIS_ONE.test(add[2]) && !/\b(?:from|on|at) [a-z]/.test(add[2])) {
+    const n = Number(add[1]) || COUNT[add[1]] || 0;
+    return { steps: [step('order', { item: add[2], qty: n > 1 ? n : 0 })], clarify: '' };
+  }
   // "make it two": how many of what's on screen (the cart's only line, or the product page).
   const qty = t.match(/^(?:make it|make that|set it to|change it to|(?:set|change) the quantity to) (\d+|two|to|too|three|four|five|six|seven|eight|nine|ten)$/);
   if (qty) return { steps: [step('quantity', { value: 'set', qty: Number(qty[1]) || COUNT[qty[1]] })], clarify: '' };
