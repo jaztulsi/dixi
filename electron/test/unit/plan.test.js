@@ -209,7 +209,7 @@ test('recorded planner replies pass the checks and keep their meaning', async ()
   const { apps: live, fixtures } = createRequire(import.meta.url)('../fixtures/plan-live.json');
   const want = {
     'Turn the volume down, open my notes, and start a new note': ['instant', 'instant', 'instant'],
-    'buy a bagel from Safeway': ['web'],
+    'buy a bagel from Safeway': ['instant'],   // desktop.js: Safeway's own search for "bagel", no planner, never Google
     'open Safari and go to the New York Times website': ['instant', 'open'],
     'make a new folder on my desktop called homework': ['instant'],   // desktop.js mkdir now: no planner call
   };

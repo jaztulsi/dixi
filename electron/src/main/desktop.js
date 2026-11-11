@@ -33,6 +33,24 @@ const APPNAME = String.raw`[a-z0-9][a-z0-9 .&+'’-]{0,38}?`;
 const NOT_TLD = /\.(md|js|ts|py|txt|pdf|docx?|xlsx?|pptx?|png|jpe?g|gif|zip|sh|app|exe|json|html?|css|csv|rtf|mov|mp[34]|dmg|pkg|log)$/i;
 const MEDIA_NOUN = String.raw`(?:music|song|track|playback|spotify|apple music)`;
 
+// Each site's own search page: "search X on Y" is one link, no model. The query is appended, URL-encoded.
+const SEARCH = {
+  google: 'www.google.com/search?q=', youtube: 'www.youtube.com/results?search_query=', amazon: 'www.amazon.com/s?k=', wikipedia: 'en.wikipedia.org/w/index.php?search=',
+  maps: 'maps.apple.com/?q=', directions: 'maps.apple.com/?daddr=', googlemaps: 'www.google.com/maps/search/',
+  spotify: 'open.spotify.com/search/', github: 'github.com/search?q=', reddit: 'www.reddit.com/search/?q=', gmail: 'mail.google.com/mail/u/0/#search/',
+  safeway: 'www.safeway.com/shop/search-results.html?q=', walmart: 'www.walmart.com/search?q=', target: 'www.target.com/s?searchTerm=', ebay: 'www.ebay.com/sch/i.html?_nkw=',
+  chatgpt: 'chatgpt.com/?q=', claude: 'claude.ai/new?q=', perplexity: 'www.perplexity.ai/search?q=', x: 'x.com/search?q=', linkedin: 'www.linkedin.com/search/results/all/?keywords=',
+};
+const SEARCH_NAME = { google: 'Google', youtube: 'YouTube', amazon: 'Amazon', wikipedia: 'Wikipedia', googlemaps: 'Google Maps', spotify: 'Spotify', github: 'GitHub', reddit: 'Reddit', gmail: 'Gmail',
+  safeway: 'Safeway', walmart: 'Walmart', target: 'Target', ebay: 'eBay', chatgpt: 'ChatGPT', claude: 'Claude', perplexity: 'Perplexity', x: 'X', linkedin: 'LinkedIn' };
+// How each is said (longest first, so "google maps" is never Google with "maps" left over).
+const SAID = { 'google maps': 'googlemaps', 'apple maps': 'maps', 'you tube': 'youtube', 'git hub': 'github', 'chat gpt': 'chatgpt', twitter: 'x', 'e bay': 'ebay', 'linked in': 'linkedin', 'g mail': 'gmail', 'my email': 'gmail', 'my gmail': 'gmail', 'safe way': 'safeway' };
+const STORES = ['amazon', 'safeway', 'walmart', 'target', 'ebay'];
+const said = (keys) => [...keys, ...Object.keys(SAID).filter((k) => keys.includes(SAID[k]))].sort((a, b) => b.length - a.length).join('|');
+const SITE_SAID = `${said(Object.keys(SEARCH).filter((k) => k !== 'directions' && k !== 'x'))}|twitter`;   // "x" alone is too short to trust; "twitter" is said
+const STORE_SAID = said(STORES);
+const siteKey = (w) => { const k = w.toLowerCase().replace(/\s+/g, ' '); return SAID[k] ?? k; };
+
 const rule = (verb, body, args = () => ({})) => ({ verb, re: new RegExp(`^${PRE}(?:${body})${POST}$`, 'i'), args });
 const RULES = [
   rule('volume', String.raw`(?:set |turn |put )?(?:the )?(?:volume|sound)(?: level)?(?: to| at)? (\d{1,3})(?: ?%| percent)?`, (m) => ({ op: 'set', pct: Math.min(100, Number(m[1])) })),
@@ -46,7 +64,9 @@ const RULES = [
   rule('media', String.raw`skip(?: the| this)? (?:song|track)|(?:play )?(?:the )?next (?:song|track)`, () => ({ op: 'next' })),
   rule('media', String.raw`(?:play )?(?:the )?(?:previous|last) (?:song|track)|go back (?:a|one) (?:song|track)`, () => ({ op: 'previous' })),
   rule('media', String.raw`${WHAT}(?: song| track)? (?:now )?playing(?: right now)?|what (?:song|track) is (?:this|playing)(?: right now)?|${WHAT} this (?:song|track)`, () => ({ op: 'now' })),
-  rule('search', String.raw`(?:search|look up|look for|find)(?: for)? (.{1,80}?) (?:on|in|with|using) (google|youtube|amazon|wikipedia)|(?:search|check) (google|youtube|amazon|wikipedia) for (.{1,80})|google (.{1,80})`, (m) => ({ site: (m[2] ?? m[3] ?? 'google').toLowerCase(), q: (m[1] ?? m[4] ?? m[5]).trim() })),
+  rule('search', String.raw`(?:search|look up|look for|find)(?: for)? (.{1,80}?) (?:on|in|with|using) (?:the )?(${SITE_SAID})(?: website| app)?|(?:search|check) (?:the )?(${SITE_SAID}) for (.{1,80})|google (.{1,80})`, (m) => ({ site: siteKey(m[2] ?? m[3] ?? 'google'), q: (m[1] ?? m[4] ?? m[5]).trim() })),
+  // "buy a bagel from Safeway": that store's own search for the thing. Nothing is bought: it's a search page.
+  rule('search', String.raw`(?:buy|order|get|shop for|pick up)(?: me)? (?:an? |some |the )?(.{1,80}?) (?:from|on|at) (${STORE_SAID})`, (m) => ({ site: siteKey(m[2]), q: m[1].trim() })),
   rule('search', String.raw`(?:get |give me |show me )?directions to (.{1,80})|(?:show|find) (.{1,80}?) on (?:the )?maps?`, (m) => ({ site: m[1] ? 'directions' : 'maps', q: (m[1] ?? m[2]).trim() })),
   rule('folder', String.raw`open (?:up )?(?:my |the )?(downloads|documents|desktop|applications|pictures)(?: folder)?|open (?:up )?(?:my |the )?(music|movies|home) folder`, (m) => ({ dir: (m[1] ?? m[2]).toLowerCase() })),
   rule('mkdir', String.raw`(?:make|create|add|start)? ?(?:a )?new folder(?: (?:on|in) (?:my |the )?(desktop|documents|downloads))?(?: folder)? (?:called|named) ["“']?([^"”'/\\:]{1,60}?)["”']?(?: (?:on|in) (?:my |the )?(desktop|documents|downloads))?`, (m) => ({ dir: (m[1] ?? m[3] ?? 'desktop').toLowerCase(), name: m[2].trim() })),
@@ -103,8 +123,6 @@ const KEY_SAID = [
   ['ctrl+cmd+f', '(?:go |enter |exit |leave )?full ?screen(?: mode)?'],
 ];
 const KEY_RULES = KEY_SAID.map(([combo, body]) => rule('keys', body, () => ({ combo })));
-const SEARCH = { google: 'www.google.com/search?q=', youtube: 'www.youtube.com/results?search_query=', amazon: 'www.amazon.com/s?k=', wikipedia: 'en.wikipedia.org/w/index.php?search=', maps: 'maps.apple.com/?q=', directions: 'maps.apple.com/?daddr=' };
-const SEARCH_NAME = { google: 'Google', youtube: 'YouTube', amazon: 'Amazon', wikipedia: 'Wikipedia' };
 const FOLDER = { downloads: 'Downloads', documents: 'Documents', desktop: 'Desktop', applications: '/Applications', pictures: 'Pictures', music: 'Music', movies: 'Movies', home: '' };
 const mediaApp = (s) => (/spotify/i.test(s) ? 'Spotify' : /apple music/i.test(s) ? 'Music' : undefined);
 const NOT_APPS = /^(this|that|it|everything|all|dixi|app|the app|here)$/i;

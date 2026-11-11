@@ -21,7 +21,7 @@ import { unsafe } from './safesite.js';
 import { exec as macExec, openTarget, runScript, check as checkScript, installedApps } from './mac.js';
 import { mark } from './timing.js';
 import { plan, split } from './plan.js';
-import { ENDPOINTS, chat, fastChat, prewarm } from './providers.js';
+import { ENDPOINTS, chat, fastChat, fastModels, prewarm } from './providers.js';
 import { plainError } from './tools.js';
 import { makeAsk } from './ask.js';
 import { openIndex } from './index.js';
@@ -848,13 +848,19 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   const newPlan = async () => ({ steps: [], results: [], planning: 0, wake: null, app: (await input.frontApp()).name, apps: await installedApps().catch(() => []) });
   // The planner's fast try (plan.js): DIXI_PLAN_FAST="provider:model"; unset = Haiku only until the live A/B
   // (eval/plan-ab.mjs) shows one matches Haiku. 2.5 s at most, then Haiku.
-  const FAST = env.DIXI_PLAN_FAST ?? '';
-  const fastPlanner = FAST && config.keys[FAST.split(':')[0]] ? fastChat(config, spend, FAST) : null;
+  // Fastest first: DIXI_PLAN_FAST="provider:model[,provider:model]" or, unset, Cerebras then Groq (whichever keys exist).
+  // Each gets 2.5 s; a refusal, a timeout or bad JSON moves on to the next. No fast key: null, and Haiku plans as before.
+  const FAST = fastModels(env, config.keys);
+  const fastPlanner = FAST.length ? async (body, sig) => {
+    let last;
+    for (const m of FAST) { try { return await fastChat(config, spend, m)(body, sig); } catch (err) { last = err; if (sig?.aborted) break; } }
+    throw last;
+  } : null;
   function planInto(q, text, signal, runId, stream = true) {
     q.planning++;
-    return plan(text, { app: q.app }, {
+    return plan(text, { app: q.app, context: heardContext() }, {
       apps: q.apps, commands, home: os.homedir(), recentFiles: Date.now() - (state.filesAt ?? 0) < 300000, signal,
-      model: (body, sig, partial) => claude(body, sig, [], partial), fast: fastPlanner,
+      model: config.keys.anthropic && !q.fastOnly ? (body, sig, partial) => claude(body, sig, [], partial) : null, fast: fastPlanner,
       ...(stream && { onStep: (step) => { q.steps.push(step); q.wake?.(); } }),
     }).catch((err) => ({ steps: [], why: err.message }))
       .finally(() => { mark(runId, 'planned'); q.planning--; q.wake?.(); });
@@ -882,7 +888,10 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   async function doStep(s, prior, signal) {
     if (s.do === 'instant') {
       if (s.kind === 'command') { await runCommand(s.command); return { ok: true, said: true }; }   // it says what it did
-      if (s.kind === 'open') return (await input.openApp(s.app)) ? { ok: true } : { ok: false, error: `I couldn't open ${s.app}` };
+      if (s.kind === 'open') {   // checked: done means the app is in front (or at least running), not that `open` returned
+        const r = await openTarget({ app: s.app }).catch((err) => ({ ok: false, error: err.message }));
+        return r.ok ? { ok: true } : (await input.openApp(s.app)) ? { ok: true } : { ok: false, error: r.error ?? `I couldn't open ${s.app}` };
+      }
       if (s.kind === 'quick') { const qa = await quickAnswer(s.clause, { webAnswer }); return qa ? { ok: true, say: qa.say, out: qa.say } : { ok: false, error: "I couldn't work that out" }; }
       if (s.kind === 'read') {
         const r = await readOut({ intent: s.intent, claude, image, signal, screenText });
@@ -960,7 +969,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       toMain('everywhere:browse', { text: String(text), id });
     });
   }
-  async function runPlan(q, text, signal) {
+  async function runPlan(q, text, signal, { more = false } = {}) {
     state.plan = q;
     const label = (s) => s.clause.slice(0, 90);
     let i = 0, spoke = false;
@@ -982,9 +991,12 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
           if (signal.aborted) return;
           if (!r.ok) {
             const why = `Step ${i}, “${label(s)}”, didn't work${r.error ? `: ${String(r.error).replace(/[.\s]+$/, '')}` : ''}.`;
-            show({ state: 'error', title: text.slice(0, 80), text: why, linger: 12000 }); if (!r.said) say(why); return;   // a refused screen step already said why
+            show({ state: 'error', title: text.slice(0, 80), text: why, linger: 12000 }); if (!r.said) say(why); return false;   // a refused screen step already said why
           }
-          if (r.say) say(r.say);
+          // Dixi speaks less: the island shows what was done; the voice is for answers (and for anything, with the "chatty" pref).
+          const answer = s.do === 'answer' || s.kind === 'quick' || s.kind === 'read' || (s.kind === 'desktop' && (/^(?:battery|timers)$/.test(s.intent?.verb) || s.intent?.op === 'now'));
+          if (r.say && (answer || prefs.chatty)) say(r.say);
+          if (r.say) q.last = r.say;
           spoke ||= Boolean(r.say || r.said);
           if (r.out) q.results.push(`${label(s)} → ${String(r.out).slice(0, 200)}`);
           continue;
@@ -993,15 +1005,43 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
         await new Promise((res) => { q.wake = res; signal.addEventListener('abort', res, { once: true }); });
         q.wake = null;
       }
-      if (!q.steps.length) { say("I couldn't plan that."); return; }
-      show({ state: 'done', title: text.slice(0, 80), steps: q.steps.map((x) => ({ label: label(x), state: 'done' })).slice(-6), text: 'Done.', linger: 4000 });
-      if (!spoke) say('Done.');
+      if (!q.steps.length) { say("I couldn't plan that."); return false; }
+      if (more) return true;   // the rest of the command is still to do (the agent's part): no "Done." yet
+      show({ state: 'done', title: text.slice(0, 80), steps: q.steps.map((x) => ({ label: label(x), state: 'done' })).slice(-6), text: q.last ?? 'Done.', linger: 4000 });
+      if (!spoke && prefs.chatty) say('Done.');
+      return true;
     } finally { if (state.plan === q) state.plan = null; }
   }
 
   // ---- The agent (agent.js): one warm Claude Agent SDK session; Dixi's abilities are its tools. ----
   // On unless DIXI_AGENT=0 or the "agent" pref is off. The old router below stays for that case until M3.
-  const agentOn = () => Boolean(config.keys.anthropic) && (prefs.agent ?? (config.env?.DIXI_AGENT ?? process.env.DIXI_AGENT) !== '0');
+  const agentOn = () => Boolean(config.keys.anthropic) && (prefs.agent ?? ((config.env?.DIXI_AGENT ?? process.env.DIXI_AGENT) !== '0'));   // the pref wins; then the env; on by default
+  // What was in front when you started talking (ear.js hands it over at Fn-down); stale after a minute.
+  const heardContext = () => (state.heardCtx && Date.now() - state.heardCtx.at < 60000 ? state.heardCtx : null);
+  /**
+   * Rules and the fast planner, before the agent: the checklist. Every clause code can do alone (plan.js instantOf)
+   * runs at once with no model. What's left goes to the fast planner (Cerebras, Groq); its plan is used only when
+   * every step checks out and none needs the screen. Returns true when the command was handled here; false hands
+   * `rest` (the words not done yet) to the agent.
+   */
+  async function checklist(t, signal, runId) {
+    if (HERE.test(t) || DO_IT.test(t.trim()) || CAL_ADD.test(t) || modeOf(t) === 'hive') return { done: false, rest: t };
+    const q = await newPlan();
+    q.fastOnly = true;
+    const r = await planInto(q, t, signal, runId, false);
+    if (signal.aborted) return { done: true };
+    const steps = r.steps ?? [];
+    const firstHard = steps.findIndex((x) => x.do === 'computer' || (x.do === 'answer' && !x.say) || x.do === 'web');
+    if (!steps.length || firstHard === 0) return { done: false, rest: t };
+    mark(runId, 'routed');
+    if (firstHard < 0) { q.steps = steps; await runPlan(q, t, signal); return { done: true }; }
+    // The sure steps run now; the first unsure one and everything after it are the agent's, told what's already done.
+    q.steps = steps.slice(0, firstHard);
+    const ok = await runPlan(q, t, signal, { more: true });
+    if (!ok || signal.aborted) return { done: true };
+    const rest = steps.slice(firstHard).map((x) => x.clause).join(', then ');
+    return { done: false, rest: `${rest}\n(Already done just now, do not repeat: ${q.steps.map((x) => x.clause).join('; ')})` };
+  }
   const hush = () => {};
   const asOut = (r) => (r.ok ? { ok: true, out: r.out ?? r.say, said: r.said } : { ok: false, error: r.error, said: r.said });
   const HELD = { send: "Sending is off in Dixi's settings (Allow sending). Don't send: leave it open as a visible draft, then tell the user it's ready for them to send.", delete: "Deleting is off in Dixi's settings (Allow deleting). Tell the user that, and do nothing else." };
@@ -1187,7 +1227,11 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       }
       if (UNDO.test(t)) { await input.key('cmd+z'); say('Undone.'); show({ state: 'done', title: 'Undone', text: '⌘Z', linger: 1500 }); return; }
       if (forced === 'type') return await typeOut(text, signal);
-      if (!forced && agentOn() && !tutorIntent(t) && !SCAM_CHECK.test(t) && !REMEMBER.test(t)) return await agentDo(t, signal, runId);
+      if (!forced && agentOn() && !tutorIntent(t) && !SCAM_CHECK.test(t) && !REMEMBER.test(t)) {
+        const c = await checklist(t, signal, runId);
+        if (c.done) return;
+        return await agentDo(c.rest, signal, runId);
+      }
       // Several things in one breath: planned once, then done in order (plan.js).
       if (!forced && split(t).length > 1 && !HERE.test(t) && !DO_IT.test(t) && !tutorIntent(t) && !SCAM_CHECK.test(t) && !CAL_ADD.test(t) && !REMEMBER.test(t) && modeOf(t) !== 'hive') {
         mark(runId, 'routed');
@@ -1560,6 +1604,40 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // Control turned out to be a shortcut (⌃C, ⌃-click): the session is dropped, nothing runs, nothing is said.
   const dropped = () => { if (!ptt.open) return; ptt.end(); state.armed = null; toMain('everywhere:disarm'); if (!busy()) show({ state: 'idle' }); };
   const control = holdToTalk({ onStart: talk, onEnd: letGo, onCancel: dropped });
+  // ---- The Fn key and on-device hearing (ear.js + native/dixi-ear): the helper owns the key, the mic and the
+  // speech model. Nothing here touches the renderer's mic or a speech socket, and nothing runs until the whole
+  // utterance is final: one hold (or one hands-free lock) is one command. ----
+  const ear = {
+    open() {   // Fn went down: the helper is already recording. Stop Dixi talking; warm the planner's connection.
+      if (state.talking) toMain('everywhere:kill');
+      if (config.keys.anthropic) prewarm();
+      state.heardAt = Date.now();
+      mark((state.heardId = `r${state.heardAt.toString(36)}`), 'heard');
+    },
+    show(mode) {
+      state.earOpen = true;
+      ptt.start();   // Esc as a global key too, for a helper without key access
+      show({ state: 'listening', text: '', ...(mode === 'dictate' && { title: 'Dictating' }) });
+    },
+    mode(mode) { if (state.earOpen) show({ state: 'listening', text: state.earText ?? '', ...(mode === 'dictate' && { title: 'Dictating' }) }); },
+    partial(text) { state.earText = String(text ?? '').slice(0, 300); if (state.earOpen) show({ state: 'listening', text: state.earText }); },
+    level(v) { if (state.shown === 'listening') ui('ew:level', Math.max(0, Math.min(1, Number(v) || 0))); },
+    context(c) { state.heardCtx = { ...c, at: Date.now() }; },
+    cancel() { state.earOpen = false; state.earText = ''; ptt.end(); if (state.shown === 'listening') show({ state: 'idle' }); },
+    /** The whole utterance, once. Dictation is pasted by the helper (ear.js); a command runs. */
+    async final(text, mode) {
+      state.earOpen = false; state.earText = ''; ptt.end();
+      const t = String(text ?? '').trim().slice(0, 4000);
+      if (!t) { if (state.shown === 'listening') show({ state: 'idle' }); return; }
+      if (mode === 'dictate') { show({ state: 'done', text: t.slice(0, 120), linger: 1200 }); return; }
+      show({ state: 'thinking', title: t.slice(0, 80) });
+      setTimeout(() => { if (state.shown === 'thinking' && state.runId === state.heardId) show({ state: 'thinking', title: t.slice(0, 80), text: 'Working on it…' }); }, 200);
+      await run(t);
+    },
+    stop: () => stopAll(),
+    unavailable(why) { act.log({ kind: 'error', text: `ear: ${why}` }); },
+    vocab: async () => [...new Set([...(await installedApps().catch(() => [])), ...commands.map((c) => c.phrase ?? c.name).filter(Boolean), 'Dixi'])].slice(0, 100),
+  };
   // ⌥⇧Space: take what's selected (text, a picture, files), then listen for what to do with it.
   async function selectionKey() {
     if (active()) return stopAll();
@@ -1770,5 +1848,5 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
   // The speech connection dropped mid-session (deepgram.js retries and replays the audio): say so, not a frozen "Listening…".
   const reconnecting = (on) => { if (ptt.open && !busy()) show({ state: 'listening', text: on ? 'Reconnecting…' : '' }); };
   // ponytail: hold-⌃ runs a 30 Hz osascript poll, so it's opt-in (DIXI_HOLD_CTRL=1 or prefs.holdCtrl); ⌥Space is the default.
-  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, control: env.DIXI_HOLD_CTRL === '1' || prefs.holdCtrl ? control : null, toggle, set: (k, v) => dashApi.set(k, v), showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
+  return { enabled: true, keepsRunning: true, stop, tray, level, reconnecting, run, ear, voicePath: () => env.DIXI_VOICE_PATH ?? prefs.voicePath ?? 'ear', control: env.DIXI_HOLD_CTRL === '1' || prefs.holdCtrl ? control : null, toggle, set: (k, v) => dashApi.set(k, v), showDashboard: env.DIXI_START !== 'browser' ? openDash : null };
 }

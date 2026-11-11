@@ -255,6 +255,14 @@ export async function chat(config, spend, req, fetchImpl = fetch, { backoffMs = 
   }
 }
 
+/** The planner's fast models, in order: DIXI_PLAN_FAST ("provider:model", comma-separated) or Cerebras then Groq; only those with a key. */
+export const FAST_DEFAULT = ['cerebras:gpt-oss-120b', 'groq:openai/gpt-oss-120b'];
+export function fastModels(env = {}, keys = {}) {
+  const want = String(env.DIXI_PLAN_FAST ?? '').trim();
+  if (want === '0' || want === 'off') return [];
+  return (want ? want.split(',') : FAST_DEFAULT).map((m) => m.trim()).filter((m) => m && keys[m.split(':')[0]]);
+}
+
 /** One quick try (plan.js deps.fast): the OpenAI reply JSON, or a throw on a refusal, an error or after budgetMs. */
 export const fastChat = (config, spend, model, budgetMs = 2500, fetchImpl = fetch) => async (body, signal) => {
   const id = `fast-${performance.now()}-${Math.random()}`, stop = () => abort(id), t = setTimeout(stop, budgetMs);
