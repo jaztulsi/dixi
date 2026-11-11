@@ -684,4 +684,4 @@ Measured here (Linux, offline): npm test 458 pass / 2 fail (both pre-existing: E
 recorded Haiku calls 9 → 5, unplanned/MISS 6 → 0, plan p50 0 ms, p95 2071 ms (the 5 model plans). Bagel/Safeway 1563 ms → 0 ms.
 NOT measured (no Mac, no keys, no Swift here): Fn→mic, release→final, WER, end-to-end ms, idle mic. Helper not compiled.
 ASSUMPTIONS: Foundation Models tier dropped (CLI rate limit; user chose Cerebras). Fn+key cancel is silent always.
-BLOCKED: git push 403 — the Claude GitHub App has no access to jaztulsi/dixi; commits are local to the session.
+Push: first try 403 (no GitHub app access), retried after access came back: pushed to origin/claude/epic-ritchie-k4kr9s.

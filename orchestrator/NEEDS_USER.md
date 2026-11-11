@@ -23,7 +23,7 @@
 ## Nov 11: hold Fn, speak (v4) — what only you can do
 Branch `claude/epic-ritchie-k4kr9s` (built on fix/voice-speed). On the Mac:
 1. **Get the branch:** `cd ~/dixi-integration && git fetch origin && git checkout claude/epic-ritchie-k4kr9s`
-   (if the push didn't reach GitHub, see LOG.md "v4 RESUME": the Claude GitHub App needs access to the repo).
+   (all work is pushed there).
 2. **Build the ear** (Xcode 26 / macOS 26): `cd electron && npm run build:ear`. It was written on Linux and never
    compiled: if it fails, paste the errors back and they get fixed in one round.
 3. **Permissions** for the app that starts Dixi (Electron, or Terminal while developing):
