@@ -510,7 +510,7 @@ export class Executor {
       // with questions that click would answer one ("Add a trade-in") behind the answer loop's back.
       if (!opened && Date.now() - t0 > 600 && Array.isArray(o)) opened = String(await this.tabs.dx('reveal', ADD)).startsWith('opened');
       return null;
-    }, (b) => b, 3000);
+    }, (b) => b, 6000);   // slow product pages (ads still loading) draw the button late; found = returns at once
     this.mark(ready ? 'add button' : 'no add button yet');
     // Choices the page needs before it can add, one question at a time (answering one often reveals the
     // next): what you said, else no paid extras ("No trade-in", "No AppleCare", "carrier later"), else
@@ -662,7 +662,9 @@ export class Executor {
       if (n0 != null && n != null && n > n0) return `count ${n0} → ${n}`;
       if (p.said && saidBefore !== true) return 'added message';
       if (p.cart) return 'cart page';
-      if (p.url === url0 && cartCount(p.s) != null && p.s !== before) return 'cart text';
+      // The cart/button text changing is weak proof: not enough when the store was already showing an error
+      // (Target's "There was a temporary issue": the press does nothing, but the button redraws).
+      if (p.url === url0 && cartCount(p.s) != null && p.s !== before && !errBefore) return 'cart text';
       return null;
     };
     const changed = (p) => why(p) != null;
@@ -701,7 +703,7 @@ export class Executor {
     if (await this.tabs.dx('loginWall')) return ok(`${where} wants you to sign in before adding ${what}. Sign in and say "add it again"`, { login: true });
     const choice = picked.length ? ` (${picked.join(', ')})` : '';
     if (changed(after)) { this.lastAdded = what; return ok(`Added ${what}${choice}${step.qty > 1 ? ` ×${step.qty}` : ''} to your cart at ${where}${step.unheard ? `. It has no “${step.unheard}” option` : ''}`); }
-    return fail(`I pressed “${add.name}” on ${where} but the cart didn't change`);
+    return fail(`I pressed “${add.name}” on ${where} but the cart didn't change${typeof errBefore === 'string' ? `. The page says: “${errBefore.trim()}”` : ''}`);
   }
 
   /** Anything that changes when a cart changes: a count in the header, the button's own text. */
@@ -762,9 +764,11 @@ export class Executor {
   async do_cart() {
     // A cart address isn't always the cart: Amazon's "Added to cart" page lives at /cart/smart-wagon.
     // On a cart path, it's the cart only if it shows lines (or says it's empty).
-    const isCart = async () => CART_PATH.test(pathOf(this.tabs.getCurrentURL())) && (((await this.tabs.dx('cartLines')) ?? []).length > 0
+    // An empty cart is a cart too: its header count says 0 ("cart 0 items"), or it says it's empty.
+    const empty = async () => (await this.tabs.dx('cartBadge')) === 0 && !((await this.tabs.dx('cartLines')) ?? []).length;
+    const isCart = async () => CART_PATH.test(pathOf(this.tabs.getCurrentURL())) && (((await this.tabs.dx('cartLines')) ?? []).length > 0 || await empty()
       || (await this.tabs.exec(null, `/\\b(?:(?:your|the) (?:shopping )?(?:cart|bag|basket|trolley) is (?:currently )?empty|(?:cart|bag|basket) is empty|(?:you have no|there are no|no) items in (?:your|the) (?:shopping )?(?:cart|bag|basket)|empty (?:cart|bag|basket))\\b/i.test(document.body?.innerText.slice(0, 20000) || '')`)) === true);
-    if (await isCart()) return ok('Here is your cart');
+    if (await isCart()) return ok(await empty() ? 'Your cart is empty' : 'Here is your cart');
     await this.tabs.dx('dismissOverlays');
     const b = await this.waitFor(async () => (await this.tabs.dx('cartLink')) ?? this.tabs.dx('findButton', CART), (x) => x, 3000)
       ?? await this.visualPick('the shopping cart, bag or basket icon/link (usually top right)');
@@ -777,7 +781,7 @@ export class Executor {
       const view = await this.waitFor(() => this.tabs.dx('findButton', /^(review|view|go to|see|open)( my| your)? (bag|cart|basket)\b|^(bag|cart|basket)$/i), (x) => x, 1500);
       if (view) await this.clickAndWait(view.ref);
     }
-    if (await this.waitFor(isCart, (x) => x, 7000)) return ok('Here is your cart');   // (Target's cart takes ~3.5 s to show its items)
+    if (await this.waitFor(isCart, (x) => x, 7000)) return ok(await empty() ? 'Your cart is empty' : 'Here is your cart');   // (Target's cart takes ~3.5 s to show its items)
     return fail(`I opened “${b.name.slice(0, 40)}”, but I don't see your cart's items there`);
   }
 

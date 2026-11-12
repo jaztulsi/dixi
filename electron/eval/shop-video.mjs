@@ -58,7 +58,7 @@ const SITES = {
 // ---- the offline fixture stores (always reachable) ----
 const fixture = await startServer({ seed: 3 });
 const SHOPS = fixture.world.brands.filter((b) => ['shop', 'grocery', 'store'].includes(b.kind) && !b.quirks.login && !b.quirks.cookie);
-const offline = shuffle(SHOPS).slice(0, 2);
+const offline = shuffle(SHOPS).slice(0, Number(arg('offline', 2)));
 const fixtureHosts = fixture.world.brands.map((b) => b.host);
 
 // ---- the island page (src/renderer), served locally; its strict CSP is relaxed only to color its strip ----
