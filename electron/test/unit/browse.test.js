@@ -59,3 +59,13 @@ test('a page that refuses AI agents is recognized, in its own words', () => {
   assert.match(run("Access restricted. Continued access by an unauthorized AI agent violates Amazon's Conditions of Use, to which our customers have agreed."), /unauthorized AI agent violates/);
   assert.equal(run('Free shipping on orders over $35. Add to cart.'), null);
 });
+
+test('a site that is down or overloaded is said as that, in its own words; a normal store page is not "down"', () => {
+  const run = (text, links = 3) => vm.runInNewContext(`${PAGE_LIB}; window[${JSON.stringify(DX)}].siteDown()`, {
+    window: {}, crypto: globalThis.crypto, document: { title: '', body: { innerText: text }, querySelectorAll: (q) => (q === 'a[href]' ? { length: links } : []) }, getComputedStyle: () => ({}), location: { href: 'https://x/', pathname: '/' },
+    URL, URLSearchParams, Map, WeakMap, Set, RegExp, String, Number, Array, Object, JSON, Math, Date, Boolean, Symbol, Error, Promise, setTimeout,
+  });
+  assert.match(run("This website is under heavy load (queue full). We're sorry, too many people are accessing this website at the same time."), /under heavy load/);
+  assert.match(run('503 Service Unavailable'), /Service Unavailable/);
+  assert.equal(run('Free shipping. If checkout fails, try again later. Add to cart.', 120), null);
+});

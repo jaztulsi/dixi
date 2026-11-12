@@ -61,6 +61,8 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
     if (intent.steps.every((s) => s.act === 'none')) return { none: true };
     // A "prove you're human" page in front: nothing is pressed on it (Dixi never solves those checks).
     const leaving = intent.steps[0] && (intent.steps[0].act === 'open' || ((intent.steps[0].act === 'search' || intent.steps[0].act === 'order') && intent.steps[0].said));
+    const down = !leaving && (await tabs.dx('siteDown'));
+    if (down) return { ok: false, down: true, message: `${tabs.displayURL() || 'This site'} isn't working right now (it says “${down}”). Try again in a bit.` };
     const refused = !leaving && (await tabs.dx('agentRefused'));
     if (refused) return { ok: false, wall: true, refused: true, message: `${tabs.displayURL() || 'This site'} doesn't allow AI agents (“${refused}”). I stopped; I won't do anything more on this site.` };
     if (!leaving && await walled(tabs)) return { ok: false, wall: true, message: `${tabs.displayURL() || 'This site'} wants you to prove you're human first. Do the check on screen, then say it again.` };
@@ -75,7 +77,11 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
       if (tabs.problem === 'js-off') return { ok: false, problem: 'js-off', message: jsOffHelp(browser) };
       const no = await tabs.dx('agentRefused');   // the step landed on the site's refusal: say so, stop there
       if (no) return { ok: false, wall: true, refused: true, message: `${tabs.displayURL() || 'This site'} doesn't allow AI agents (“${no}”). I stopped; I won't do anything more on this site.` };
-      if (!r.ok) break;
+      if (!r.ok) {   // a step that failed because the site went down mid-way is said as that, not as Dixi's miss
+        const gone = await tabs.dx('siteDown');
+        if (gone) r = { ok: false, down: true, message: `${tabs.displayURL() || 'This site'} isn't working right now (it says “${gone}”). Try again in a bit.` };
+        break;
+      }
     }
     recent.push(text);
     if (recent.length > 6) recent.shift();

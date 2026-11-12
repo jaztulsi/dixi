@@ -619,6 +619,14 @@ function agentRefused() {
   const m = t.match(/[^.]*\b(?:unauthori[sz]ed (?:ai )?agents?|ai agents? (?:are|is) not (?:allowed|permitted)|automated (?:access|agents?|bots?|browsing) (?:is|are) (?:not allowed|prohibited|not permitted)|access (?:restricted|denied) (?:to|for) (?:bots|automated|ai)|bots? (?:are|is) not allowed)\b[^.]*/i);
   return m ? m[0].trim().slice(0, 200) : null;
 }
+/** The site itself is down or overloaded ("under heavy load (queue full)", "Service Unavailable", "502 Bad
+ *  Gateway"): its own words, or null. Only a short page: a real store page that mentions "try again" is not down. */
+function siteDown() {
+  const body = clean((document.body?.innerText || '').slice(0, 3000));
+  if (body.length > 1500 || document.querySelectorAll('a[href]').length > 40) return null;
+  const m = (clean(document.title) + ' . ' + body).match(/[^.]*\b(?:under heavy load|queue full|too many (?:people|requests|users)|service (?:is )?(?:temporarily )?unavailable|temporarily unavailable|(?:502|503|504) (?:bad gateway|service unavailable|gateway time-?out)|bad gateway|gateway time-?out|site (?:is )?(?:down|under maintenance)|down for maintenance|this page isn['’]t working|can['’]t be reached)\b[^.]*/i);
+  return m ? m[0].trim().slice(0, 160) : null;
+}
 /** A store / location / address picker standing between you and the menu or cart. */
 function storePicker() {
   if (/store-?locator|locations?|find-a-store|select-?store|choose-?(a-)?(store|location)|restaurants?\/?$/i.test(location.pathname)) return true;
@@ -666,7 +674,7 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window[${JSON.stringify(DX)}] = { resultAtScreen, lineAtScreen, agentRefused, botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
+window[${JSON.stringify(DX)}] = { resultAtScreen, lineAtScreen, agentRefused, siteDown, botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
   media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)), enterGate };
 })();`;
 
