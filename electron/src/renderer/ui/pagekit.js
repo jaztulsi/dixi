@@ -253,6 +253,10 @@ function results() {
   // A result's own card: climb while the parent holds no other result link.
   const itemRoot = (a) => { let el = a; while (el.parentElement && el.parentElement !== main && [...el.parentElement.querySelectorAll('a[href]')].filter((x) => mine.has(x) && x !== a && x.href !== a.href).length === 0) el = el.parentElement; return el; };
   const sponsored = (root) => root.matches('[class*=ad-slot i], [data-ad], [aria-label*=sponsored i]') || [...root.querySelectorAll('span, div, small, p, a, b')].some((e) => !e.children.length && SPONSORED.test(clean(e.innerText)) && clean(e.innerText).length < 20);
+  // A card often links twice (the product, and its brand or a "shop all" page): when the list holds at least two
+  // product pages (/p/, /dp/, /ip/, /item/, product_details, ?sku= …), the other links are not results.
+  const PRODUCTISH = /\/(?:p|dp|ip|itm|item|items|product|products|prod|pd|gp\/product)\/|prod\.html|product[_-]details|[?&](?:sku|pid|idp_|productid)=/i;
+  if (best.filter((x) => PRODUCTISH.test(x.a.href)).length >= 2) best = best.filter((x) => PRODUCTISH.test(x.a.href));
   return best.filter(({ a, card }) => {
     if (SPONSORED.test(clean(card.innerText)) || sponsored(itemRoot(a))) return false;
     if (seen.has(a.href)) return false; seen.add(a.href); return true;

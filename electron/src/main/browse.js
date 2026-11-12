@@ -5,9 +5,9 @@
 // The long tail goes to the page agent (renderer/core/agent.js): a numbered list of the page's elements to a
 // fast model, one typed move at a time. No screenshots, no blind clicks, nothing paid unless a model is needed.
 import { RealTabs, browserOf } from './realtabs.js';
-import { Executor } from '../renderer/core/execute.js';
+import { Executor, BOT_PATH } from '../renderer/core/execute.js';
 import { BrowserAgent } from '../renderer/core/agent.js';
-import { interpret, fastPath, SHOPPING } from '../renderer/core/interpret.js';
+import { interpret, fastPath, SHOPPING, normName } from '../renderer/core/interpret.js';
 import { LLM } from '../renderer/core/llm.js';
 
 // Words that are about the page in front, not the Mac: worth the browser's understanding when a browser is in front.
@@ -53,10 +53,14 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
     await tabs.refresh();
     if (tabs.problem === 'js-off') return { ok: false, problem: 'js-off', message: jsOffHelp(browser) };
     if (tabs.problem === 'automation') return { ok: false, problem: 'automation', message: `Dixi needs permission to control ${browser.app}: System Settings → Privacy & Security → Automation → Dixi → ${browser.app}.` };
-    const parsed = await interpret(text, { url: tabs.getCurrentURL(), title: tabs.title, recent: recent.slice(-3) }, { llm, tiers: llm.tiers, signal });
+    // Sites you've been to by name ("go to target") open without a model.
+    const names = new Set((registry?.entries ?? []).flatMap((e) => [e.name, e.said]).filter(Boolean).map((n) => normName(n)));
+    const parsed = await interpret(text, { url: tabs.getCurrentURL(), title: tabs.title, recent: recent.slice(-3), names }, { llm, tiers: llm.tiers, signal });
     const intent = parsed.intent;
     if (!intent?.steps?.length) return intent?.clarify ? { ok: false, ask: intent.clarify, message: intent.clarify } : { none: true };
     if (intent.steps.every((s) => s.act === 'none')) return { none: true };
+    // A "prove you're human" page in front: nothing is pressed on it (Dixi never solves those checks).
+    if (await walled(tabs)) return { ok: false, wall: true, message: `${tabs.displayURL() || 'This site'} wants you to prove you're human first. Do the check on screen, then say it again.` };
     if (THIS.test(text)) await pointAt(tabs, intent.steps);
     let r = { ok: false, message: "I couldn't do that here" };
     const n = intent.steps.length;
@@ -71,6 +75,11 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
     recent.push(text);
     if (recent.length > 6) recent.shift();
     return { ok: Boolean(r.ok), message: r.message, answer: r.answer?.text, source: parsed.source, ms: parsed.ms };
+  }
+  async function walled(tabs) {
+    let path = '';
+    try { path = new URL(tabs.getCurrentURL()).pathname; } catch {}
+    return BOT_PATH.test(path) || (await tabs.dx('botWall')) === true;
   }
   /** "add THIS to my cart" on a list of results, "remove THIS" in a cart: the one under your mouse pointer. */
   async function pointAt(tabs, steps) {

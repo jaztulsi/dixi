@@ -19,7 +19,7 @@ const ADD = /^(add( to( your| my)?)? (cart|bag|basket|order|trolley|meal)\b|add(
 // Toward checkout itself; "go to cart" / "view cart" are the cart (CART), so checkout goes there first.
 const CHECKOUT = /^(check ?out|proceed to (check ?out|checkout|payment)|go to checkout|continue to checkout|review (order|bag)|pagar|commander)\b/i;
 // Addresses of "prove you're human" pages (words of the web, not one site's).
-const BOT_PATH = /\/(checkpoint|captcha|validatecaptcha|challenge|human-?check|sorry)(\/|$)/i;
+export const BOT_PATH = /\/(checkpoint|captcha|validatecaptcha|challenge|human-?check|sorry|blocked|bot-?check|are-?you-?human)(\/|$|\?)/i;
 // One pick among numbered candidates, with how sure the model is.
 const PICK_SCHEMA = { type: 'object', additionalProperties: false, required: ['index', 'confidence'], properties: { index: { type: 'integer' }, confidence: { type: 'number' } } };
 // A sign-in step (the store's own or a sign-in service's page): checkout stops here for you.
@@ -42,6 +42,10 @@ export const cartCount = (signal) => {
   const ns = signal.split('|').filter((t) => !/^\s*add\b/i.test(t)).join(' ').replace(/[$€£]\s?[\d.,]+|\d+[.,]\d+/g, ' ').match(/\b\d{1,3}\b/g);
   return (ns ?? []).reduce((a, n) => a + Number(n), 0);
 };
+// A store saying the add failed ("There was a temporary issue", "Couldn't add to cart", "out of stock"): read
+// before and after a press; a new one means NOT added, whatever else changed (a button turning into a quantity
+// stepper is not proof). Returns the store's words, or null.
+const STORE_ERROR_JS = `(() => { const m = (document.body?.innerText || '').slice(0, 40000).match(/\\b(there was a (?:temporary )?(?:issue|problem|error)[^.\\n]{0,60}|something went wrong[^.\\n]{0,40}|(?:could ?n[o']t|unable to|can'?t|cannot) (?:be )?add(?:ed)?[^.\\n]{0,60}|(?:this )?item (?:is )?(?:currently )?(?:not available|unavailable|out of stock)[^.\\n]{0,40})/i); return m ? m[0].slice(0, 120) : null; })()`;
 const REMOVED_JS =`(() => /\\b(was removed|has been removed|removed from (your |the )?(cart|bag|basket))\\b/i.test((document.body?.innerText || '').slice(0, 30000)))()`;
 // Words in a product request that never pick an option ("in black" → black).
 const OPTION_STOP = new Set(['a', 'an', 'the', 'in', 'on', 'of', 'with', 'and', 'for', 'me', 'my', 'buy', 'order', 'get', 'please', 'one', 'some', 'color', 'colour', 'size', 'model', 'version']);
@@ -603,6 +607,7 @@ export class Executor {
     this.mark('press add');
     const before = await this.cartSignal();
     const saidBefore = await this.tabs.exec(null, ADDED_JS);
+    const errBefore = await this.tabs.exec(null, STORE_ERROR_JS);
     const url0 = this.tabs.getCurrentURL();
     // Where the cart is, read here: the page the store moves to may still be loading when it's needed.
     const cartHref = (await this.tabs.dx('cartLink'))?.href ?? null;
@@ -618,10 +623,11 @@ export class Executor {
       const cart = url !== url0 && CART_PATH.test(pathOf(url)) && !this.tabs.isLoading() && (await this.tabs.dx('cartLines'))?.length > 0;
       // Moved on = a new address, loaded or not: a heavy next page (Apple's accessories page after an
       // iPhone) can still be loading when the first look is over, and then only the cart itself can tell.
-      return { s: await this.cartSignal(), url, cart, said: (await this.tabs.exec(null, ADDED_JS)) === true, moved: url !== url0 };
+      const err = await this.tabs.exec(null, STORE_ERROR_JS);
+      return { s: await this.cartSignal(), url, cart, said: (await this.tabs.exec(null, ADDED_JS)) === true, moved: url !== url0, err: typeof err === 'string' && err !== errBefore ? err : null };
     };
     const why = (p) => {
-      if (!p) return null;
+      if (!p || p.err) return null;   // the store said it failed: nothing else counts
       const n = cartCount(p.s);
       if (n0 != null && n != null && n > n0) return `count ${n0} → ${n}`;
       if (p.said && saidBefore !== true) return 'added message';
@@ -630,7 +636,7 @@ export class Executor {
       return null;
     };
     const changed = (p) => why(p) != null;
-    let after = await this.waitFor(probe, (p) => changed(p) || p.moved, 2500);
+    let after = await this.waitFor(probe, (p) => changed(p) || p.moved || Boolean(p.err), 2500);
     // Still working on it (the button went away or turned off: a slow store, Apple's iPhones take ~3-4 s):
     // wait for it, never a second press, which could add it twice.
     const pressable = async () => (await this.tabs.exec(null, `(() => { const b = window[${JSON.stringify(DX)}]?.get(${Number(add.ref)}); return Boolean(b && b.isConnected && !b.disabled && b.getAttribute('aria-disabled') !== 'true' && b.offsetWidth); })()`)) === true;
@@ -660,6 +666,7 @@ export class Executor {
     if (!changed(after) && after.moved && await this.inCart(step.picked || step.item, cartHref)) after = { ...after, cart: true };
     // The product's name without a trailing " - Apple" / "| Best Buy" (the store), cut at a word.
     const what = (step.picked || step.item || 'it').replace(/\s+[-–—|]\s+[^-–—|]{1,25}$/, (m) => (tokens(m).some((w) => tokens(where).includes(w) || w === 'apple') ? '' : m)).replace(/\s+/g, ' ').trim().replace(/^(.{60}).+$/, (m, head) => head.replace(/\s+\S*$/, ''));
+    if (after?.err) return fail(`${where} didn't add ${what}. It said: “${after.err.trim()}”`);
     if (await this.tabs.dx('storePicker')) return ok(`${where} wants you to pick a store or address before adding ${what}. Choose one and say "add it again"`, { needsStore: true });
     if (await this.tabs.dx('loginWall')) return ok(`${where} wants you to sign in before adding ${what}. Sign in and say "add it again"`, { login: true });
     const choice = picked.length ? ` (${picked.join(', ')})` : '';

@@ -244,6 +244,10 @@ export function fastPath(text, ctx = {}) {
   // "add the first one to my cart": that result, then into the cart.
   const addNth = t.match(/^(?:add|put) (?:the )?(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last)(?: one| result| item| product| listing)?(?: (?:to|in|into) (?:my |the )?(?:cart|bag|basket))?$/);
   if (addNth) return { steps: [step('add_to_cart', { n: ORDINAL[addNth[1]] })], clarify: '' };
+  // "search for oat milk", "look for running shoes": this site's own search (a site named, "on Amazon", is the model's;
+  // "find …" is your files, and "my …" is yours, not the store's).
+  const srch = t.match(/^(?:can you |please )?(?:search for|search|look for|look up) (?!(?:for )?my\b)(?!for\b)(.{2,80}?)$/);
+  if (srch && !/ (?:on|at|from|using|with) [a-z]/.test(srch[1])) return { steps: [step('search', { query: srch[1] })], clarify: '' };
   // "remove the Premium sunglasses from my cart", "take the milk out of my bag": that line, by its words.
   const rm = t.match(/^(?:can you |please )?(?:remove|delete|take out|take|get rid of) (?:the |my |all the |all my )?(.+?) (?:from|out of|off|off of) (?:my |the )?(?:shopping )?(?:cart|bag|basket|trolley)$/);
   if (rm && !THIS_ONE.test(rm[1])) return { steps: [step('remove', { item: rm[1] })], clarify: '' };
