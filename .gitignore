@@ -22,3 +22,6 @@ website/.next/
 **/.claude-flow/
 node_modules/
 electron/bench/out/
+
+# shop-video recordings (large; sent, not committed)
+demo-video/
