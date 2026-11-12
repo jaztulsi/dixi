@@ -638,6 +638,7 @@ export class Executor {
     const before = await this.cartSignal();
     const saidBefore = await this.tabs.exec(null, ADDED_JS);
     const errBefore = await this.tabs.exec(null, STORE_ERROR_JS);
+    const badge0 = await this.tabs.dx('cartBadge');   // the store's own header count ("cart 0 items"): the best witness
     const url0 = this.tabs.getCurrentURL();
     // Where the cart is, read here: the page the store moves to may still be loading when it's needed.
     const cartHref = (await this.tabs.dx('cartLink'))?.href ?? null;
@@ -654,13 +655,19 @@ export class Executor {
       // Moved on = a new address, loaded or not: a heavy next page (Apple's accessories page after an
       // iPhone) can still be loading when the first look is over, and then only the cart itself can tell.
       const err = await this.tabs.exec(null, STORE_ERROR_JS);
-      return { s: await this.cartSignal(), url, cart, said: (await this.tabs.exec(null, ADDED_JS)) === true, moved: url !== url0, err: typeof err === 'string' && err !== errBefore ? err : null };
+      return { s: await this.cartSignal(), badge: await this.tabs.dx('cartBadge'), url, cart, said: (await this.tabs.exec(null, ADDED_JS)) === true, moved: url !== url0, err: typeof err === 'string' && err !== errBefore ? err : null };
     };
     const why = (p) => {
       if (!p || p.err) return null;   // the store said it failed: nothing else counts
+      // The header's own count went up: proof. It stayed put after a store error: nothing else on the page counts
+      // (Target shows "1 in cart" and "added" next to the button while its header says "cart 0 items").
+      if (typeof badge0 === 'number' && typeof p.badge === 'number' && p.badge > badge0) return `header count ${badge0} → ${p.badge}`;
+      if (errBefore && typeof badge0 === 'number') return p.cart ? 'cart page' : null;
       const n = cartCount(p.s);
       if (n0 != null && n != null && n > n0) return `count ${n0} → ${n}`;
-      if (p.said && saidBefore !== true) return 'added message';
+      // A page's own "added" message isn't proof when the store was already showing an error: Target says "in cart"
+      // and "added" while its header still says "cart 0 items" and the cart is empty. Then only the count or the cart.
+      if (p.said && saidBefore !== true && !errBefore) return 'added message';
       if (p.cart) return 'cart page';
       // The cart/button text changing is weak proof: not enough when the store was already showing an error
       // (Target's "There was a temporary issue": the press does nothing, but the button redraws).
@@ -764,11 +771,10 @@ export class Executor {
   async do_cart() {
     // A cart address isn't always the cart: Amazon's "Added to cart" page lives at /cart/smart-wagon.
     // On a cart path, it's the cart only if it shows lines (or says it's empty).
-    // An empty cart is a cart too: its header count says 0 ("cart 0 items"), or it says it's empty.
-    const empty = async () => (await this.tabs.dx('cartBadge')) === 0 && !((await this.tabs.dx('cartLines')) ?? []).length;
-    const isCart = async () => CART_PATH.test(pathOf(this.tabs.getCurrentURL())) && (((await this.tabs.dx('cartLines')) ?? []).length > 0 || await empty()
+    const hasLines = async () => ((await this.tabs.dx('cartLines')) ?? []).length > 0;
+    const isCart = async () => CART_PATH.test(pathOf(this.tabs.getCurrentURL())) && (await hasLines()
       || (await this.tabs.exec(null, `/\\b(?:(?:your|the) (?:shopping )?(?:cart|bag|basket|trolley) is (?:currently )?empty|(?:cart|bag|basket) is empty|(?:you have no|there are no|no) items in (?:your|the) (?:shopping )?(?:cart|bag|basket)|empty (?:cart|bag|basket))\\b/i.test(document.body?.innerText.slice(0, 20000) || '')`)) === true);
-    if (await isCart()) return ok(await empty() ? 'Your cart is empty' : 'Here is your cart');
+    if (await isCart()) return ok((await hasLines()) ? 'Here is your cart' : 'Your cart is empty');
     await this.tabs.dx('dismissOverlays');
     const b = await this.waitFor(async () => (await this.tabs.dx('cartLink')) ?? this.tabs.dx('findButton', CART), (x) => x, 3000)
       ?? await this.visualPick('the shopping cart, bag or basket icon/link (usually top right)');
@@ -781,7 +787,10 @@ export class Executor {
       const view = await this.waitFor(() => this.tabs.dx('findButton', /^(review|view|go to|see|open)( my| your)? (bag|cart|basket)\b|^(bag|cart|basket)$/i), (x) => x, 1500);
       if (view) await this.clickAndWait(view.ref);
     }
-    if (await this.waitFor(isCart, (x) => x, 7000)) return ok(await empty() ? 'Your cart is empty' : 'Here is your cart');   // (Target's cart takes ~3.5 s to show its items)
+    if (await this.waitFor(isCart, (x) => x, 7000)) return ok((await hasLines()) ? 'Here is your cart' : 'Your cart is empty');
+    // Still no items after 7 s, on the cart, and its own header count says 0: it is empty ("Your holiday cart awaits").
+    // Never judged sooner: a store's count reads 0 for a moment while its cart page loads.
+    if (CART_PATH.test(pathOf(this.tabs.getCurrentURL())) && (await this.tabs.dx('cartBadge')) === 0) return ok('Your cart is empty');   // (Target's cart takes ~3.5 s to show its items)
     return fail(`I opened “${b.name.slice(0, 40)}”, but I don't see your cart's items there`);
   }
 
