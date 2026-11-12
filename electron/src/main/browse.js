@@ -61,6 +61,8 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
     if (intent.steps.every((s) => s.act === 'none')) return { none: true };
     // A "prove you're human" page in front: nothing is pressed on it (Dixi never solves those checks).
     const leaving = intent.steps[0] && (intent.steps[0].act === 'open' || ((intent.steps[0].act === 'search' || intent.steps[0].act === 'order') && intent.steps[0].said));
+    const refused = !leaving && (await tabs.dx('agentRefused'));
+    if (refused) return { ok: false, wall: true, refused: true, message: `${tabs.displayURL() || 'This site'} doesn't allow AI agents (“${refused}”). I stopped; I won't do anything more on this site.` };
     if (!leaving && await walled(tabs)) return { ok: false, wall: true, message: `${tabs.displayURL() || 'This site'} wants you to prove you're human first. Do the check on screen, then say it again.` };
     if (THIS.test(text)) await pointAt(tabs, intent.steps);
     let r = { ok: false, message: "I couldn't do that here" };
@@ -71,6 +73,8 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
       onStep({ label: labelOf(st, text), i, n });
       r = await executor.run(st, text, signal);
       if (tabs.problem === 'js-off') return { ok: false, problem: 'js-off', message: jsOffHelp(browser) };
+      const no = await tabs.dx('agentRefused');   // the step landed on the site's refusal: say so, stop there
+      if (no) return { ok: false, wall: true, refused: true, message: `${tabs.displayURL() || 'This site'} doesn't allow AI agents (“${no}”). I stopped; I won't do anything more on this site.` };
       if (!r.ok) break;
     }
     recent.push(text);

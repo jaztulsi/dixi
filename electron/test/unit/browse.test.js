@@ -49,3 +49,13 @@ test('"which one?" answers: ordinals, digits, or the one name that matches; neve
   const list = [{ text: 'Oatly Barista Edition' }, { text: 'Minor Figures Oat Milk' }, { text: 'Planet Oat Extra Creamy' }];
   for (const [a, n] of [['the second one', 2], ['third', 3], ['the minor figures one', 2], ['the oatly', 1], ['2', 2], ['the last one', -1], ['oat', 0], ['', 0], [null, 0]]) assert.equal(pickFromAnswer(a, list), n, String(a));
 });
+
+import { PAGE_LIB, DX } from '../../src/renderer/ui/pagekit.js';
+test('a page that refuses AI agents is recognized, in its own words', () => {
+  const run = (text) => vm.runInNewContext(`${PAGE_LIB}; window[${JSON.stringify(DX)}].agentRefused()`, {
+    window: {}, crypto: globalThis.crypto, document: { title: 'Amazon.com', body: { innerText: text }, querySelectorAll: () => [] }, getComputedStyle: () => ({}), location: { href: 'https://x/', pathname: '/' },
+    URL, URLSearchParams, Map, WeakMap, Set, RegExp, String, Number, Array, Object, JSON, Math, Date, Boolean, Symbol, Error, Promise, setTimeout,
+  });
+  assert.match(run("Access restricted. Continued access by an unauthorized AI agent violates Amazon's Conditions of Use, to which our customers have agreed."), /unauthorized AI agent violates/);
+  assert.equal(run('Free shipping on orders over $35. Add to cart.'), null);
+});

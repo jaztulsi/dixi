@@ -23,7 +23,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
 const OUT = path.resolve(arg('out', path.join(os.tmpdir(), 'dixi-video')));
 const SEED = Number(arg('seed', Date.now() % 100000));
-const REAL = arg('real', 'target,amazon,walmart,safeway,automation exercise').split(',').filter(Boolean);
+const REAL = arg('real', 'target,walmart,safeway,automation exercise').split(',').filter(Boolean);   // (no Amazon: its pages say unauthorized AI agents violate its Conditions of Use)
 const W = 1440, H = 900, BH = 720;   // the browser on top, Dixi's island strip below
 fs.mkdirSync(path.join(OUT, 'audio'), { recursive: true });
 
@@ -44,14 +44,12 @@ const SAY = {
 };
 const POOLS = {
   target: ['oat milk', 'paper towels', 'dish soap', 'granola', 'coffee pods', 'toothpaste', 'trail mix', 'almond butter'],
-  amazon: ['paper towels', 'phone charger', 'water bottle', 'notebook', 'dish sponges', 'aa batteries'],
   walmart: ['bagels', 'cereal', 'peanut butter', 'paper plates'],
   safeway: ['bagels', 'eggs', 'avocados', 'orange juice'],
   'automation exercise': ['blue top', 'jeans', 'dress', 'tshirt'],
 };
 const SITES = {
   target: { url: 'https://www.target.com/', tpl: 'https://www.target.com/s?searchTerm={q}' },
-  amazon: { url: 'https://www.amazon.com/', tpl: 'https://www.amazon.com/s?k={q}' },
   walmart: { url: 'https://www.walmart.com/', tpl: 'https://www.walmart.com/search?q={q}' },
   safeway: { url: 'https://www.safeway.com/', tpl: 'https://www.safeway.com/shop/search-results.html?q={q}' },
   'automation exercise': { url: 'https://automationexercise.com/', tpl: 'https://automationexercise.com/products?search={q}' },

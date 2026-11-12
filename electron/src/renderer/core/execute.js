@@ -763,7 +763,7 @@ export class Executor {
     // A cart address isn't always the cart: Amazon's "Added to cart" page lives at /cart/smart-wagon.
     // On a cart path, it's the cart only if it shows lines (or says it's empty).
     const isCart = async () => CART_PATH.test(pathOf(this.tabs.getCurrentURL())) && (((await this.tabs.dx('cartLines')) ?? []).length > 0
-      || (await this.tabs.exec(null, `/\\b(your|the) (shopping )?(cart|bag|basket) is empty\\b/i.test(document.body?.innerText.slice(0, 20000) || '')`)) === true);
+      || (await this.tabs.exec(null, `/\\b(?:(?:your|the) (?:shopping )?(?:cart|bag|basket|trolley) is (?:currently )?empty|(?:cart|bag|basket) is empty|(?:you have no|there are no|no) items in (?:your|the) (?:shopping )?(?:cart|bag|basket)|empty (?:cart|bag|basket))\\b/i.test(document.body?.innerText.slice(0, 20000) || '')`)) === true);
     if (await isCart()) return ok('Here is your cart');
     await this.tabs.dx('dismissOverlays');
     const b = await this.waitFor(async () => (await this.tabs.dx('cartLink')) ?? this.tabs.dx('findButton', CART), (x) => x, 3000)

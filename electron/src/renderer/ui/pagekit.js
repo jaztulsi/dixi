@@ -344,7 +344,9 @@ const REMOVE_RE = /^(remove|delete)\b/i;
 const CHECKOUT_RE = /^(check ?out|proceed to (check ?out|checkout|buy)|continue to (check ?out|payment))\b/i;
 const QTY_SEL = 'select, input[type=number], [role=spinbutton], input[name*=qty i], input[name*=quantity i]';
 function cartLines() {
-  let anchors = all('button, a[href], [role=button], input[type=submit], input[type=button]').filter((x) => shown(x) && REMOVE_RE.test(name(x)) && !inChrome(x));
+  // A remove control by its name, or an unnamed icon one (an ×, a trash can: "cart_quantity_delete", "fa-trash").
+  const iconRemove = (x) => !clean(name(x)) && /\b(?:delete|remove|trash|bin)\b|(?:^|[\s_-])(?:delete|remove|trash)(?:$|[\s_-])|fa-(?:times|trash|xmark|close)|icon-(?:close|trash|delete|remove)/i.test([x.className && x.className.baseVal != null ? x.className.baseVal : x.className, x.id, x.getAttribute('title') || '', x.getAttribute('data-action') || '', x.innerHTML.slice(0, 200)].join(' '));
+  let anchors = all('button, a[href], a[class*=delete i], a[class*=remove i], a[class*=trash i], [role=button], input[type=submit], input[type=button]').filter((x) => shown(x) && (REMOVE_RE.test(name(x)) || iconRemove(x)) && !inChrome(x));
   const byQty = !anchors.length;
   // Carts with no remove control: each quantity box is a line ("0 (Delete)" removes).
   if (byQty) anchors = all(QTY_SEL).filter((x) => shown(x) && !inChrome(x) && /qty|quantity/i.test(name(x) + ' ' + (x.name || '') + ' ' + (x.id || '')));
@@ -610,6 +612,13 @@ function botWall() {
   if (HUMAN.test(clean(document.title) + ' ' + clean((document.body?.innerText || '').slice(0, 3000)))) return true;
   return [...document.querySelectorAll('iframe')].some((f) => visible(f) && /captcha|challenge|turnstile|px-cdn|perimeterx|datadome|arkose/i.test([f.src, f.title, f.id, f.name].join(' ')));
 }
+/** The site saying AI agents / automated access aren't allowed here (Amazon: "Continued access by an unauthorized AI
+ *  agent violates …"). Its own sentence, or null. Dixi stops on such a site: it never works around a site's refusal. */
+function agentRefused() {
+  const t = clean(document.title) + ' . ' + clean((document.body?.innerText || '').slice(0, 4000));
+  const m = t.match(/[^.]*\b(?:unauthori[sz]ed (?:ai )?agents?|ai agents? (?:are|is) not (?:allowed|permitted)|automated (?:access|agents?|bots?|browsing) (?:is|are) (?:not allowed|prohibited|not permitted)|access (?:restricted|denied) (?:to|for) (?:bots|automated|ai)|bots? (?:are|is) not allowed)\b[^.]*/i);
+  return m ? m[0].trim().slice(0, 200) : null;
+}
 /** A store / location / address picker standing between you and the menu or cart. */
 function storePicker() {
   if (/store-?locator|locations?|find-a-store|select-?store|choose-?(a-)?(store|location)|restaurants?\/?$/i.test(location.pathname)) return true;
@@ -657,7 +666,7 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window[${JSON.stringify(DX)}] = { resultAtScreen, lineAtScreen, botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
+window[${JSON.stringify(DX)}] = { resultAtScreen, lineAtScreen, agentRefused, botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
   media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)), enterGate };
 })();`;
 
