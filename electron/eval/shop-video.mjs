@@ -235,11 +235,11 @@ function realTrip(name) {
   const items = shuffle(POOLS[name] ?? ['milk']);
   const c = [`go to ${name}`, SAY.search(items[0])];
   if (name === 'safeway' || name === 'walmart') return [...c, SAY.addFirst(), SAY.cart()];
-  return [...c, SAY.addFirst(), SAY.remark(), SAY.back(), { point: 3, said: SAY.addThis() }, SAY.cart(), ...(name === 'target' ? [{ line: 1, said: 'remove this' }, 'what time is it'] : [])];
+  return [...c, SAY.addFirst(), SAY.remark(), { said: SAY.back(), when: 'product' }, { point: 3, said: SAY.addThis() }, SAY.cart(), ...(name === 'target' ? [{ line: 1, said: 'remove this' }, 'what time is it'] : [])];
 }
 function offlineTrip(b) {
   const named = shuffle(b.items).find((it) => it.name.split(' ').length > 1) ?? b.items[0];
-  return [`go to ${b.name.toLowerCase()}`, SAY.search(b.items[0].base), SAY.addFirst(), SAY.back(), { point: 2, said: SAY.addThis() }, SAY.filler(),
+  return [`go to ${b.name.toLowerCase()}`, SAY.search(b.items[0].base), SAY.addFirst(), { said: SAY.back(), when: 'product' }, { point: 2, said: SAY.addThis() }, SAY.filler(),
     `add the ${named.name.toLowerCase()} to my cart`, SAY.cart(), { line: 1, said: 'make that two' }, { line: 2, said: 'remove this' }, SAY.remark(), 'check out'];
 }
 const plan = [...REAL.map((n) => ({ store: n, trip: realTrip(n) })), ...offline.map((b) => ({ store: b.name, trip: offlineTrip(b) }))];
@@ -256,6 +256,8 @@ await glide({ x: 980, y: 380 }, 900);
 for (const { store, trip } of plan) {
   for (const c of trip) {
     const said = typeof c === 'string' ? c : c.said;
+    // "go back" only when a product page is open (a store that adds straight from its list never left the results).
+    if (c.when === 'product' && !/\/(?:p|dp|ip|item|product|products)\/|product_details|prod\.html/i.test(page.url())) continue;
     if (c.point) await pointAtResult(c.point);
     if (c.line) await pointAtLine(c.line);
     const r = await say(said);

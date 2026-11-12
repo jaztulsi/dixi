@@ -60,7 +60,8 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
     if (!intent?.steps?.length) return intent?.clarify ? { ok: false, ask: intent.clarify, message: intent.clarify } : { none: true };
     if (intent.steps.every((s) => s.act === 'none')) return { none: true };
     // A "prove you're human" page in front: nothing is pressed on it (Dixi never solves those checks).
-    if (await walled(tabs)) return { ok: false, wall: true, message: `${tabs.displayURL() || 'This site'} wants you to prove you're human first. Do the check on screen, then say it again.` };
+    const leaving = intent.steps[0] && (intent.steps[0].act === 'open' || ((intent.steps[0].act === 'search' || intent.steps[0].act === 'order') && intent.steps[0].said));
+    if (!leaving && await walled(tabs)) return { ok: false, wall: true, message: `${tabs.displayURL() || 'This site'} wants you to prove you're human first. Do the check on screen, then say it again.` };
     if (THIS.test(text)) await pointAt(tabs, intent.steps);
     let r = { ok: false, message: "I couldn't do that here" };
     const n = intent.steps.length;
@@ -88,16 +89,16 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
     const add = steps.find((st) => st.act === 'add_to_cart' && !st.n && !st.item);
     const rm = steps.find((st) => (st.act === 'remove' || st.act === 'quantity') && !st.item);
     if (!add && !rm) return;
-    const hit = await tabs.exec(null, underPointer(p));
-    if (!hit || typeof hit !== 'object') return;
-    if (add) {
-      const list = await tabs.dx('results');
-      const i = Array.isArray(list) && list.length > 1 ? list.findIndex((x) => x.href && x.href === hit.href) : -1;
-      if (i >= 0) add.n = i + 1;
+    if (add) {   // only a real result (a search's results, or a product page link): never an ordinary page link
+      const n = Number(await tabs.dx('resultAtScreen', p.x, p.y)) || 0;
+      const list = n ? await tabs.dx('results') : null;
+      const r = Array.isArray(list) ? list[n - 1] : null;
+      if (r && (r.q || PRODUCTISH.test(r.href))) add.n = n;
     }
     if (rm) {
-      const lines = await tabs.dx('cartLines');
-      const at = Array.isArray(lines) && lines.length > 1 ? lines.find((l) => hit.text && (hit.text.includes(l.text.slice(0, 24)) || l.text.includes(hit.text.slice(0, 24)))) : null;
+      const i = Number(await tabs.dx('lineAtScreen', p.x, p.y)) || 0;
+      const lines = i ? await tabs.dx('cartLines') : null;
+      const at = Array.isArray(lines) && lines.length > 1 ? lines[i - 1] : null;
       if (at) rm.item = (at.removeName.replace(/^(remove|delete)\s*/i, '').trim() || at.text).split(/\s+/).slice(0, 6).join(' ');
     }
   }
@@ -105,6 +106,7 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
   return { run, kitFor, forPage: (text) => forPage(text, siteNames()) };
 }
 
+const PRODUCTISH = /\/(?:p|dp|ip|itm|item|items|product|products|prod|pd|gp\/product)\/|prod\.html|product[_-]details|[?&](?:sku|pid|idp_|productid)=/i;
 const THIS = /\b(?:this|that|it|this one|that one|these)\b/i;
 /** Page code: what's under the pointer (screen point → this window's page point), as {href, text} of its card or line. */
 export const underPointer = ({ x, y }) => `(function(){var px=${Number(x)}-screenX-(outerWidth-innerWidth)/2,py=${Number(y)}-screenY-(outerHeight-innerHeight);`

@@ -56,6 +56,7 @@ const BUY_NOW = /^(buy now|purchase|order now|buy it now|comprar( ahora)?)\b/i;
 const PLACE = /^(place (my |your |the )?order|submit (my |your |the )?order|complete (purchase|order)|confirm (and pay|order|purchase|payment)|pay( now)?|realizar pedido|pagar)\b/i;
 const ANY = /\b(any|whatever|doesn'?t matter|don'?t care|your choice|default|any (color|colour|size|one))\b/i;
 
+const PRODUCT_PAGE = /\/(?:p|dp|ip|itm|item|items|product|products|prod|pd|gp\/product)\/|prod\.html|product[_-]details|[?&](?:sku|pid|idp_|productid)=/i;
 const ORDINALS = { first: 1, '1st': 1, second: 2, '2nd': 2, third: 3, '3rd': 3, fourth: 4, '4th': 4, fifth: 5, '5th': 5, last: -1, two: 2, three: 3, four: 4, five: 5 };   // ("one" is "the X one", never a number)
 /** "the second one", "2", "the Oatly one" → its position in the list (1-based, -1 = last), or 0. */
 export function pickFromAnswer(answer, list) {
@@ -460,7 +461,9 @@ export class Executor {
     // "add this" on a list of results with nothing under the pointer (browse.js sets step.n when there is):
     // one result is that one; several, Dixi asks which ("the second one", or its name), never guesses.
     if (!step.n && !step.item && !step.addRef && !(await this.tabs.dx('findButton', ADD, { links: false }))) {
-      const list = await this.tabs.dx('results');
+      // Only real results: a search's own results, or links to product pages (never a home page's ordinary links).
+      const all = await this.tabs.dx('results');
+      const list = Array.isArray(all) ? all.filter((x) => x.q || PRODUCT_PAGE.test(x.href ?? '')) : null;
       if (Array.isArray(list) && list.length === 1) step = { ...step, n: 1 };
       else if (Array.isArray(list) && list.length > 1) {
         const names = list.slice(0, 4).map((x) => x.text.split(/\s+/).slice(0, 5).join(' '));

@@ -269,6 +269,33 @@ function results() {
     return { ref: ref(a), text: clean((a.querySelector('h1,h2,h3,h4') || a.closest('h1,h2,h3,h4') || a).innerText).slice(0, 90), href: a.href, match: matching.length > 0, q: qw.length > 0, buy: buy ? ref(buy) : null, add: add ? ref(add) : null };
   });
 }
+// ---- "this": the result or cart line under the mouse pointer (screen point → this window's page point) ----
+// Each result's card = the biggest box around its link holding no other result's link, so an image link, a
+// sponsored link and the title link in one card are all that card, whatever their addresses. Fixed/sticky layers
+// (cookie banners, sticky headers) are looked through. 0 = nothing there (never a guess).
+function pagePoint(sx, sy) { return [sx - screenX - (outerWidth - innerWidth) / 2, sy - screenY - (outerHeight - innerHeight)]; }
+function fixedUp(e) { for (let n = e, i = 0; n && n.nodeType === 1 && i < 12; n = n.parentElement, i++) { const p = getComputedStyle(n).position; if (p === 'fixed' || p === 'sticky') return true; } return false; }
+function underPoint(sx, sy) {
+  const [px, py] = pagePoint(sx, sy);
+  if (px < 0 || py < 0 || px > innerWidth || py > innerHeight) return null;
+  return document.elementsFromPoint(px, py).find((e) => !fixedUp(e)) || null;
+}
+function cardsOf(els) {
+  return els.map((el, i) => { let box = el; while (box.parentElement && box.parentElement !== document.body && !els.some((o, j) => j !== i && o && box.parentElement.contains(o))) box = box.parentElement; return box; });
+}
+function resultAtScreen(sx, sy) {
+  const t = underPoint(sx, sy); if (!t) return 0;
+  const list = results(); if (list.length < 2) return 0;
+  const cards = cardsOf(list.map((r) => get(r.ref)));
+  const i = cards.findIndex((c) => c && c.contains(t));
+  return i + 1;
+}
+function lineAtScreen(sx, sy) {
+  const t = underPoint(sx, sy); if (!t) return 0;
+  const lines = cartLines(); if (!lines.length) return 0;
+  const i = lines.findIndex((l) => get(l.line)?.contains(t));
+  return i + 1;
+}
 function scrollResultsToEnd() {
   const s = [...document.querySelectorAll('*')].filter((e) => e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY) && visible(e)).sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
   if (s) s.scrollTop = s.scrollHeight; else scrollTo(0, document.body.scrollHeight);
@@ -630,7 +657,7 @@ function quiet(ms, max) {
     setTimeout(done, max);
   });
 }
-window[${JSON.stringify(DX)}] = { botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
+window[${JSON.stringify(DX)}] = { resultAtScreen, lineAtScreen, botWall, findSearch, focus, closeSuggestions, suggesting, valueOf, submitSearch, formURL, formTemplate, optionTarget, cartLines, cartBadge, setLineQty, stepLine, results, scrollResultsToEnd, findButton, clickRef, pointOf, findByWords, options, choose, setQty,
   media, identity, loginWall, storePicker, reveal, affordances, elements, getQty, stepQty, cartLink, qtyIn, typeInto, dismissOverlays, quiet, get, name: (k) => name(get(k)), enterGate };
 })();`;
 
