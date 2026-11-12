@@ -74,6 +74,15 @@ export const COMMAND = new RegExp([CAL_ADD, ACTIVITY, WATCH, FILE_ASK, SKILL_SAV
 // nothing is said. ponytail: a word list plus a ratio; a long ramble with few fillers still gets through.
 const FILLER_BIT = new RegExp(String.raw`\b(?:hey|hay|hi|hello|yo|ok(?:ay)?|yeah|yea|yep|yes|yup|no+|nope|nah|oh+|ah+|uh+|um+|hmm+|huh|wait|shoot|dang|dude|bro|man|wow|lol|so|like|well|right|alright|cool|nice|come on|you got this|you can do (?:it|this)|let'?s go|i'?m done|it'?s gone|whatever|thanks|thank you|dixi)\b`, 'gi');
 /** → true when every bit of it (or 60 %+ of three or more bits) is filler: an ignore, not a command. Pure. */
+/** Thinking out loud while shopping: "hmm, what else do I need", "that looks good", "wow, that's cheap", "let me
+ *  think". A remark with no command verb in it is nobody's command: nothing is done. ("I need milk" is not one.) */
+const DOING = /\b(?:add|remove|delete|put|take|open|close|go|search|look|find|buy|order|get|make|show|click|press|tap|scroll|check|play|pause|stop|send|call|text|type|write|set|turn|change|pick|choose|select|start|cancel|undo|read|tell|ask|what time|how much|how many)\b/i;
+const REMARK = /^(?:(?:hmm+|uh+|um+|ok(?:ay)?|so|well|wow|oh|ah|nice|cool|great|perfect|alright|right|yeah|yes|no|huh)\b[\s,.!]*)*(?:what else(?: do i need| is there)?|let me (?:think|see)|that(?:'s| is| looks)? (?:good|great|nice|fine|cheap|expensive|pricey|a lot|perfect|weird|interesting)|looks (?:good|great|nice|fine)|(?:that's|thats|it's) (?:cheap|expensive|pricey|a lot|nice|perfect)|interesting|not bad|i (?:guess|think so|don't know)|where (?:was|were) we|hmm+|uh+|um+)[\s,.!?]*$/i;
+export function remark(text) {
+  const t = String(text ?? '').trim();
+  return Boolean(t) && !DOING.test(t) && REMARK.test(t.replace(/[“”"]/g, ''));
+}
+
 export function chatter(text) {
   const bits = String(text ?? '').toLowerCase().split(/[.,!?…;:]+|\s[-—–]+\s/).map((b) => b.trim()).filter(Boolean);
   if (!bits.length) return true;

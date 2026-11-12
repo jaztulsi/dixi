@@ -38,7 +38,7 @@ import { grabSelection, pasteText, actOn, screenText } from './capture.js';
 import { IRREVERSIBLE, RECURRING } from '../renderer/ui/pagekit.js';
 import { execFile } from 'node:child_process';
 import { pttSession, hotkeyOwner, holdToTalk } from './ptt.js';
-import { chatter, HERE, MISSED, HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
+import { chatter, remark, HERE, MISSED, HIVE, ABOUT_SCREEN, REMEMBER, RECALL, BACK, CAREFUL_ON, CAREFUL_OFF, MIC_OFF, UNDO, BRIEF, NEXT, TOMORROW } from '../renderer/core/everywhere-words.js';
 import { openMemory, factsLine, memoryTurn, openProfile, loadProfile, profileLine, masked, FORM, secretField, profileFocused } from './memory.js';
 import * as brief from './brief.js';
 import { watchIntent, startWatch, stopWatch, isWatching, checkPrompt, CHECK_SCHEMA } from './watch.js';
@@ -1162,7 +1162,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
     mark(runId, 'stt_final');
     const head = forced ? null : state.spec;
     state.spec = null;
-    if (!forced && chatter(text)) { head?.ctrl.abort(); if (!busy()) show({ state: 'idle' }); return; }   // filler, not a request: nothing done, nothing stopped
+    if (!forced && (chatter(text) || remark(text))) { head?.ctrl.abort(); if (!busy()) show({ state: 'idle' }); return; }   // filler, not a request: nothing done, nothing stopped
     if (!forced && state.plan && state.ctrl) { head?.ctrl.abort(); mark(runId, 'routed'); planInto(state.plan, text, state.ctrl.signal, runId); return; }   // added to the running plan
     state.runId = runId;
     state.lastRoute = null;
@@ -1257,7 +1257,7 @@ export function setupEverywhere({ config, spend, here, userData, getMainWindow, 
       // one", "go to my cart"): done on that page by its elements (browse.js). A sure Mac command still goes below.
       if (!forced && browseBrain && !tutorIntent(t) && !SCAM_CHECK.test(t) && !REMEMBER.test(t)) {
         const front = heardContext() ?? await input.frontApp().then((f) => ({ app: f?.name, bundle: f?.bundle })).catch(() => null);
-        const how = front && browserOf(front) && forPage(t);
+        const how = front && browserOf(front) && browseBrain.forPage(t);
         if (how && (how === 'rule' || !instantOf(t, { apps: [], commands }))) {
           const r = await browseDo(t, front, signal, runId);
           if (!r.none) return;

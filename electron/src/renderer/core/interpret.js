@@ -239,7 +239,7 @@ export function fastPath(text, ctx = {}) {
   // "Buy it", "pre-order this one": what's on the page goes in the cart, then to checkout (which stops
   // before anything is placed). "Add it" only adds.
   if (/^(can you |please )?(buy|purchase|pre-?order|order|get) (me )?(it|this|that|this one|that one)( for me| now| please)?$/.test(t)) return { steps: [step('add_to_cart'), step('checkout')], clarify: '' };
-  if (/^(can you |please )?add (it|this|that|this one|that one)( to (my |the )?(cart|bag|basket))?( please)?$/.test(t)) return { steps: [step('add_to_cart')], clarify: '' };
+  if (/^(can you |please )?(add|put|throw) (it|this|that|this one|that one)( (to|in|into|in to) (my |the )?(cart|bag|basket))?( please| too| as well)?$/.test(t)) return { steps: [step('add_to_cart')], clarify: '' };
   if (/^(can you |please )?(remove|delete|take out|take off) (it|this|that|this one|that one)( from (my |the )?(cart|bag|basket))?( please)?$/.test(t)) return { steps: [step('remove')], clarify: '' };
   // "add the first one to my cart": that result, then into the cart.
   const addNth = t.match(/^(?:add|put) (?:the )?(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last)(?: one| result| item| product| listing)?(?: (?:to|in|into) (?:my |the )?(?:cart|bag|basket))?$/);

@@ -56,6 +56,20 @@ const BUY_NOW = /^(buy now|purchase|order now|buy it now|comprar( ahora)?)\b/i;
 const PLACE = /^(place (my |your |the )?order|submit (my |your |the )?order|complete (purchase|order)|confirm (and pay|order|purchase|payment)|pay( now)?|realizar pedido|pagar)\b/i;
 const ANY = /\b(any|whatever|doesn'?t matter|don'?t care|your choice|default|any (color|colour|size|one))\b/i;
 
+const ORDINALS = { first: 1, '1st': 1, second: 2, '2nd': 2, third: 3, '3rd': 3, fourth: 4, '4th': 4, fifth: 5, '5th': 5, last: -1, two: 2, three: 3, four: 4, five: 5 };   // ("one" is "the X one", never a number)
+/** "the second one", "2", "the Oatly one" → its position in the list (1-based, -1 = last), or 0. */
+export function pickFromAnswer(answer, list) {
+  const t = String(answer ?? '').toLowerCase();
+  if (!t.trim()) return 0;
+  for (const [w, n] of Object.entries(ORDINALS)) if (new RegExp(`\\b${w}\\b`).test(t)) return n;
+  const digit = t.match(/\b([1-9])\b/);
+  if (digit) return Number(digit[1]);
+  const said = new Set(tokens(t).filter((w) => w.length >= 3 && !['the', 'one', 'that', 'this'].includes(w)));
+  const scores = list.map((x) => tokens(x.text).filter((w) => said.has(w)).length);
+  const best = Math.max(0, ...scores);
+  return best > 0 && scores.filter((x) => x === best).length === 1 ? scores.indexOf(best) + 1 : 0;
+}
+
 export class Executor {
   /**
    * @param deps {tabs, resolve(name) → result (main), registry {names, outcome, setSearchTemplate},
@@ -154,7 +168,7 @@ export class Executor {
       const known = this.registry?.entries?.find((e) => e.host === hostOf(url) || e.finalHost === hostOf(url));
       const id = known ? null : await this.tabs.dx('identity');
       const name = known?.name || (id && (id.appName || id.siteName || (id.logo || '').replace(/\s*logo$/i, ''))) || hostOf(url);
-      return { url, host: hostOf(url), name, here: true };
+      return { url, host: hostOf(url), name, here: true, searchTemplate: known?.searchTemplate ?? null };   // a learned search address beats typing
     }
     // The sanctioned Apple shortcut: "the Apple Store" / "Apple" is Apple's own store (a name lookup once
     // landed on applestore.com, another site).
@@ -443,6 +457,19 @@ export class Executor {
   }
 
   async do_add_to_cart(step, said) {
+    // "add this" on a list of results with nothing under the pointer (browse.js sets step.n when there is):
+    // one result is that one; several, Dixi asks which ("the second one", or its name), never guesses.
+    if (!step.n && !step.item && !step.addRef && !(await this.tabs.dx('findButton', ADD, { links: false }))) {
+      const list = await this.tabs.dx('results');
+      if (Array.isArray(list) && list.length === 1) step = { ...step, n: 1 };
+      else if (Array.isArray(list) && list.length > 1) {
+        const names = list.slice(0, 4).map((x) => x.text.split(/\s+/).slice(0, 5).join(' '));
+        const answer = await this.ask?.(`Which one? ${names.slice(0, 3).map((x, i) => `${['First', 'Second', 'Third'][i]}: ${x}`).join('. ')}.`, names);
+        const n = pickFromAnswer(answer, list);
+        if (!n) return fail(answer ? `I didn't catch which one, so I didn't add anything` : `Point at it or say which one, and I'll add it`);
+        step = { ...step, n };
+      }
+    }
     if (step.n) {
       // A result with its own add button (store result lists often have one): pressed right there.
       const list = await this.stableResults(Math.max(1, step.n));
@@ -707,7 +734,9 @@ export class Executor {
     for (const re of [CHECKOUT, CART]) {
       const b = re === CHECKOUT ? (await this.tabs.dx('findButton', re, { links: false })) ?? (await this.tabs.dx('findButton', re)) : await this.tabs.dx('findButton', re);
       if (!b) continue;
-      await this.clickAndWait(b.ref);
+      const pressed = await this.clickAndWait(b.ref);
+      // The purchase gate asks first ("Pagar" can mean pay): ask you, never skip past it, never call it a failure.
+      if (typeof pressed === 'string' && pressed.startsWith('confirm')) { const r = await this.confirmThen(b.ref, pressed.slice(9)); if (!r.ok) return r; return this.atCheckout(); }
       // On the cart: its checkout button draws a moment after the page.
       if (re === CART) { const c = await this.waitFor(async () => (await this.tabs.dx('findButton', CHECKOUT, { links: false })) ?? this.tabs.dx('findButton', CHECKOUT), (x) => x, 3000); if (c) await this.clickAndWait(c.ref); }
       return this.atCheckout();
@@ -745,7 +774,7 @@ export class Executor {
       const view = await this.waitFor(() => this.tabs.dx('findButton', /^(review|view|go to|see|open)( my| your)? (bag|cart|basket)\b|^(bag|cart|basket)$/i), (x) => x, 1500);
       if (view) await this.clickAndWait(view.ref);
     }
-    if (await this.waitFor(isCart, (x) => x, 3000)) return ok('Here is your cart');
+    if (await this.waitFor(isCart, (x) => x, 7000)) return ok('Here is your cart');   // (Target's cart takes ~3.5 s to show its items)
     return fail(`I opened “${b.name.slice(0, 40)}”, but I don't see your cart's items there`);
   }
 

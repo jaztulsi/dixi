@@ -13,9 +13,10 @@ import { LLM } from '../renderer/core/llm.js';
 // Words that are about the page in front, not the Mac: worth the browser's understanding when a browser is in front.
 export const PAGEISH = /\b(this|that|these|those|it|here|there|page|tab|site|cart|bag|basket|checkout|check out|click|press|tap|select|choose|pick|scroll|back|forward|reload|refresh|result|results|link|button|first|second|third|fourth|fifth|last|next|previous|one|quantity|size|color|colour|search for|look for|find|sort|filter|sign in|log in|video|play|pause)\b/i;
 
-/** Is this a command for the page in front? Rules say so outright; otherwise page words or shopping words. */
-export function forPage(text) {
-  if (fastPath(text)) return 'rule';
+/** Is this a command for the page in front? Rules say so outright (learned site names included: "go to target");
+ *  otherwise page words or shopping words. */
+export function forPage(text, names = null) {
+  if (fastPath(text, names ? { names } : {})) return 'rule';
   if (SHOPPING.test(text) || PAGEISH.test(text)) return 'model';
   return null;
 }
@@ -54,8 +55,7 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
     if (tabs.problem === 'js-off') return { ok: false, problem: 'js-off', message: jsOffHelp(browser) };
     if (tabs.problem === 'automation') return { ok: false, problem: 'automation', message: `Dixi needs permission to control ${browser.app}: System Settings → Privacy & Security → Automation → Dixi → ${browser.app}.` };
     // Sites you've been to by name ("go to target") open without a model.
-    const names = new Set((registry?.entries ?? []).flatMap((e) => [e.name, e.said]).filter(Boolean).map((n) => normName(n)));
-    const parsed = await interpret(text, { url: tabs.getCurrentURL(), title: tabs.title, recent: recent.slice(-3), names }, { llm, tiers: llm.tiers, signal });
+    const parsed = await interpret(text, { url: tabs.getCurrentURL(), title: tabs.title, recent: recent.slice(-3), names: siteNames() }, { llm, tiers: llm.tiers, signal });
     const intent = parsed.intent;
     if (!intent?.steps?.length) return intent?.clarify ? { ok: false, ask: intent.clarify, message: intent.clarify } : { none: true };
     if (intent.steps.every((s) => s.act === 'none')) return { none: true };
@@ -101,7 +101,8 @@ export function makeBrowse({ bridge, keys = {}, chat, tiers = () => ({}), resolv
       if (at) rm.item = (at.removeName.replace(/^(remove|delete)\s*/i, '').trim() || at.text).split(/\s+/).slice(0, 6).join(' ');
     }
   }
-  return { run, kitFor };
+  const siteNames = () => new Set((registry?.entries ?? []).flatMap((e) => [e.name, e.said]).filter(Boolean).map((n) => normName(n)));
+  return { run, kitFor, forPage: (text) => forPage(text, siteNames()) };
 }
 
 const THIS = /\b(?:this|that|it|this one|that one|these)\b/i;

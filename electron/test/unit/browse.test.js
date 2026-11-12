@@ -37,3 +37,15 @@ test('"search for X" searches the site you are on, no model; a named site, "my â
   assert.deepEqual(fastPath('look for running shoes').steps.map((s) => [s.act, s.query]), [['search', 'running shoes']]);
   for (const t of ['search lo-fi beats on apple music', 'search for my resume', 'find my resume']) assert.ok(!fastPath(t)?.steps?.some((s) => s.act === 'search'), t);
 });
+
+import { remark } from '../../src/renderer/core/everywhere-words.js';
+test('thinking out loud is not a command; anything with a command in it still is', () => {
+  for (const t of ['hmm, what else do I need', 'uh, let me think', 'that looks good', "wow, that's cheap", 'okay, interesting', 'hmm']) assert.equal(remark(t), true, t);
+  for (const t of ['add this to my cart', 'I need milk', 'what time is it', "that's good, add it", 'what else is in my cart? show me']) assert.equal(remark(t), false, t);
+});
+
+import { pickFromAnswer } from '../../src/renderer/core/execute.js';
+test('"which one?" answers: ordinals, digits, or the one name that matches; never a guess', () => {
+  const list = [{ text: 'Oatly Barista Edition' }, { text: 'Minor Figures Oat Milk' }, { text: 'Planet Oat Extra Creamy' }];
+  for (const [a, n] of [['the second one', 2], ['third', 3], ['the minor figures one', 2], ['the oatly', 1], ['2', 2], ['the last one', -1], ['oat', 0], ['', 0], [null, 0]]) assert.equal(pickFromAnswer(a, list), n, String(a));
+});
